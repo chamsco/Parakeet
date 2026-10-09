@@ -72,6 +72,7 @@ Two variants share every block:
 | Does it learn? | AE recon **36 %** better, text side **91 %**, text→audio **26 %** vs untrained, duration MAE **3 ms**, generated/target log-mel cosine **0.954** | `learn_demo.py` |
 | **Does the teacher mixture work?** | predicted F0 moves **87 → 200 Hz** monotonically across a mixture sweep between two synthetic teachers (92/215 Hz, span 112.6 Hz), and the fit to the low teacher degrades in the same order | `mixture_demo.py` |
 | Is NFE 2 viable? | reflowed 2-step agrees with the NFE-32 reference **better than the teacher's own NFE-16** (1.51 vs 1.85) and 29 % better than a naive 2-step cut; **9.7× wall-clock** at NFE 2 | `reflow_demo.py` |
+| **Does multi-voice work?** | for three fixture voices the student predicts **81.7 / 88.8 / 148.6 Hz** (fixtures at 80.8 / 95 / 152) and fits the per-voice targets **7x better** than a voice-blind control | `voice_demo.py` |
 | Does the whole recipe run? | **yes, offline** — prompts → corpus → cache → distillation → synthesis, 6/6 checks pass with dependency-free fixture teachers | `recipe_dry_run.py` |
 | Int8 weights (simulated) | 12.0 MB Tiny / 56.3 MB Small | `smoke_test.py` |
 
@@ -86,9 +87,10 @@ python scripts/learn_demo.py --quick            # proves the stages learn (befor
 python scripts/reflow_demo.py --quick           # validates NFE-2 sampling after Reflow
 python scripts/streaming_demo.py --quick        # blockwise streaming + TTFA vs one-shot
 python scripts/mixture_demo.py --quick          # the teacher mixture steering the student
+python scripts/voice_demo.py --quick            # multi-voice conditioning vs a control
 python scripts/recipe_dry_run.py --quick        # the WHOLE recipe offline, no teachers needed
 python scripts/export_onnx.py                   # int8 ONNX vocoder + PyTorch/ONNX benchmark
-python -m pytest -q                            # 140 tests
+python -m pytest -q                            # 150 tests
 python scripts/bench_rtf.py --config configs/parakeet_tiny.yaml --steps 2
 ```
 
@@ -126,9 +128,9 @@ parakeet/
   eval/       RTF, MCD, spectral convergence, phase coherence, optional UTMOS/WER/SECS, learning probes
 configs/      parakeet_tiny.yaml (9.6M) | parakeet_small.yaml (45M) | parakeet_small_44k.yaml
 scripts/      smoke_test.py | learn_demo.py | reflow_demo.py | streaming_demo.py |
-              mixture_demo.py | recipe_dry_run.py | export_onnx.py | profile_pipeline.py |
+              mixture_demo.py | voice_demo.py | recipe_dry_run.py | export_onnx.py | profile_pipeline.py |
               train.py | make_teacher_corpus.py | bench_rtf.py
-tests/        140 tests: config, audio DSP, models, losses, all five stages, inference,
+tests/        150 tests: config, audio DSP, models, losses, all five stages, inference,
               streaming, mixture weighting, data/corpus paths, curation, ONNX/int8, learning
 .github/      ci.yml -- suite + smoke test + fast demos on every push; benchmarks on demand
 ```

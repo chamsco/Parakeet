@@ -32,6 +32,92 @@ def frame_energy_db(
     return 20.0 * torch.log10(rms)
 
 
+def _frames(wav: torch.Tensor, frame_length: int, hop_length: int) -> torch.Tensor:
+    if wav.dim() == 1:
+        wav = wav.unsqueeze(0)
+    pad = frame_length // 2
+    x = F.pad(wav.unsqueeze(-2), (pad, pad)) if False else F.pad(wav, (pad, pad))
+    return x.unfold(-1, frame_length, hop_length)
+
+
+@torch.no_grad()
+def estimate_f0_yin(
+    wav: torch.Tensor,
+    sample_rate: int,
+    hop_length: int = 256,
+    frame_length: int = 1024,
+    fmin: float = 60.0,
+    fmax: float = 500.0,
+    threshold: float = 0.20,
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """YIN pitch tracker (de Cheveigné & Kawahara, 2002).
+
+    YIN is used instead of autocorrelation because autocorrelation has a **formant bias**: for a
+    strongly formant-shaped harmonic stack the tallest normalized peak can land on a subharmonic or
+    a formant period, which is not a corner case here -- it is the whole signal model.  Measured on
+    the fixture voices, the autocorrelation estimator reported 134.5 Hz for an 81 Hz voice, and
+    those wrong values become the F0 *targets* the student is trained to imitate.
+
+    Returns ``(f0_hz, voiced, confidence)`` of shape ``(B, T)``; unvoiced frames are 0.
+    """
+    frames = _frames(wav, frame_length, hop_length)
+    if frames.numel() == 0:
+        empty = torch.zeros(wav.shape[0], 0)
+        return empty, empty.bool(), empty
+    frames = frames - frames.mean(dim=-1, keepdim=True)
+    b, t, w = frames.shape
+
+    # difference function d(tau) = sum_j (x[j] - x[j+tau])^2, computed from the autocorrelation
+    nfft = 1 << max(1, (2 * w - 1).bit_length())
+    spec = torch.fft.rfft(frames, n=nfft, dim=-1)
+    acf = torch.fft.irfft(spec * spec.conj(), n=nfft, dim=-1)[..., :w]
+    squares = frames.pow(2)
+    prefix = F.pad(torch.cumsum(squares, dim=-1), (1, 0))  # prefix[k] = sum_{j<k} x[j]^2
+    tau = torch.arange(w, device=frames.device)
+    term1 = prefix[..., (w - tau).clamp(min=0)]  # sum_{j < w - tau}
+    term2 = prefix[..., w : w + 1] - prefix[..., tau]  # sum_{j >= tau}
+    diff = (term1 + term2 - 2 * acf).clamp_min(0.0)
+    diff[..., 0] = 0.0
+
+    # cumulative mean normalised difference
+    cumsum = torch.cumsum(diff, dim=-1)
+    denom = cumsum / tau.clamp_min(1).to(diff.dtype)
+    cmnd = diff / denom.clamp_min(1e-9)
+    cmnd[..., 0] = 1.0
+
+    lo = max(2, int(sample_rate / fmax))
+    hi = min(w - 2, int(sample_rate / fmin))
+    if hi <= lo:
+        empty = torch.zeros(b, t, device=wav.device)
+        return empty, empty.bool(), empty
+    window = cmnd[..., lo : hi + 1]
+
+    # YIN step 3-4: the *first local minimum* of the CMND below the absolute threshold (falling
+    # back to the global minimum).  Taking the first threshold *crossing* instead lands short of the
+    # true period -- on a pure 200 Hz tone it reported 226 Hz.
+    prev = torch.cat([window[..., :1], window[..., :-1]], dim=-1)
+    nxt = torch.cat([window[..., 1:], window[..., -1:]], dim=-1)
+    is_min = (window <= prev) & (window <= nxt)
+    below = is_min & (window < threshold)
+    has_below = below.any(dim=-1)
+    idx = torch.where(has_below, below.float().argmax(dim=-1), window.argmin(dim=-1)) + lo
+    idx = idx.clamp(min=lo + 1, max=hi - 1)
+
+    # parabolic refinement on the *difference* function (smooth near the minimum), not the CMND
+    left = torch.gather(diff, -1, (idx - 1).unsqueeze(-1)).squeeze(-1)
+    centre = torch.gather(diff, -1, idx.unsqueeze(-1)).squeeze(-1)
+    right = torch.gather(diff, -1, (idx + 1).unsqueeze(-1)).squeeze(-1)
+    denom_p = (left - 2 * centre + right).abs().clamp_min(1e-12)
+    delta = (0.5 * (left - right) / denom_p).clamp(-1.0, 1.0)
+    tau_best = idx.to(wav.dtype) + delta
+
+    f0 = sample_rate / tau_best.clamp_min(1.0)
+    confidence = (1.0 - torch.gather(cmnd, -1, idx.unsqueeze(-1)).squeeze(-1)).clamp(0.0, 1.0)
+    voiced = has_below & (f0 >= fmin) & (f0 <= fmax)
+    f0 = torch.where(voiced, f0, torch.zeros_like(f0))
+    return f0, voiced, confidence
+
+
 @torch.no_grad()
 def estimate_f0(
     wav: torch.Tensor,
@@ -41,12 +127,20 @@ def estimate_f0(
     fmin: float = 60.0,
     fmax: float = 500.0,
     threshold: float = 0.30,
+    method: str = "yin",
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    """Normalized-autocorrelation pitch tracker.
+    """Pitch tracking.  ``method="yin"`` (default) or ``"autocorr"`` (legacy, formant-biased).
 
     Returns ``(f0_hz, voiced, confidence)`` each of shape ``(B, T)``; unvoiced frames have
     ``f0_hz == 0``.
     """
+    if method == "yin":
+        return estimate_f0_yin(
+            wav, sample_rate, hop_length, frame_length, fmin, fmax, threshold=min(threshold, 0.25)
+        )
+    if method != "autocorr":
+        raise ValueError(f"unknown pitch method {method!r}")
+
     if wav.dim() == 1:
         wav = wav.unsqueeze(0)
     n = wav.shape[-1]
@@ -69,7 +163,6 @@ def estimate_f0(
     best_val, best_idx = segment.max(dim=-1)
     lag = (best_idx + min_lag).to(wav.dtype)
 
-    # parabolic interpolation around the peak
     left = torch.gather(acf, -1, (best_idx + min_lag - 1).clamp(min=0).long().unsqueeze(-1)).squeeze(-1)
     right = torch.gather(
         acf, -1, (best_idx + min_lag + 1).clamp(max=frame_length - 1).long().unsqueeze(-1)

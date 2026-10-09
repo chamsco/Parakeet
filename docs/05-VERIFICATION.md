@@ -12,14 +12,14 @@ python scripts/reflow_demo.py                               # validates NFE-2 sa
 python scripts/streaming_demo.py                            # blockwise streaming + TTFA (~7 min CPU)
 python scripts/export_onnx.py --pipeline                    # int8 ONNX + runtime benchmark
 python scripts/profile_pipeline.py                          # where does the time actually go
-python -m pytest -q                                         # 140 tests
+python -m pytest -q                                         # 150 tests
 python scripts/bench_rtf.py --config configs/parakeet_tiny.yaml
 ```
 
 ## 1. Test suite
 
 ```
-140 passed
+150 passed
 ```
 
 Coverage by area:
@@ -36,6 +36,7 @@ Coverage by area:
 | `test_curate.py` | every curation gate fires on a constructed failure (too short/long, clipped, silent, low SNR, narrowband, low MOS, ASR disagreement); **all** reasons reported, not just the first; SNR correctly reported as *unevaluable* without a noise floor; WER and punctuation-gap maths; reject records are never dropped |
 | `test_learning.py` | synthetic fixture is structurally exact (frame counts, peak, F0 declination); latent normaliser fits and inverts; token targets are exact and normalised; decoder-latent alignment; supplied-latent path leaves the encoder gradient-free; **stage freezing does not leak between stages**; and the headline: 40 CPU steps measurably improve both the representation and the distilled text side |
 | `test_onnx.py` | ONNX decoder matches PyTorch to **<1e-4**; text side matches to **<1e-4 across token lengths 5/8/17** (the legacy exporter's baked-in length would fail this); dynamic time axis across 7/23/41 frames; int8 files are smaller and run on CPU; dtypes are validated at the wrapper boundary; external weight sidecars are counted in size; full int8 pipeline tracks PyTorch (cosine >0.95) and is smaller in total (skips if `onnx`/`onnxruntime`/`onnxscript` absent) |
+| `test_voice.py` | the fixture voices really are multi-voice (measured monotone pitch); the voice embedding conditions **every** head (duration/F0/energy/latent — the first version only modulated the latent); the default voice is index 0; the cache records per-voice indices and rejects a corpus with more voices than the model has; **cached F0 targets follow the voice pitch** (fails if the unbounded fixture sweep, the formant-biased estimator, or the unvoiced-zero averaging regresses); YIN is the default and is accurate; per-token aggregation ignores unvoiced zeros |
 | `test_streaming.py` | the reported vector-field context is confirmed **empirically** (perturb a frame, the response stops exactly at `3 × depth`); `layer_scale_init` leaves the VF per-frame at init (documented, not hidden); a single block equals the one-shot sampler exactly; multi-block stays closer to one-shot than an independent draw; blocks cover every frame in order and concatenate to the batch result; chunked phase lock matches offline (cosine >0.99) and buffers a full `n_fft`; streaming synthesis yields several chunks whose total length matches the one-shot path, with and without the filter |
 
 ## 2. Learning demo (measured)
@@ -323,7 +324,53 @@ The lesson generalises: every bug found in rounds 6–7 — the mixture never re
 mask bug, these two — lived in the *seams between* components, which is exactly what a per-part demo
 suite cannot see, and why this end-to-end run earns its four minutes.
 
-## 9. Smoke test output (measured)
+## 9. Multi-voice conditioning (measured)
+
+The same class of bug as the mixture, found the same way: `n_voices` and `voice_embed` existed and
+the manifest had carried a `voice` per record since round 1, but **nothing between them produced a
+voice tensor**, so every sample trained as voice 0. Fixing the plumbing exposed a second, *design*
+gap: the voice embedding only modulated the latent feature, leaving the duration/F0/energy heads
+voice-blind, so voices could not differ in pitch even once the index arrived. The voice now
+conditions the whole text side.
+
+`scripts/voice_demo.py` trains the Tiny text side twice from an identical initialisation — once with
+the voice index reaching the model, once with it forced to 0 (the pre-fix behaviour) — on a corpus
+where **the same texts are rendered once per fixture voice** (pitch multipliers 0.85 / 1.0 / 1.6):
+
+| | voice 0 (low) | voice 1 (mid) | voice 2 (high) | fit |
+|---|---|---|---|---|
+| fixture pitch | 80.8 Hz | 95.0 Hz | 152.0 Hz | — |
+| **with conditioning** | **81.7 Hz** | **88.8 Hz** | **148.6 Hz** | loss **0.3726** |
+| control (voice forced to 0) | 128.0 Hz | 106.9 Hz | 0.0 Hz | loss 2.6021 |
+
+The conditioned student reproduces the fixtures' relative pitch almost exactly (81.7/88.8/148.6 vs
+80.8/95/152) and fits the per-voice targets **7× better** than the control, which — given identical
+inputs with contradictory targets and no way to disambiguate — drifts to nonsense (0 Hz for the
+high voice).
+
+### Three more bugs the voice work surfaced in the F0 *target* pipeline
+
+Pitch is the target, so it had to be right; it was not.
+
+1. **The fixture's pitch sweep was unbounded** — 2 % decline per *token* over a 43-character
+   sentence swept down to 0.16× the base pitch (24 Hz for the high voice), below any tracker's
+   range. The fallback target then looked scrambled in a way that first appeared to be a modelling
+   failure. Fixed to a bounded 15 %.
+2. **The default pitch estimator was formant-biased autocorrelation**, which on a full utterance
+   reported **168 Hz for an 81 Hz voice** and marked only 52 % of frames voiced (YIN: 74 Hz, 100 %).
+   The estimator is now YIN (difference function, CMND, absolute threshold on the first *local
+   minimum*, parabolic refinement on the difference function) with a wider analysis window. Two
+   implementation details mattered: stopping at the first threshold *crossing* rather than the first
+   local minimum reported 226 Hz for a pure 200 Hz tone.
+3. **Per-token aggregation averaged in the unvoiced zeros**, so a half-voiced token was labelled
+   with half its true pitch. F0 now averages over voiced frames only (a fully unvoiced span stays 0).
+
+All three are pinned by `test_cached_f0_targets_follow_the_voice_pitch` (the cached targets must
+increase with the voice's pitch multiplier — it fails if any of the three regresses),
+`test_yin_is_used_by_default_and_is_no_worse_than_autocorrelation`, and
+`test_aggregate_to_tokens_ignores_unvoiced_zeros`.
+
+## 10. Smoke test output (measured)
 
 ```
 parakeet-tiny [tiny] sr=24000 mel=80@93.8Hz latent=24 compress=1/6 voice=constant
@@ -374,7 +421,7 @@ overhead — it is not a valid throughput measurement until the model predicts s
 learning demo (§2) trains properly but on 15 seconds of *synthetic* audio, so it demonstrates that
 the machinery learns, not that the model is good.
 
-## 10. Deliberate engineering checks worth calling out
+## 11. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
@@ -410,7 +457,7 @@ the machinery learns, not that the model is good.
   `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
   else, rather than surfacing a cryptic `torch.stft` message.
 
-## 11. Environment notes
+## 12. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).

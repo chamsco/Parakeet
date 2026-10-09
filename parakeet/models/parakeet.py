@@ -82,8 +82,12 @@ class ParakeetTiny(nn.Module):
         self.prosody_proj = nn.Sequential(
             nn.Linear(2, 64), nn.GELU(), nn.Linear(64, cfg.autoencoder.latent_dim)
         )
-        #: voice: "replaces the style input with a learned constant" (Paradee)
-        self.voice_embed = nn.Embedding(max(1, cfg.n_voices), cfg.autoencoder.latent_dim)
+        #: voice: conditions the *whole* text side, not just the latent feature.  A voice differs in
+        #: pitch range, energy, timing and timbre, so adding it only to the latent (as the first
+        #: version did) left the F0/energy/duration heads voice-blind -- which made multi-voice
+        #: training unable to separate voices at all.  "Replaces the style input with a learned
+        #: constant" for a single voice (Paradee).
+        self.voice_embed = nn.Embedding(max(1, cfg.n_voices), cfg.text.dim)
         self.register_buffer("f0_mean", torch.tensor(0.0), persistent=False)
         self.register_buffer("f0_std", torch.tensor(1.0), persistent=False)
 
@@ -92,15 +96,14 @@ class ParakeetTiny(nn.Module):
         self, ids: torch.Tensor, mask: Optional[torch.Tensor] = None, voice: Optional[torch.Tensor] = None
     ) -> Dict[str, torch.Tensor]:
         h = self.text(ids, mask)
+        if voice is not None:
+            h = h + self.voice_embed(voice)[:, None, :]
+        else:
+            h = h + self.voice_embed.weight[0][None, None, :]
         log_dur = self.duration(h, mask)
         latent_tok = self.latent_head(h)
         f0 = self.f0_head(h).squeeze(-1)
         energy = self.energy_head(h).squeeze(-1)
-        if voice is not None:
-            v = self.voice_embed(voice)[:, None, :]
-            latent_tok = latent_tok + v
-        else:
-            latent_tok = latent_tok + self.voice_embed.weight[0][None, None, :]
         return {
             "text_memory": h,
             "log_duration": log_dur,

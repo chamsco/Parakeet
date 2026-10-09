@@ -72,6 +72,20 @@ cross-attention into the text memory, as in SupertonicTTS.
 
 Tiny 0.66 M, Small 0.20 M (Small's is tiny because it is a single scalar head).
 
+**Voice conditioning (Tiny).** A voice is *not* just timbre: it changes pitch range, energy,
+timing and spectrum. `ParakeetTiny.voice_embed` therefore adds a per-voice vector to the **text
+memory before every head**, so duration, F0, energy and the latent feature are all voice-conditioned.
+The first implementation added it only to the latent feature, which left the prosody heads
+voice-blind and made multi-voice training unable to separate voices at all. A single voice is the
+learned constant `voice_embed.weight[0]` (Paradee replaces the style input with a learned constant).
+The per-sample voice index is stored in the latent cache next to the teacher weight.
+
+**Pitch targets.** `extract_signals` uses **YIN** (`estimate_f0_yin`: difference function, cumulative
+mean normalisation, absolute threshold on the first *local* minimum, parabolic refinement on the
+difference function) rather than autocorrelation, which is formant-biased — on a fixture utterance it
+reported 168 Hz for an 81 Hz voice and marked only 52 % of frames voiced (YIN: 74 Hz, 100 %). Per-token
+F0 targets average over **voiced frames only**, so a half-voiced token keeps its true pitch.
+
 ## 5. Speaker conditioning (`SpeakerConditioner`, PilotTTS §3.2)
 
 ```

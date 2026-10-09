@@ -84,9 +84,15 @@ the engineering.
 
 ## P5 — Optional quality work
 
-* [ ] Multi-voice Tiny (`n_voices > 1`) and per-voice constant styles.
-* [ ] Multilingual text (the char-level encoder makes this an alphabet problem, not a G2P problem).
-* [ ] Consistency distillation as an alternative to Reflow; compare NFE 1 feasibility.
+* [x] **Multi-voice Tiny**: the manifest's per-record voice reaches the model (cache → collation →
+      loss), the voice embedding conditions the *whole* text side (not just the latent feature), and
+      a fixture demo shows the student reproducing three voices' relative pitch (81.7 / 88.8 /
+      148.6 Hz against fixtures at 80.8 / 95 / 152) with a 7× better per-voice fit than a
+      voice-blind control.  The work also fixed three bugs in the F0 **target** pipeline: an
+      unbounded fixture pitch sweep, a formant-biased default estimator (autocorrelation reported
+      168 Hz for an 81 Hz voice), and per-token aggregation that averaged in unvoiced zeros
+* [ ] Multilingual text (the char-level encoder makes this an alphabet problem, not a G2P problem)
+* [ ] Consistency distillation as an alternative to Reflow; compare NFE 1 feasibility
 * [ ] Soft/distributional teacher targets to counteract the synthetic-data failure mode.
 * [ ] Prosody transfer experiments (swap style tokens between speakers of the same language).
 

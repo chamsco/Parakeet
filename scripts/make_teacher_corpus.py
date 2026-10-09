@@ -41,6 +41,9 @@ DEFAULT_VOICES = {
     "orpheus": ["tara", "leah", "jess", "leo", "dan", "mia", "zac", "zoe"],
     "kokoro": ["af_heart", "af_bella", "am_michael", "bf_emma"],
     "minimax": ["English_expressive_narrator"],
+    # fixtures: distinct pitches, so a multi-voice fixture corpus exercises voice conditioning
+    "stub_low": ["low", "mid", "high"],
+    "stub_high": ["mid", "high"],
 }
 
 

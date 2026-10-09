@@ -39,7 +39,12 @@ def ae_reconstruction_l1(
 
 
 def teacher_signal_loss(model, targets: Sequence[Mapping], cfg: ParakeetConfig) -> float:
-    """The Tiny distillation objective on each target individually (Tiny models only)."""
+    """The Tiny distillation objective on each target individually (Tiny models only).
+
+    The sample's own ``teacher_weight`` and ``voice`` are passed through when present: dropping
+    either would evaluate the model under conditioning it was not given, which quietly makes a
+    voice-conditioned model look worse than an unconditioned one.
+    """
     from ..train.stages import tiny_text_step
 
     values = []
@@ -53,6 +58,12 @@ def teacher_signal_loss(model, targets: Sequence[Mapping], cfg: ParakeetConfig) 
                 "energy": t["energy"][None],
                 "latent_token": t["latent_token"][None],
             }
+            for key in ("teacher_weight", "voice"):
+                value = t.get(key) if isinstance(t, Mapping) else None
+                if value is None:
+                    continue
+                tensor = torch.as_tensor(value).reshape(-1)
+                batch[key] = tensor[:1] if tensor.numel() else None
             loss, _ = tiny_text_step(cfg, model, batch)
             values.append(float(loss.item()))
     return sum(values) / max(1, len(values))
