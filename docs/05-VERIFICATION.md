@@ -12,14 +12,14 @@ python scripts/reflow_demo.py                               # validates NFE-2 sa
 python scripts/streaming_demo.py                            # blockwise streaming + TTFA (~7 min CPU)
 python scripts/export_onnx.py --pipeline                    # int8 ONNX + runtime benchmark
 python scripts/profile_pipeline.py                          # where does the time actually go
-python -m pytest -q                                         # 167 tests
+python -m pytest -q                                         # 181 tests
 python scripts/bench_rtf.py --config configs/parakeet_tiny.yaml
 ```
 
 ## 1. Test suite
 
 ```
-167 passed
+181 passed
 ```
 
 Coverage by area:
@@ -36,6 +36,7 @@ Coverage by area:
 | `test_curate.py` | every curation gate fires on a constructed failure (too short/long, clipped, silent, low SNR, narrowband, low MOS, ASR disagreement); **all** reasons reported, not just the first; SNR correctly reported as *unevaluable* without a noise floor; WER and punctuation-gap maths; reject records are never dropped |
 | `test_learning.py` | synthetic fixture is structurally exact (frame counts, peak, F0 declination); latent normaliser fits and inverts; token targets are exact and normalised; decoder-latent alignment; supplied-latent path leaves the encoder gradient-free; **stage freezing does not leak between stages**; and the headline: 40 CPU steps measurably improve both the representation and the distilled text side |
 | `test_onnx.py` | ONNX decoder matches PyTorch to **<1e-4**; text side matches to **<1e-4 across token lengths 5/8/17** (the legacy exporter's baked-in length would fail this); dynamic time axis across 7/23/41 frames; int8 files are smaller and run on CPU; dtypes are validated at the wrapper boundary; external weight sidecars are counted in size; full int8 pipeline tracks PyTorch (cosine >0.95) and is smaller in total (skips if `onnx`/`onnxruntime`/`onnxscript` absent) |
+| `test_provenance_and_hygiene.py` | **every `.py` under `parakeet/` is tracked by git** (the unanchored `data/` ignore rule hid the whole data package for ten commits), plus scripts/CI/configs ship; no public name in the package is referenced nowhere (with an explicit allowlist escape hatch); `run_stage` writes `run.json` with git revision, config SHA-256, versions, and the trainable/frozen report, and merges caller provenance; `SpeakerConfig.freeze` really freezes the identity encoder while the Q-Former adapts; a saved checkpoint round-trips from both a raw encoder state dict and a full-model state dict, and a mismatched one raises |
 | `test_pipeline_wiring.py` | `make_batch_source` pairs references for the flow stage only (and honours the config cap, and falls back to synthetic batches); `cache_teacher_corpus` takes the mixture from `corpus_meta.json` (the CLI used to pass none), prefers a curated `kept.jsonl` including in `curated/`, and errors without a manifest; the P1 gates discriminate, **reject digital silence even with duration/bandwidth/SNR relaxed** (`min_rms_dbfs`), and score `silence_ratio` 1.0 for it; a curated manifest round-trips into a valid cache |
 | `test_conditioning.py` | the cache batch carries a padded, masked reference (and legacy caches without `log_mel` still collate); pairing never uses the target utterance and takes the positive from the same voice and the negative from a different one; `max_ref_frames` truncates like PilotTTS's 15 s cap; **with no reference the identity/style encoders receive exactly zero gradient** (the control for the pre-fix cached path) while with one they receive gradient and the separation term is active; the separation loss pushes different speakers apart and the consistency term is off by default |
 | `test_voice.py` | the fixture voices really are multi-voice (measured monotone pitch); the voice embedding conditions **every** head (duration/F0/energy/latent — the first version only modulated the latent); the default voice is index 0; the cache records per-voice indices and rejects a corpus with more voices than the model has; **cached F0 targets follow the voice pitch** (fails if the unbounded fixture sweep, the formant-biased estimator, or the unvoiced-zero averaging regresses); YIN is the default and is accurate; per-token aggregation ignores unvoiced zeros |
@@ -417,7 +418,61 @@ about what the fixture can demonstrate.
 cache from the curated manifest → training → synthesis — passing 10/10 checks on both the Tiny and
 the Small/flow stage.
 
-## 12. Speaker/style conditioning from a latent cache (measured)
+## 12. The published repository was missing the data package (found by cloning, not inspecting)
+
+The most serious defect in this project so far, and the one no test in the working tree could see.
+
+`.gitignore` carried an **unanchored `data/`** rule, meant for the corpus directory at the repo root.
+It also matches the Python package `parakeet/data/`, so for the first ten commits the tokenizer,
+teacher backends, feature cache, datasets and curation pipeline were never committed:
+**7 of 33 package source files were absent from GitHub**. Everything worked locally, every test
+passed locally, `git push` succeeded every time — and a fresh clone could not even
+`import parakeet.data`.
+
+It surfaced only because a routine audit tried to recover a deleted helper from git and found the
+file was not in git at all. The rule is now root-anchored (`/data/`, `/runs/`, `/checkpoints/`).
+
+Verified the only way that counts — by **cloning the pushed repository** and running it there:
+
+```
+$ git clone https://github.com/chamsco/Parakeet.git /tmp/clone
+$ cd /tmp/clone && python -c "import parakeet; print(parakeet.__file__)"
+/tmp/clone/parakeet/__init__.py
+$ python -m pytest tests/test_provenance_and_hygiene.py tests/test_conditioning.py \
+      tests/test_pipeline_wiring.py
+31 passed
+```
+
+`tests/test_provenance_and_hygiene.py` makes this class of failure impossible to repeat silently: it
+asserts every `.py` under `parakeet/` is tracked by git (plus scripts, CI config and configs), and it
+runs in CI, where the checkout is a real git repository.
+
+### Closing out the "declared but unwired" theme
+
+A systematic audit of every public name and config field (not opportunistic discovery) found the
+remainder:
+
+* **`write_run_metadata` was dead code** — no run had ever recorded its provenance. `run_stage` now
+  writes `<out_dir>/run.json` with the git revision and dirty flag, a config SHA-256, python/torch
+  versions, the stage, and the **trainable/frozen parameter report** (the diagnostic that would have
+  caught the round-2 bug where `distill-decoder` silently trained nothing). `train.py` adds the
+  corpus provenance: teacher mixture, voices, and a SHA-256 of the cache index.
+* **`SpeakerConfig.checkpoint` / `SpeakerConfig.freeze` were never read.** The documented production
+  path — frozen CAM++ identity with an adapting Q-Former — did not exist; every run trained the
+  randomly-initialised stand-in. Implemented, with a prefix-tolerant loader (raw encoder state dict
+  or full-model checkpoint) that raises on zero overlap instead of silently training a random encoder.
+* **`use_teacher_durations` was accepted and ignored**; it now selects the teacher's durations when
+  the manifest carries `token_frames`, and the uniform fallback otherwise (whose comment claimed
+  "energy valleys" while splitting uniformly, and computed an energy vector it never used).
+* **`consistency_distillation_loss`** duplicated an inline MSE in `reflow_step`; the named loss is
+  now the one used.
+* **14 superseded helpers deleted and 7 dead config knobs removed** (listed in the commit). One
+  deletion was an error I caught in the same command: `sha1_of_array` *is* used for corpus
+  provenance and was restored immediately.
+* **`test_no_dead_public_api_in_the_package`** now fails if any public name becomes unreferenced
+  again, with an explicit allowlist escape hatch, so the finding cannot silently return.
+
+## 13. Speaker/style conditioning from a latent cache (measured)
 
 The third instance of the same class of bug, this time in the **flagship** path. `collate` dropped
 `log_mel` entirely, so the Small/flow model trained from a latent cache received `ref_mel=None`:
@@ -460,7 +515,7 @@ dominated by `x0` and two different references give near-identical audio (cosine
 the same degeneracy found in round 5; measuring it would have been a fake control, so the structural
 measurement is the meaningful one at this stage.
 
-## 13. Smoke test output (measured)
+## 14. Smoke test output (measured)
 
 ```
 parakeet-tiny [tiny] sr=24000 mel=80@93.8Hz latent=24 compress=1/6 voice=constant
@@ -511,7 +566,7 @@ overhead — it is not a valid throughput measurement until the model predicts s
 learning demo (§2) trains properly but on 15 seconds of *synthetic* audio, so it demonstrates that
 the machinery learns, not that the model is good.
 
-## 14. Deliberate engineering checks worth calling out
+## 15. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
@@ -547,7 +602,7 @@ the machinery learns, not that the model is good.
   `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
   else, rather than surfacing a cryptic `torch.stft` message.
 
-## 15. Environment notes
+## 16. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
