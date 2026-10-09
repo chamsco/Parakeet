@@ -1,0 +1,139 @@
+"""Staged training: every stage must run, produce finite losses and checkpoint."""
+
+import copy
+
+import pytest
+import torch
+
+from parakeet.config import ParakeetConfig, load_config
+from parakeet.data.dataset import SyntheticBatchSource
+from parakeet.models import build_model
+from parakeet.train.stages import STAGE_STEPS, run_stage, train_all_stages
+
+
+def _fast_small() -> ParakeetConfig:
+    cfg = ParakeetConfig(variant="small", voice_mode="reference")
+    cfg.autoencoder.encoder_dims = [32, 48, 64]
+    cfg.autoencoder.encoder_blocks = [1, 1, 1]
+    cfg.autoencoder.decoder_dim = 64
+    cfg.autoencoder.decoder_blocks = 3
+    cfg.autoencoder.decoder_dilations = [1, 2]
+    cfg.text.dim = 64
+    cfg.text.n_layers = 2
+    cfg.text.n_heads = 4
+    cfg.flow.dim = 64
+    cfg.flow.depth = 2
+    cfg.flow.n_heads = 4
+    cfg.flow.text_dim = 64
+    cfg.flow.cond_dim = 64
+    cfg.flow.nfe = 2
+    cfg.flow.distilled_nfe = 2
+    cfg.speaker.style_dim = 64
+    cfg.speaker.emb_dim = 64
+    cfg.speaker.channels = [32, 48]
+    cfg.speaker.n_query = 4
+    cfg.duration.hidden = 64
+    cfg.train.log_every = 1
+    cfg.train.save_every = 0
+    return cfg.validate()
+
+
+TINY_STAGES = ["autoencoder", "distill-text", "distill-decoder"]
+SMALL_STAGES = ["autoencoder", "flow", "reflow"]
+
+
+@pytest.mark.parametrize("stage", TINY_STAGES)
+def test_tiny_stage_runs(fast_cfg, stage, tmp_path):
+    cfg = copy.deepcopy(fast_cfg)
+    cfg.train.max_steps = 1
+    model = build_model(cfg)
+    source = SyntheticBatchSource(cfg, stage, batch_size=2, n_frames=32, n_tokens=12)
+    logs = run_stage(stage, cfg, model=model, batches=source, max_steps=1, out_dir=str(tmp_path))
+    assert logs["loss"] == logs["loss"], f"{stage} loss is NaN"
+    assert (tmp_path / f"{stage}_last.pt").exists()
+
+
+@pytest.mark.parametrize("stage", SMALL_STAGES)
+def test_small_stage_runs(stage, tmp_path):
+    cfg = _fast_small()
+    cfg.train.max_steps = 1
+    model = build_model(cfg)
+    source = SyntheticBatchSource(cfg, stage, batch_size=2, n_frames=32, n_tokens=12)
+    logs = run_stage(stage, cfg, model=model, batches=source, max_steps=1, out_dir=str(tmp_path))
+    assert logs["loss"] == logs["loss"], f"{stage} loss is NaN"
+    assert (tmp_path / f"{stage}_last.pt").exists()
+
+
+def test_stage_registry_covers_every_stage():
+    assert set(STAGE_STEPS) == {
+        "autoencoder",
+        "distill-decoder",
+        "distill-text",
+        "flow",
+        "reflow",
+    }
+
+
+def test_unknown_stage_rejected(fast_cfg):
+    with pytest.raises(ValueError):
+        run_stage("nonsense", fast_cfg, batches=lambda: {})
+
+
+def test_distill_decoder_freezes_encoder(fast_cfg, tmp_path):
+    cfg = copy.deepcopy(fast_cfg)
+    model = build_model(cfg)
+    source = SyntheticBatchSource(cfg, "distill-decoder", batch_size=1, n_frames=32, n_tokens=12)
+    run_stage("distill-decoder", cfg, model=model, batches=source, max_steps=1, out_dir=str(tmp_path))
+    assert not any(p.requires_grad for p in model.autoencoder.encoder.parameters())
+    assert any(p.requires_grad for p in model.autoencoder.decoder.parameters())
+
+
+def test_distill_text_freezes_autoencoder(fast_cfg, tmp_path):
+    cfg = copy.deepcopy(fast_cfg)
+    model = build_model(cfg)
+    source = SyntheticBatchSource(cfg, "distill-text", batch_size=1, n_frames=16, n_tokens=8)
+    run_stage("distill-text", cfg, model=model, batches=source, max_steps=1, out_dir=str(tmp_path))
+    assert not any(p.requires_grad for p in model.autoencoder.parameters())
+
+
+def test_training_reduces_loss_on_a_tiny_problem(fast_cfg):
+    """Sanity: the distilled text side actually fits its cached targets."""
+    cfg = copy.deepcopy(fast_cfg)
+    cfg.train.lr = 5e-3
+    model = build_model(cfg)
+    fixed_batch = SyntheticBatchSource(cfg, "distill-text", batch_size=2, n_frames=16, n_tokens=12, seed=7)
+    batch = fixed_batch()
+    from parakeet.train.stages import tiny_text_step
+
+    with torch.no_grad():
+        first, _ = tiny_text_step(cfg, model, batch)
+    for _ in range(20):
+        run_stage(
+            "distill-text", cfg, model=model, batches=lambda: batch, max_steps=1, out_dir=str(cfg.train.out_dir)
+        )
+    with torch.no_grad():
+        last, _ = tiny_text_step(cfg, model, batch)
+    assert last.item() < first.item(), f"loss did not decrease: {first.item():.4f} -> {last.item():.4f}"
+
+
+def test_train_all_stages_curriculum(tmp_path):
+    cfg = _fast_small()
+    cfg.train.out_dir = str(tmp_path)
+    sources = {
+        stage: SyntheticBatchSource(cfg, stage, batch_size=1, n_frames=24, n_tokens=8)
+        for stage in SMALL_STAGES
+    }
+    results = train_all_stages(
+        cfg, sources, steps_by_stage={s: 1 for s in SMALL_STAGES}, out_dir=str(tmp_path)
+    )
+    assert set(results) == set(SMALL_STAGES)
+    for logs in results.values():
+        assert logs["loss"] == logs["loss"]
+
+
+def test_load_shipped_configs_build():
+    for path in ("configs/parakeet_tiny.yaml", "configs/parakeet_small.yaml", "configs/parakeet_small_44k.yaml"):
+        cfg = load_config(path)
+        assert cfg.variant in {"tiny", "small"}
+        assert cfg.flow.compress == 6
+        assert cfg.audio.hop_length in {256, 512}

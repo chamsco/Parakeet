@@ -1,0 +1,77 @@
+# Parakeet-Tiny — single/few voices, ~9.6M params, CPU realtime.
+#
+# Recipe: Paradee (arXiv 2610.06817) applied to a mixture of teachers.  Two halves trained
+# separately against cached teacher signals, then connected with no joint training.  No flow
+# sampler at inference: the text side predicts (duration, F0, energy, latent feature) and a
+# 24-dim causal ConvNeXt decoder renders the waveform.  Weight-only int8 for deployment.
+name: parakeet-tiny
+variant: tiny
+voice_mode: constant
+n_voices: 1
+
+audio:
+  sample_rate: 24000        # matched to the teachers (Orpheus/SNAC 24k, Kokoro 24k)
+  n_fft: 1024
+  hop_length: 256           # 93.75 mel frames/s
+  win_length: 1024
+  n_mels: 80
+  fmax: 12000.0
+
+autoencoder:
+  latent_dim: 24
+  encoder_dims: [64, 96, 128]
+  encoder_blocks: [1, 2, 2]
+  decoder_dim: 256
+  decoder_blocks: 5
+  decoder_expansion: 4
+  decoder_dilations: [1, 2, 4, 8, 16]
+  causal_decoder: true       # streaming-capable
+
+text:
+  vocab_size: 128
+  dim: 256
+  n_layers: 4
+  n_heads: 4
+  mode: char                 # char (SupertonicTTS) or phoneme (Kokoro-style G2P)
+
+duration:
+  hidden: 256
+  n_layers: 2
+  predict_token_durations: true
+  predict_utterance_length: false
+
+speaker:
+  n_mels: 80
+  emb_dim: 192
+  n_query: 8
+  style_dim: 256
+  freeze: true
+
+flow:
+  latent_dim: 24
+  compress: 6
+  dim: 384
+  depth: 6
+  n_heads: 6
+  text_dim: 256
+  cond_dim: 256
+  nfe: 32
+  distilled_nfe: 4
+
+train:
+  batch_size: 16
+  lr: 0.0002
+  max_steps: 50000
+  ema_decay: 0.999
+  save_every: 5000
+  log_every: 50
+  loss:
+    mel: 1.0
+    spectral: 3.0            # Paradee: 3.0 -> UTMOS 4.37; 45 -> 3.02.  Balance, not size.
+    adversarial: 1.0
+    feature_match: 2.0
+    duration: 1.0
+    f0: 1.0
+    energy: 1.0
+    latent_feature: 1.0
+    phase_lock: 0.05

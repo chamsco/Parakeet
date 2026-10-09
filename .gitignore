@@ -1,0 +1,36 @@
+# --- python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+build/
+dist/
+
+# --- data (never commit corpora / teacher dumps) ---
+data/
+runs/
+checkpoints/
+*.wav
+*.flac
+*.mp3
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.onnx
+!assets/**/*.wav
+
+# --- secrets ---
+.env
+*.key
+secrets.yaml
+
+# --- os / editor ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

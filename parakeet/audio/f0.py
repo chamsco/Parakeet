@@ -1,0 +1,140 @@
+"""F0 / energy extraction, and the F0 quantisation used by the Tiny distillation path.
+
+Paradee caches *durations, pitch, energy and phoneme features* from the teacher and trains a
+small text side to regress them.  This module provides the pitch/energy half of that cache
+without a heavy dependency.  For research-grade F0 we recommend ``praat-parselmouth`` or
+``pyin``; :func:`estimate_f0` is a normalized-autocorrelation estimator that is good enough
+for regression targets and for the phase-locking filter.
+"""
+
+from __future__ import annotations
+
+from typing import Tuple
+
+import torch
+import torch.nn.functional as F
+
+
+def frame_energy_db(
+    wav: torch.Tensor,
+    frame_length: int = 1024,
+    hop_length: int = 256,
+    eps: float = 1e-8,
+) -> torch.Tensor:
+    """Frame RMS in dB.  ``(B, N) -> (B, T)``."""
+    if wav.dim() == 1:
+        wav = wav.unsqueeze(0)
+    pad = frame_length // 2
+    x = F.pad(wav, (pad, pad))
+    frames = x.unfold(-1, frame_length, hop_length)
+    rms = frames.pow(2).mean(dim=-1).clamp_min(eps).sqrt()
+    return 20.0 * torch.log10(rms)
+
+
+@torch.no_grad()
+def estimate_f0(
+    wav: torch.Tensor,
+    sample_rate: int,
+    hop_length: int = 256,
+    frame_length: int = 1024,
+    fmin: float = 60.0,
+    fmax: float = 500.0,
+    threshold: float = 0.30,
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Normalized-autocorrelation pitch tracker.
+
+    Returns ``(f0_hz, voiced, confidence)`` each of shape ``(B, T)``; unvoiced frames have
+    ``f0_hz == 0``.
+    """
+    if wav.dim() == 1:
+        wav = wav.unsqueeze(0)
+    n = wav.shape[-1]
+    pad = frame_length // 2
+    x = F.pad(wav, (pad, pad))
+    frames = x.unfold(-1, frame_length, hop_length)  # (B, T, L)
+    frames = frames - frames.mean(dim=-1, keepdim=True)
+    win = torch.hann_window(frame_length, device=wav.device, dtype=wav.dtype)
+    frames = frames * win
+    nfft = 1 << max(1, (2 * frame_length - 1).bit_length())
+    spec = torch.fft.rfft(frames, n=nfft, dim=-1)
+    acf = torch.fft.irfft(spec * spec.conj(), n=nfft, dim=-1)[..., :frame_length]
+    zero = acf[..., :1].clamp_min(1e-8)
+    acf = acf / zero
+
+    min_lag = max(2, int(sample_rate / fmax))
+    max_lag = min(frame_length - 2, int(sample_rate / fmin))
+    segment = acf[..., min_lag:max_lag]
+
+    best_val, best_idx = segment.max(dim=-1)
+    lag = (best_idx + min_lag).to(wav.dtype)
+
+    # parabolic interpolation around the peak
+    left = torch.gather(acf, -1, (best_idx + min_lag - 1).clamp(min=0).long().unsqueeze(-1)).squeeze(-1)
+    right = torch.gather(
+        acf, -1, (best_idx + min_lag + 1).clamp(max=frame_length - 1).long().unsqueeze(-1)
+    ).squeeze(-1)
+    denom = (left - 2 * best_val + right).abs().clamp_min(1e-8)
+    delta = 0.5 * (left - right) / denom
+    delta = delta.clamp(-0.5, 0.5)
+    lag = (lag + delta).clamp(min=1.0)
+
+    f0 = sample_rate / lag
+    voiced = (best_val > threshold) & (f0 >= fmin) & (f0 <= fmax)
+    f0 = torch.where(voiced, f0, torch.zeros_like(f0))
+    return f0, voiced, best_val.clamp(0.0, 1.0)
+
+
+def f0_to_bins(
+    f0_hz: torch.Tensor,
+    voiced: torch.Tensor | None = None,
+    fmin: float = 60.0,
+    fmax: float = 500.0,
+    n_bins: int = 256,
+) -> torch.Tensor:
+    """Quantise log-F0 into ``n_bins`` bins (0 == unvoiced), as an integer code.
+
+    Quantised pitch makes the Tiny text-side regression target robust to mis-voicing in the
+    teacher cache (it behaves like a coarse pitch contour rather than a fragile float).
+    """
+    up = max(2 * n_bins, 65536)
+    f0 = f0_hz.to(torch.float32)
+    if voiced is not None:
+        f0 = torch.where(voiced, f0, torch.zeros_like(f0))
+    log_f0 = torch.log2(f0.clamp_min(fmin))
+    lo, hi = float(torch.log2(torch.tensor(fmin + 1e-6))), float(torch.log2(torch.tensor(fmax)))
+    scaled = (log_f0 - lo) / max(hi - lo, 1e-6)
+    bins = torch.round(scaled * (n_bins - 1)).clamp(0, n_bins - 1)
+    bins = torch.where(f0 > 0, bins + 1, torch.zeros_like(bins))
+    del up
+    return bins.to(torch.long)
+
+
+def bins_to_f0(
+    bins: torch.Tensor,
+    fmin: float = 60.0,
+    fmax: float = 500.0,
+    n_bins: int = 256,
+) -> torch.Tensor:
+    """Inverse of :func:`f0_to_bins` (bin 0 -> 0 Hz, i.e. unvoiced)."""
+    lo, hi = float(torch.log2(torch.tensor(fmin + 1e-6))), float(torch.log2(torch.tensor(fmax)))
+    b = bins.to(torch.float32) - 1.0
+    scaled = b / max(n_bins - 1, 1)
+    f0 = torch.pow(2.0, lo + scaled * (hi - lo))
+    return torch.where(bins > 0, f0, torch.zeros_like(f0))
+
+
+def interpolate_f0(f0: torch.Tensor, voiced: torch.Tensor) -> torch.Tensor:
+    """Fill unvoiced gaps with the nearest voiced value (log-domain), for smooth targets."""
+    f0 = f0.clone()
+    voiced = voiced.bool()
+    if not bool(voiced.any()):
+        return f0
+    logf0 = torch.where(voiced, torch.log(f0.clamp_min(1e-3)), torch.full_like(f0, float("nan")))
+    b, t = logf0.shape
+    idx = torch.arange(t, device=f0.device).expand(b, t)
+    idx = torch.where(voiced, idx, torch.zeros_like(idx))
+    idx = torch.cummax(idx, dim=-1).values
+    last_valid = torch.gather(logf0, -1, idx.clamp(max=t - 1).long())
+    filled = torch.where(torch.isnan(logf0), last_valid, logf0)
+    filled = torch.nan_to_num(filled, nan=0.0)
+    return torch.where(voiced, torch.exp(filled), torch.zeros_like(f0))

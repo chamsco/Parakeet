@@ -1,0 +1,69 @@
+# Parakeet-Small-44k — the SupertonicTTS-faithful geometry (arXiv 2503.23108 v3).
+#
+# Use this when training mostly on *real* 44.1 kHz corpora (e.g. Emilia at full rate) rather
+# than on 24 kHz teacher output.  228 mel bands, FFT 2048, hop 512 -> ~86 frames/s, latent C=24,
+# Kc=6 -> 144 dims at ~14 Hz, exactly as the paper reports.
+name: parakeet-small-44k
+variant: small
+voice_mode: reference
+n_voices: 1
+
+audio:
+  sample_rate: 44100
+  n_fft: 2048
+  hop_length: 512            # 86.13 mel frames/s
+  win_length: 2048
+  n_mels: 228
+  fmax: 22050.0
+
+autoencoder:
+  latent_dim: 24
+  encoder_dims: [128, 192, 256]
+  encoder_blocks: [2, 3, 3]
+  decoder_dim: 384
+  decoder_blocks: 8
+  decoder_expansion: 4
+  decoder_dilations: [1, 2, 4, 1, 2, 4, 1, 1]
+  causal_decoder: true
+
+text:
+  vocab_size: 128
+  dim: 384
+  n_layers: 4
+  n_heads: 4
+  mode: char
+
+duration:
+  hidden: 256
+  n_layers: 2
+  predict_utterance_length: true
+
+speaker:
+  n_mels: 228
+  emb_dim: 192
+  n_query: 8
+  style_dim: 384
+  qformer_layers: 2
+  qformer_heads: 4
+  freeze: true
+
+flow:
+  latent_dim: 24
+  compress: 6
+  dim: 512
+  depth: 6
+  n_heads: 4
+  text_dim: 384
+  cond_dim: 384
+  nfe: 32
+  distilled_nfe: 4
+  cfg_scale: 3.0
+  context_expansion: 4
+
+train:
+  batch_size: 16
+  lr: 0.0002
+  max_steps: 700000          # paper: 700k iters at batch 64 on 4x 4090
+  ema_decay: 0.999
+  save_every: 20000
+  log_every: 100

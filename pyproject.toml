@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "parakeet-tts"
+version = "0.1.0"
+description = "Parakeet: a tiny, lightning-fast, high-realism TTS distilled from a mixture of teachers."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+dependencies = [
+    "torch>=2.4",
+    "numpy>=1.24",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+audio = ["soundfile>=0.12", "librosa>=0.10", "praat-parselmouth>=0.4"]
+teachers = ["transformers>=4.44", "snac>=1.2", "kokoro>=0.9", "misaki>=0.9"]
+eval = ["faster-whisper>=1.0", "onnxruntime>=1.18"]
+dev = ["pytest>=8.0", "tqdm>=4.66"]
+
+[tool.setuptools.packages.find]
+include = ["parakeet*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

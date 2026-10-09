@@ -1,0 +1,81 @@
+# Parakeet-Small — zero-shot multi-speaker, ~44M params (SupertonicTTS budget:
+# 0.5M duration + 18.5M text-to-latent + 25M latent-to-speech), 24 kHz so that it can be
+# distilled from 24 kHz teachers without a pointless upsample.
+#
+# Conditioning follows PilotTTS: a frozen CAM++ identity embedding + Q-Former style tokens,
+# with cross-sample paired training so identity and style factorise.
+# Few-step inference (NFE 2-4) comes from the `reflow` stage, not from naively cutting Euler
+# steps: SupertonicTTS reports WER 11.43 at NFE 4 vs 2.64 at NFE 32.
+name: parakeet-small
+variant: small
+voice_mode: reference
+n_voices: 1
+
+audio:
+  sample_rate: 24000
+  n_fft: 1024
+  hop_length: 256
+  win_length: 1024
+  n_mels: 80
+  fmax: 12000.0
+
+autoencoder:
+  latent_dim: 24
+  encoder_dims: [128, 192, 256]
+  encoder_blocks: [2, 3, 3]
+  decoder_dim: 384
+  decoder_blocks: 7
+  decoder_expansion: 4
+  decoder_dilations: [1, 2, 4, 8, 16]
+  causal_decoder: true
+text:
+  vocab_size: 128
+  dim: 256
+  n_layers: 6
+  n_heads: 4
+  mode: char                 # no G2P, implicit cross-attention alignment
+
+duration:
+  hidden: 256
+  n_layers: 2
+  predict_token_durations: false
+  predict_utterance_length: true   # single scalar total length (SupertonicTTS)
+
+speaker:
+  n_mels: 80
+  emb_dim: 192               # CAM++ output dim
+  channels: [256, 384, 384, 384]
+  n_query: 8                 # PilotTTS uses 32; 8 keeps the model inside the 44M budget
+  style_dim: 256
+  qformer_layers: 2
+  qformer_heads: 4
+  freeze: true               # use pretrained CAM++; do not train the identity encoder
+
+flow:
+  latent_dim: 24
+  compress: 6                # 24 x 6 = 144 dims at 15.6 Hz -- the SupertonicTTS T2L layout
+  dim: 384
+  depth: 6
+  n_heads: 6
+  ffn_mult: 4
+  text_dim: 256
+  cond_dim: 256
+  nfe: 32
+  distilled_nfe: 2
+  cfg_scale: 3.0             # SupertonicTTS uses CFG 3
+  context_expansion: 4       # Ke = 4
+
+train:
+  batch_size: 32
+  lr: 0.0002
+  max_steps: 200000
+  ema_decay: 0.999
+  save_every: 10000
+  log_every: 100
+  loss:
+    mel: 1.0
+    spectral: 3.0
+    adversarial: 1.0
+    feature_match: 2.0
+    style_consistency: 0.1
+    phase_lock: 0.05
