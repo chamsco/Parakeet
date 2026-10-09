@@ -156,8 +156,16 @@ class Synthesizer:
 
     # ------------------------------------------------------------------ text
     def prepare_text(self, text: str) -> Tuple[torch.Tensor, torch.Tensor, list[str]]:
+        """Tokenise for inference.
+
+        ``add_special=False`` is deliberate and must match training: the Tiny text side regresses
+        *per-character* durations, so a BOS/EOS token would introduce two tokens with no
+        corresponding frames (and the teacher-signal cache is built the same way).  Tokenising with
+        specials at inference while training without them adds two spurious durations per
+        utterance.
+        """
         tags = self.tokenizer.style_tags(text)
-        ids, mask = self.tokenizer.batch([text], max_len=self.cfg.text.max_len)
+        ids, mask = self.tokenizer.batch([text], max_len=self.cfg.text.max_len, add_special=False)
         return ids.to(self.device), mask.to(self.device), tags
 
     # ------------------------------------------------------------------ offline

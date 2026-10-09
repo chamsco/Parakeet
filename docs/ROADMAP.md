@@ -62,12 +62,13 @@ the engineering.
       calibration set, a runtime wrapper that keeps streaming iSTFT, and a **measured** PyTorch vs
       ONNX-fp32 vs ONNX-int8 benchmark (`scripts/export_onnx.py`) — the real-time story has to be
       judged on ONNX, not PyTorch
+* [x] **Export the text side too** (it is ~31 % of the budget).  Full int8 pipeline on one CPU
+      thread: **5.4 ms for 0.57 s → 106× real time** (3.9× vs PyTorch), **9.9 MB** total, waveform
+      cosine ≥ 0.992 against the PyTorch pipeline.  `OnnxTinyPipeline` composes both halves
 * [ ] A streaming sampler for Small (currently only decoding streams)
-* [ ] **Export the text side to ONNX too.** Profiling shows the decoder is only ~40 % of a full
-      Tiny synthesis and the text side ~34 %, so vocoder int8 alone buys ~20 % of the path; the
-      text side's attention is MatMul-shaped, which int8 handles better than convolutions
 * [ ] Attack the 13 % python/dispatch overhead measured by `scripts/profile_pipeline.py`
-* [ ] A/B the two phase-lock references (`ramp` vs `smooth`) against UTMOS and phase coherence
+* [ ] A/B the two phase-lock references (`ramp` vs `smooth`) against UTMOS and phase coherence (the
+      filter is 10 % of the shipped path, so this trades quality against latency)
 * [ ] Model card: teachers used, licence obligations, intended/misuse cases, deep-synthesis
       marking, provenance hashes
 * [ ] CI job that runs `smoke_test.py` + `learn_demo.py` + `pytest` and fails on RTF, streaming

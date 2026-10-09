@@ -100,3 +100,74 @@ def test_compare_fp32_int8_reports_deviation(fast_cfg, tmp_path):
     # bound on an untrained model, not a quality claim)
     assert report["int8_max_log_mag_deviation"] < 2.0
     assert np.isfinite(report["int8_max_phase_deviation_rad"])
+
+
+# ---------------------------------------------------------------------------------------
+# text side: this is where the legacy exporter silently produces a single-length graph
+# ---------------------------------------------------------------------------------------
+def test_text_side_onnx_matches_pytorch_across_token_lengths(fast_cfg, tmp_path):
+    pytest.importorskip("onnxscript", reason="dynamic-token export needs the dynamo exporter")
+    from parakeet.inference.onnx_export import OnnxTextSide, _TextSide, export_text_side_onnx
+
+    cfg = _cfg(fast_cfg)
+    model = build_model(cfg).eval()
+    path = export_text_side_onnx(model, tmp_path / "text.onnx", opset=18, tokens=8, dynamo=True)
+    side = OnnxTextSide(path)
+    names = ("log_duration", "latent_token", "f0", "energy")
+    with torch.no_grad():
+        for length in (5, 8, 17):
+            ids = torch.randint(1, cfg.text.vocab_size, (1, length))
+            ref = _TextSide(model).eval()(ids)
+            got = side(ids.numpy())
+            for name, expected in zip(names, ref):
+                dev = float(np.abs(np.asarray(got[name]) - expected.numpy()).max())
+                assert dev < 1e-4, f"{name} deviates by {dev:.2e} at token length {length}"
+
+
+def test_text_side_onnx_rejects_wrong_dtype(fast_cfg, tmp_path):
+    """ORT silently casts a float input to int64 indices; our wrapper must not allow that."""
+    pytest.importorskip("onnxscript")
+    from parakeet.inference.onnx_export import OnnxTextSide, export_text_side_onnx
+
+    cfg = _cfg(fast_cfg)
+    model = build_model(cfg).eval()
+    path = export_text_side_onnx(model, tmp_path / "text2.onnx", opset=18, dynamo=True)
+    side = OnnxTextSide(path)
+    with pytest.raises(TypeError, match="integers"):
+        side(np.zeros((1, 4), dtype=np.float32))
+
+
+def test_vocoder_rejects_non_float_latent(fast_cfg, tmp_path):
+    cfg = _cfg(fast_cfg)
+    model = build_model(cfg).eval()
+    path = export_onnx(model, cfg.audio, tmp_path / "v.onnx")
+    voc = OnnxVocoder(path, cfg.audio)
+    with pytest.raises(TypeError, match="floating"):
+        voc.spectrogram(np.zeros((1, cfg.autoencoder.latent_dim, 5), dtype=np.int64))
+
+
+def test_full_onnx_pipeline_matches_torch(fast_cfg, tmp_path):
+    pytest.importorskip("onnxscript")
+    from parakeet.inference.onnx_export import compare_pipelines
+
+    cfg = _cfg(fast_cfg)
+    model = build_model(cfg).eval()
+    texts = ["hello world", "a slightly longer test sentence"]
+    report = compare_pipelines(model, cfg, tmp_path / "pipe", texts, runs=1, threads=1)
+
+    assert report["total_int8_mb"] < report["total_fp32_mb"], "int8 must be smaller in total"
+    assert report["int8_vs_torch_waveform_cosine"] > 0.95, "int8 pipeline must track PyTorch"
+    assert report["int8_vs_torch_mel_l1"] < 0.5
+    assert report["mean_ms"]["torch"] > 0 and report["mean_ms"]["onnx_int8"] > 0
+    assert set(report["mean_ms"]) == {"torch", "onnx_fp32", "onnx_int8", "onnx_int8_shipped"}
+
+
+def test_onnx_artifact_bytes_counts_external_data(tmp_path):
+    from parakeet.inference.onnx_export import onnx_artifact_bytes
+
+    graph = tmp_path / "m.onnx"
+    graph.write_bytes(b"0" * 1000)
+    assert onnx_artifact_bytes(graph) == 1000
+    sidecar = tmp_path / "m.onnx.data"
+    sidecar.write_bytes(b"0" * 500)
+    assert onnx_artifact_bytes(graph) == 1500, "external weight sidecar must be counted"

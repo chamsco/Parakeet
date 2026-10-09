@@ -85,6 +85,18 @@ def main() -> int:
             t_full, wav_full = timeit(
                 lambda: synth.synthesize(text, seed=0), max(1, args.runs // 2)
             )
+
+            def shipped() -> torch.Tensor:
+                """The configuration we actually deploy: synthesis + phase-lock filter."""
+                wav = synth.synthesize(text, seed=0)
+                return phase_lock(
+                    wav,
+                    sample_rate=cfg.audio.sample_rate,
+                    n_fft=cfg.audio.n_fft,
+                    hop_length=cfg.audio.hop_length,
+                )
+
+            t_full_locked, _ = timeit(shipped, max(1, args.runs // 2))
             audio_s = wav_full.shape[-1] / cfg.audio.sample_rate
             rows[text] = {
                 "audio_seconds": audio_s,
@@ -94,25 +106,29 @@ def main() -> int:
                 "decoder_ms": t_decoder,
                 "phase_lock_ms": t_lock,
                 "full_ms": t_full,
+                "full_with_filter_ms": t_full_locked,
                 "full_rtf": (t_full / 1000.0) / max(audio_s, 1e-9),
                 "full_x_realtime": audio_s / max(t_full / 1000.0, 1e-9),
+                "shipped_x_realtime": audio_s / max(t_full_locked / 1000.0, 1e-9),
             }
 
     keys = ["text_side_ms", "latent_build_ms", "decoder_ms", "phase_lock_ms"]
     means = {k: sum(r[k] for r in rows.values()) / len(rows) for k in keys}
     full = sum(r["full_ms"] for r in rows.values()) / len(rows)
+    full_shipped = sum(r["full_with_filter_ms"] for r in rows.values()) / len(rows)
     audio = sum(r["audio_seconds"] for r in rows.values()) / len(rows)
     accounted = sum(means.values())
 
     print(f"\n{cfg.name} | {args.threads} thread(s) | mean audio {audio:.3f}s | "
           f"{cfg.flow.distilled_nfe} NFE | {sum(p.numel() for p in model.parameters())/1e6:.2f}M params")
-    print(f"{'component':<22}{'ms':>8}{'% of full':>11}{'x realtime':>12}")
+    print(f"{'component':<26}{'ms':>8}{'% of shipped':>14}{'x realtime':>12}")
     for k in keys:
         ms = means[k]
-        print(f"{k:<22}{ms:8.2f}{100*ms/full:10.1f}%{(audio/(ms/1000.0)) if ms else 0:12.1f}")
-    print(f"{'(python/dispatch overhead)':<22}{max(0.0, full-accounted):8.2f}"
-          f"{100*max(0.0, full-accounted)/full:10.1f}%")
-    print(f"{'FULL synthesize':<22}{full:8.2f}{100.0:10.1f}%{audio/(full/1000.0):12.1f}")
+        print(f"{k:<26}{ms:8.2f}{100*ms/full_shipped:13.1f}%{(audio/(ms/1000.0)) if ms else 0:12.1f}")
+    overhead = max(0.0, full - accounted)
+    print(f"{'python/dispatch overhead':<26}{overhead:8.2f}{100*overhead/full_shipped:13.1f}%")
+    print(f"{'FULL (no filter)':<26}{full:8.2f}{100*full/full_shipped:13.1f}%{audio/(full/1000.0):12.1f}")
+    print(f"{'SHIPPED (with filter)':<26}{full_shipped:8.2f}{100.0:13.1f}%{audio/(full_shipped/1000.0):12.1f}")
 
     bottleneck = max(means, key=means.get)
     report = {
@@ -123,9 +139,12 @@ def main() -> int:
         "params": sum(p.numel() for p in model.parameters()),
         "mean_component_ms": means,
         "mean_full_ms": full,
+        "mean_full_with_filter_ms": full_shipped,
         "mean_audio_seconds": audio,
         "full_rtf": (full / 1000.0) / max(audio, 1e-9),
         "full_x_realtime": audio / max(full / 1000.0, 1e-9),
+        "shipped_rtf": (full_shipped / 1000.0) / max(audio, 1e-9),
+        "shipped_x_realtime": audio / max(full_shipped / 1000.0, 1e-9),
         "accounted_fraction": accounted / max(full, 1e-9),
         "bottleneck": bottleneck,
         "per_text": rows,

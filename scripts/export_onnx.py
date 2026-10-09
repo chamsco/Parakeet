@@ -46,6 +46,8 @@ def main() -> int:
     ap.add_argument("--runs", type=int, default=10)
     ap.add_argument("--threads", type=int, default=1)
     ap.add_argument("--opset", type=int, default=17)
+    ap.add_argument("--pipeline", action="store_true",
+                    help="export text side + vocoder and benchmark the full ONNX pipeline")
     args = ap.parse_args()
 
     cfg = load_config(args.config)
@@ -60,6 +62,45 @@ def main() -> int:
 
     torch.set_num_threads(args.threads)
     out = Path(args.out)
+
+    if args.pipeline:
+        from parakeet.inference.onnx_export import compare_pipelines
+
+        texts = [
+            "the quick brown fox jumps over the lazy dog",
+            "parakeet is a small and fast text to speech model",
+            "real time factor is the number that matters on a laptop",
+        ]
+        print(f"{cfg.name}: full pipeline export (text side + vocoder), fp32 and int8")
+        t0 = time.perf_counter()
+        report = compare_pipelines(
+            model, cfg, out, texts, runs=args.runs, threads=args.threads, opset=args.opset
+        )
+        report["config"] = args.config
+        report["checkpoint"] = args.checkpoint
+        report["export_seconds"] = time.perf_counter() - t0
+        (out / "pipeline_report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
+
+        print(f"\n{'=' * 78}\nfull Tiny pipeline ({args.threads} thread(s), "
+              f"mean {report['mean_audio_seconds']:.3f}s audio)\n{'=' * 78}")
+        print(f"  PyTorch fp32    {report['mean_ms']['torch']:8.2f} ms  "
+              f"{report['torch_x_realtime']:7.2f}x real time")
+        print(f"  ONNX fp32       {report['mean_ms']['onnx_fp32']:8.2f} ms  "
+              f"{report['mean_audio_seconds']/(report['mean_ms']['onnx_fp32']/1000):7.2f}x real time")
+        print(f"  ONNX int8       {report['mean_ms']['onnx_int8']:8.2f} ms  "
+              f"{report['int8_x_realtime']:7.2f}x real time   "
+              f"({report['int8_vs_torch_speedup']:.2f}x vs PyTorch)")
+        print(f"  ONNX int8 + phase lock (shipped) {report['mean_ms']['onnx_int8_shipped']:6.2f} ms  "
+              f"{report['int8_shipped_x_realtime']:7.2f}x real time   "
+              f"({report['int8_shipped_vs_torch_speedup']:.2f}x vs PyTorch)")
+        print(f"  total size: {report['total_fp32_mb']:.2f} -> {report['total_int8_mb']:.2f} MB "
+              f"(text side {report['text_side_mb']['fp32']:.2f} -> {report['text_side_mb']['int8']:.2f} MB"
+              f" | vocoder {report['vocoder_mb']['fp32']:.2f} -> {report['vocoder_mb']['int8']:.2f} MB)")
+        print(f"  int8 vs PyTorch equivalence: mel L1 {report['int8_vs_torch_mel_l1']:.4f}, "
+              f"waveform cosine {report['int8_vs_torch_waveform_cosine']:.4f}")
+        print(f"\nreport -> {out/'pipeline_report.json'}")
+        return 0
+
     corpus = make_corpus(max(4, args.runs // 2), cfg.audio, seed=0)
     mel = MelSpectrogram(cfg.audio)
     calibration = [mel.log_mel(u.wav[None]) for u in corpus]

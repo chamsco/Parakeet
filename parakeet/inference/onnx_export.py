@@ -17,6 +17,7 @@ CPU support to actually beat fp32 — so :func:`benchmark` measures rather than 
 from __future__ import annotations
 
 import json
+import sys
 import time
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Sequence
@@ -28,6 +29,37 @@ import torch.nn.functional as F
 
 from ..audio.istft import OLAISTFT
 from ..config import AudioConfig
+
+
+def onnx_artifact_bytes(path: str | Path) -> int:
+    """Total bytes of an ONNX artifact, including an external-data sidecar if one exists.
+
+    The ``torch.export``-based exporter writes large weight sets to ``<name>.onnx.data`` by
+    default, so reporting ``path.stat().st_size`` alone understates the model by ~40x.  Every size
+    this module reports goes through here.
+    """
+    path = Path(path)
+    total = path.stat().st_size
+    for sidecar in path.parent.glob(path.name + ".data"):
+        total += sidecar.stat().st_size
+    return total
+
+
+def _quiet_export_logs() -> None:
+    """The dynamo exporter emits very verbose ``torch.__trace`` DEBUG lines."""
+    import logging
+
+    for name in ("torch.__trace", "torch.onnx", "onnxscript"):
+        logging.getLogger(name).setLevel(logging.WARNING)
+
+
+def _ensure_utf8_stdout() -> None:
+    """The dynamo exporter prints emoji, which crashes on a cp1252 Windows console."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
+        except Exception:  # pragma: no cover - non-reconfigurable streams
+            pass
 
 
 class _DecoderHead(nn.Module):
@@ -81,13 +113,43 @@ def export_onnx(
     return path
 
 
+def onnx_input_spec(path: str | Path) -> tuple[str, np.dtype]:
+    """Read the first graph input's name and numpy dtype.
+
+    Quantisation calibration feeds the graph directly, so the input key and dtype have to match
+    the model (token ids are int64, latents are float32).  Reading them from the graph avoids a
+    class of silent mistakes.
+    """
+    import onnx  # type: ignore
+
+    model = onnx.load(str(path))
+    inp = model.graph.input[0]
+    elem = inp.type.tensor_type.elem_type
+    mapping = {
+        1: np.dtype(np.float32),
+        2: np.dtype(np.uint8),
+        3: np.dtype(np.int8),
+        6: np.dtype(np.int32),
+        7: np.dtype(np.int64),
+        10: np.dtype(np.float16),
+        11: np.dtype(np.float64),
+    }
+    return inp.name, mapping.get(elem, np.dtype(np.float32))
+
+
 def quantize_int8(
     src: str | Path,
     dst: str | Path,
-    calibration_latents: Sequence[np.ndarray],
+    calibration_inputs: Sequence[np.ndarray],
     per_channel: bool = True,
+    input_name: Optional[str] = None,
+    dtype: Optional[np.dtype] = None,
 ) -> Path:
-    """Static QDQ int8 quantisation with a calibration set of real latents."""
+    """Static QDQ int8 quantisation with a calibration set.
+
+    The input name and dtype default to whatever the graph declares, so this works for both the
+    text side (``ids``, int64) and the vocoder (``latent``, float32).
+    """
     from onnxruntime.quantization import (  # type: ignore
         CalibrationDataReader,
         QuantFormat,
@@ -95,9 +157,14 @@ def quantize_int8(
         quantize_static,
     )
 
+    if input_name is None or dtype is None:
+        detected_name, detected_dtype = onnx_input_spec(src)
+        input_name = input_name or detected_name
+        dtype = dtype or detected_dtype
+
     class _Reader(CalibrationDataReader):
-        def __init__(self, latents: Sequence[np.ndarray]) -> None:
-            self._items = [{"latent": np.asarray(x, dtype=np.float32)} for x in latents]
+        def __init__(self, items: Sequence[np.ndarray]) -> None:
+            self._items = [{input_name: np.asarray(x, dtype=dtype)} for x in items]
             self._i = 0
 
         def get_next(self):  # noqa: D102
@@ -115,7 +182,7 @@ def quantize_int8(
     quantize_static(
         str(src),
         str(dst),
-        _Reader(calibration_latents),
+        _Reader(calibration_inputs),
         quant_format=QuantFormat.QDQ,
         per_channel=per_channel,
         weight_type=QuantType.QInt8,
@@ -152,7 +219,10 @@ class OnnxVocoder:
 
     def spectrogram(self, latent: np.ndarray | torch.Tensor) -> torch.Tensor:
         x = latent if isinstance(latent, np.ndarray) else latent.detach().cpu().numpy()
-        log_mag, phase = self.session.run(None, {self.input_name: np.asarray(x, dtype=np.float32)})
+        x = np.asarray(x)
+        if not np.issubdtype(x.dtype, np.floating):
+            raise TypeError(f"latent must be floating point, got {x.dtype}")
+        log_mag, phase = self.session.run(None, {self.input_name: x.astype(np.float32, copy=False)})
         mag = torch.exp(torch.from_numpy(log_mag).clamp(max=8.0))
         return torch.polar(mag, torch.from_numpy(phase))
 
@@ -180,14 +250,334 @@ def benchmark(
             times.append((time.perf_counter() - t0) * 1000.0)
     audio_seconds = wav.shape[-1] / audio.sample_rate
     mean_ms = float(np.mean(times))
+    total_bytes = onnx_artifact_bytes(onnx_path)
     return {
         "mean_ms": mean_ms,
         "audio_seconds": audio_seconds,
         "rtf_fixed_frames": mean_ms / 1000.0 / max(audio_seconds, 1e-9),
         "latent_frames": float(frames),
-        "model_bytes": float(Path(onnx_path).stat().st_size),
-        "model_mb": Path(onnx_path).stat().st_size / 1e6,
+        "model_bytes": float(total_bytes),
+        "model_mb": total_bytes / 1e6,
         "providers": ",".join(voc.providers),
+    }
+
+
+class _TextSide(nn.Module):
+    """ONNX-friendly view of the Tiny text side.
+
+    ``mask=None`` means "every token is valid", which is exactly true at inference where we
+    synthesise one unpadded sequence at a time -- and it keeps the exported graph free of
+    mask-shape logic.
+    """
+
+    def __init__(self, model: nn.Module) -> None:
+        super().__init__()
+        self.model = model
+
+    def forward(self, ids: torch.Tensor):
+        side = self.model.text_side(ids, None)
+        return side["log_duration"], side["latent_token"], side["f0"], side["energy"]
+
+
+def export_text_side_onnx(
+    model: nn.Module,
+    path: str | Path,
+    opset: int = 18,
+    tokens: int = 16,
+    dynamo: bool = True,
+) -> Path:
+    """Export the Tiny text side: ``ids (B, T) -> log_duration, latent_token, f0, energy``.
+
+    This matters because profiling showed the text side is ~34 % of a full synthesis, on par with
+    the vocoder -- so exporting only the decoder cannot deliver the int8 win.
+
+    ``dynamo=True`` (the ``torch.export``-based exporter, needs ``onnxscript``) is the *default
+    here on purpose*: the legacy TorchScript exporter bakes the dummy sequence length into
+    `nn.MultiheadAttention`'s internal reshapes, so the resulting graph only accepts the exact
+    token count it was traced with -- a landmine that only shows up at inference time with a
+    different sentence length.  The new exporter propagates the dynamic axis correctly.
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    wrapper = _TextSide(model).eval()
+    vocab = getattr(getattr(model, "cfg", None), "text", None)
+    vocab_size = getattr(vocab, "vocab_size", 128)
+    dummy = torch.randint(0, vocab_size, (1, tokens))
+    names = ["ids"]
+    outputs = ["log_duration", "latent_token", "f0", "energy"]
+    dynamic = {0: "batch", 1: "tokens"}
+    if dynamo:
+        _ensure_utf8_stdout()
+        _quiet_export_logs()
+        try:
+            torch.onnx.export(
+                wrapper,
+                (dummy,),
+                str(path),
+                input_names=names,
+                output_names=outputs,
+                opset_version=opset,
+                dynamo=True,
+                dynamic_shapes={"ids": dict(dynamic)},
+                external_data=False,
+            )
+        except TypeError:  # pragma: no cover - older exporter without the argument
+            torch.onnx.export(
+                wrapper,
+                (dummy,),
+                str(path),
+                input_names=names,
+                output_names=outputs,
+                opset_version=opset,
+                dynamo=True,
+                dynamic_shapes={"ids": dict(dynamic)},
+            )
+    else:
+        torch.onnx.export(
+            wrapper,
+            (dummy,),
+            str(path),
+            input_names=names,
+            output_names=outputs,
+            dynamic_axes={"ids": dict(dynamic), **{o: dict(dynamic) for o in outputs}},
+            opset_version=opset,
+            dynamo=False,
+        )
+    return path
+
+
+class OnnxTextSide:
+    """Runtime wrapper for the exported Tiny text side."""
+
+    def __init__(self, onnx_path: str | Path, intra_op_threads: int = 1) -> None:
+        import onnxruntime as ort  # type: ignore
+
+        options = ort.SessionOptions()
+        options.intra_op_num_threads = intra_op_threads
+        options.inter_op_num_threads = 1
+        self.session = ort.InferenceSession(
+            str(onnx_path), sess_options=options, providers=["CPUExecutionProvider"]
+        )
+        self.input_name = self.session.get_inputs()[0].name
+
+    def __call__(self, ids: np.ndarray | torch.Tensor) -> Dict[str, np.ndarray]:
+        x = ids if isinstance(ids, np.ndarray) else ids.detach().cpu().numpy()
+        x = np.asarray(x)
+        # ONNX Runtime happily *casts* a float input to the int64 embedding indices instead of
+        # erroring, which silently produces nonsense; fail loudly at the boundary.
+        if not np.issubdtype(x.dtype, np.integer):
+            raise TypeError(f"text-side ids must be integers, got {x.dtype}")
+        log_duration, latent_token, f0, energy = self.session.run(
+            None, {self.input_name: x.astype(np.int64, copy=False)}
+        )
+        return {"log_duration": log_duration, "latent_token": latent_token, "f0": f0, "energy": energy}
+
+
+class OnnxTinyPipeline:
+    """Full Tiny synthesis with the heavy modules in ONNX and the cheap ones in torch.
+
+    Division of labour, chosen by measurement (see ``scripts/profile_pipeline.py``):
+
+    ===========================  ======  ==========================================
+    stage                        share   where it runs
+    ===========================  ======  ==========================================
+    text side                    34 %    **ONNX** (fp32 or int8)
+    latent construction           1.5 %   torch -- dynamic ``repeat_interleave`` is not
+                                          ONNX-friendly, and it costs almost nothing
+    decoder + head               40 %    **ONNX** (fp32 or int8)
+    iSTFT overlap-add            ~cheap  torch (complex ops export badly)
+    phase-lock filter            11 %    torch (FFT-based)
+    ===========================  ======  ==========================================
+    """
+
+    def __init__(
+        self,
+        text_side_path: str | Path,
+        decoder_path: str | Path,
+        model: nn.Module,
+        cfg,
+        intra_op_threads: int = 1,
+        apply_phase_lock: bool = True,
+        phase_lock_strength: float = 0.7,
+        phase_lock_method: str = "ramp",
+        tokenizer=None,
+    ) -> None:
+        from ..data.text import TextTokenizer
+
+        self.cfg = cfg
+        self.model = model.eval()
+        self.text = OnnxTextSide(text_side_path, intra_op_threads=intra_op_threads)
+        self.vocoder = OnnxVocoder(decoder_path, cfg.audio, intra_op_threads=intra_op_threads)
+        self.tokenizer = tokenizer or TextTokenizer(mode=cfg.text.mode)
+        self.apply_phase_lock = apply_phase_lock
+        self.phase_lock_strength = phase_lock_strength
+        self.phase_lock_method = phase_lock_method
+
+    @torch.no_grad()
+    def synthesize_ids(self, ids: np.ndarray | torch.Tensor) -> torch.Tensor:
+        """``(B, T)`` token ids -> waveform ``(B, N)``."""
+        side = self.text(ids)
+        log_duration = torch.from_numpy(side["log_duration"])
+        durations = log_duration.exp().round().clamp_min(1).long()
+        token_latent = torch.from_numpy(side["latent_token"])
+        f0 = torch.from_numpy(side["f0"])
+        energy = torch.from_numpy(side["energy"])
+        latent, _ = self.model.decoder_latent_from_tokens(token_latent, durations, f0, energy)
+        wav = self.vocoder.decode(latent.numpy())
+        if self.apply_phase_lock:
+            from .phase_lock import phase_lock
+
+            wav = phase_lock(
+                wav,
+                sample_rate=self.cfg.audio.sample_rate,
+                n_fft=self.cfg.audio.n_fft,
+                hop_length=self.cfg.audio.hop_length,
+                strength=self.phase_lock_strength,
+                method=self.phase_lock_method,
+            )
+        return wav
+
+    def synthesize(self, text: str, **_: object) -> torch.Tensor:
+        ids, _mask = self.tokenizer.batch([text], max_len=self.cfg.text.max_len, add_special=False)
+        return self.synthesize_ids(ids.numpy())
+
+
+def compare_pipelines(
+    model: nn.Module,
+    cfg,
+    out_dir: str | Path,
+    texts: Sequence[str],
+    runs: int = 5,
+    threads: int = 1,
+    opset: int = 17,
+) -> Dict[str, object]:
+    """Export both halves, build the ONNX pipelines, and benchmark + verify against PyTorch.
+
+    Equivalence is measured rather than assumed: the ONNX pipelines must reproduce the PyTorch
+    waveform (mel L1 and correlation), otherwise a speed-up is meaningless.
+    """
+    from ..audio.mel import MelSpectrogram
+    from ..data.text import TextTokenizer
+    from ..inference.synthesize import Synthesizer
+
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    mel = MelSpectrogram(cfg.audio)
+    torch.set_num_threads(threads)
+    tokenizer = TextTokenizer(mode=cfg.text.mode)
+
+    text_fp32 = export_text_side_onnx(
+        model, out_dir / "text_side_fp32.onnx", opset=max(opset, 18), dynamo=True
+    )
+    dec_fp32 = export_onnx(model, cfg.audio, out_dir / "vocoder_fp32.onnx", opset=opset)
+
+    # calibration inputs: several token sequences (no specials -- the same convention used for
+    # training the text side, see TextTokenizer.batch(add_special=False))
+    cal_texts = list(texts) + [
+        "the quick brown fox jumps over the lazy dog",
+        "hello there",
+        "parakeet is a small and fast text to speech model",
+    ]
+    cal_sequences = [
+        tokenizer.encode(t, add_special=False).numpy().astype(np.int64)[None] for t in cal_texts
+    ]
+    with torch.no_grad():
+        cal_ids = np.concatenate(cal_sequences, axis=1)
+        side = OnnxTextSide(text_fp32)(cal_ids)
+        durations = torch.from_numpy(side["log_duration"]).exp().round().clamp_min(1).long()
+        cal_latents, _ = model.decoder_latent_from_tokens(
+            torch.from_numpy(side["latent_token"]),
+            durations,
+            torch.from_numpy(side["f0"]),
+            torch.from_numpy(side["energy"]),
+        )
+    text_int8 = quantize_int8(text_fp32, out_dir / "text_side_int8.onnx", cal_sequences)
+    dec_int8 = quantize_int8(
+        dec_fp32, out_dir / "vocoder_int8.onnx", [cal_latents.numpy().astype(np.float32)]
+    )
+
+    torch_pipe = Synthesizer(model, cfg, device="cpu", apply_phase_lock=False)
+    onnx_fp32 = OnnxTinyPipeline(text_fp32, dec_fp32, model, cfg, threads, apply_phase_lock=False)
+    onnx_int8 = OnnxTinyPipeline(text_int8, dec_int8, model, cfg, threads, apply_phase_lock=False)
+    # the *shipped* configuration includes the parameter-free phase-lock filter
+    onnx_int8_shipped = OnnxTinyPipeline(text_int8, dec_int8, model, cfg, threads, apply_phase_lock=True)
+
+    def bench(fn, runs: int = runs) -> float:
+        fn()
+        t0 = time.perf_counter()
+        for _ in range(runs):
+            out = fn()
+        return (time.perf_counter() - t0) / runs * 1000.0, out
+
+    rows = []
+    for text in texts:
+        t_torch, wav_torch = bench(lambda t=text: torch_pipe.synthesize(t, seed=0))
+        t_fp32, wav_fp32 = bench(lambda t=text: onnx_fp32.synthesize(t))
+        t_int8, wav_int8 = bench(lambda t=text: onnx_int8.synthesize(t))
+        t_ship, wav_ship = bench(lambda t=text: onnx_int8_shipped.synthesize(t))
+        n = min(wav_torch.shape[-1], wav_int8.shape[-1])
+        a, b = mel.log_mel(wav_torch[..., :n]), mel.log_mel(wav_int8[..., :n])
+        corr = float(
+            torch.nn.functional.cosine_similarity(
+                wav_torch[..., :n].reshape(-1)[None], wav_int8[..., :n].reshape(-1)[None]
+            ).item()
+        )
+        rows.append(
+            {
+                "text": text,
+                "torch_ms": t_torch,
+                "onnx_fp32_ms": t_fp32,
+                "onnx_int8_ms": t_int8,
+                "onnx_int8_shipped_ms": t_ship,
+                "audio_seconds": n / cfg.audio.sample_rate,
+                "int8_vs_torch_speedup": t_torch / max(t_int8, 1e-9),
+                "int8_shipped_vs_torch_speedup": t_torch / max(t_ship, 1e-9),
+                "int8_vs_torch_mel_l1": float(F.l1_loss(a, b).item()),
+                "int8_vs_torch_waveform_cosine": corr,
+            }
+        )
+
+    def mean(key: str) -> float:
+        return sum(r[key] for r in rows) / len(rows)
+
+    torch_ms, int8_ms = mean("torch_ms"), mean("onnx_int8_ms")
+    audio_s = mean("audio_seconds")
+    return {
+        "rows": rows,
+        "text_side_mb": {
+            "fp32": onnx_artifact_bytes(text_fp32) / 1e6,
+            "int8": onnx_artifact_bytes(text_int8) / 1e6,
+        },
+        "vocoder_mb": {
+            "fp32": onnx_artifact_bytes(dec_fp32) / 1e6,
+            "int8": onnx_artifact_bytes(dec_int8) / 1e6,
+        },
+        "mean_ms": {
+            "torch": torch_ms,
+            "onnx_fp32": mean("onnx_fp32_ms"),
+            "onnx_int8": int8_ms,
+            "onnx_int8_shipped": mean("onnx_int8_shipped_ms"),
+        },
+        "mean_audio_seconds": audio_s,
+        "torch_rtf": (torch_ms / 1000.0) / max(audio_s, 1e-9),
+        "int8_rtf": (int8_ms / 1000.0) / max(audio_s, 1e-9),
+        "int8_shipped_rtf": (mean("onnx_int8_shipped_ms") / 1000.0) / max(audio_s, 1e-9),
+        "torch_x_realtime": audio_s / max(torch_ms / 1000.0, 1e-9),
+        "int8_x_realtime": audio_s / max(int8_ms / 1000.0, 1e-9),
+        "int8_shipped_x_realtime": audio_s / max(mean("onnx_int8_shipped_ms") / 1000.0, 1e-9),
+        "int8_vs_torch_speedup": torch_ms / max(int8_ms, 1e-9),
+        "int8_shipped_vs_torch_speedup": torch_ms / max(mean("onnx_int8_shipped_ms"), 1e-9),
+        "int8_vs_torch_mel_l1": mean("int8_vs_torch_mel_l1"),
+        "int8_vs_torch_waveform_cosine": mean("int8_vs_torch_waveform_cosine"),
+        "total_int8_mb": (
+            onnx_artifact_bytes(text_int8) + onnx_artifact_bytes(dec_int8)
+        )
+        / 1e6,
+        "total_fp32_mb": (
+            onnx_artifact_bytes(text_fp32) + onnx_artifact_bytes(dec_fp32)
+        )
+        / 1e6,
+        "threads": threads,
     }
 
 

@@ -62,9 +62,11 @@ Two variants share every block:
 
 | | Number | Where |
 |---|---|---|
-| Full Tiny synthesis | **~20 ms for 0.57 s audio → 19–28× real time** (fp32 PyTorch) | `smoke_test.py`, `profile_pipeline.py` |
-| Decoder compute alone | 94.5× real time fp32 → **2.53× faster as int8 ONNX** (18.0 → 4.7 MB, 3.84× smaller) | `export_onnx.py` |
-| Where the time goes | decoder 40 %, text side 34 %, phase lock 11 %, python 13 % — the vocoder is *not* the bottleneck | `profile_pipeline.py` |
+| Full Tiny synthesis, PyTorch fp32 | ~21 ms for 0.57 s audio → **19–27× real time** | `smoke_test.py`, `profile_pipeline.py` |
+| **Full Tiny pipeline as int8 ONNX** | **5.4 ms → 106× real time** (3.9× faster than PyTorch); **8.1 ms → 71×** with the phase-lock filter shipped | `export_onnx.py --pipeline` |
+| Model size, int8 ONNX | **36.7 → 9.9 MB** (text side 18.8 → 5.2, vocoder 18.0 → 4.7) | `export_onnx.py --pipeline` |
+| int8 fidelity vs PyTorch | waveform cosine **0.992–0.9998**, mel L1 0.010–0.027 (untrained weights, so a lower bound) | `export_onnx.py --pipeline` |
+| Where the time goes | decoder 36 %, text side 31 %, phase lock 10 %, python 13 % — the vocoder is *not* the bottleneck | `profile_pipeline.py` |
 | Streaming decoder | **exactly equal** to offline decoding (5.6e-09) | `test_inference.py` |
 | Does it learn? | AE recon **36 %** better, text side **91 %**, text→audio **26 %** vs untrained, duration MAE **3 ms**, generated/target log-mel cosine **0.954** | `learn_demo.py` |
 | Is NFE 2 viable? | reflowed 2-step agrees with the NFE-32 reference **better than the teacher's own NFE-16** (1.51 vs 1.85) and 29 % better than a naive 2-step cut; **9.7× wall-clock** at NFE 2 | `reflow_demo.py` |
@@ -80,7 +82,7 @@ python scripts/smoke_test.py --steps 2          # trains every stage, synthesise
 python scripts/learn_demo.py --quick            # proves the stages learn (before/after metrics)
 python scripts/reflow_demo.py --quick           # validates NFE-2 sampling after Reflow
 python scripts/export_onnx.py                   # int8 ONNX vocoder + PyTorch/ONNX benchmark
-python -m pytest -q                            # 109 tests
+python -m pytest -q                            # 114 tests
 python scripts/bench_rtf.py --config configs/parakeet_tiny.yaml --steps 2
 ```
 
@@ -119,8 +121,8 @@ parakeet/
 configs/      parakeet_tiny.yaml (9.6M) | parakeet_small.yaml (45M) | parakeet_small_44k.yaml
 scripts/      smoke_test.py | learn_demo.py | reflow_demo.py | export_onnx.py |
               profile_pipeline.py | train.py | make_teacher_corpus.py | bench_rtf.py
-tests/        109 tests: config, audio DSP, models, losses, all five stages, inference,
-              data/corpus paths, curation filters, ONNX parity, and learning regressions
+tests/        114 tests: config, audio DSP, models, losses, all five stages, inference,
+              data/corpus paths, curation filters, ONNX/int8 parity, and learning regressions
 ```
 
 ## Honest limitations

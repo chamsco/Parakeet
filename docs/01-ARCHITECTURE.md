@@ -124,22 +124,26 @@ FlowBlock: causal-free ConvNeXtBlock(dim, k=7) ─► cross-attention into
    Refuses sub-8-bit without explicit per-channel acknowledgement (Paradee: 4-bit → UTMOS 3.98).
 2. `save_int8_state_dict` — int8 weights + fp16 scales + fp16 norms/embeddings in one file.
 3. **ONNX export + int8 QDQ** (`parakeet/inference/onnx_export.py`, `scripts/export_onnx.py`):
-   * the exported graph is the **decoder compute** — `from_latent` → causal ConvNeXt blocks → head →
-     `(log_mag, phase)` — with dynamic batch **and time** axes;
-   * the iSTFT overlap-add stays outside the graph: it is one FFT per frame (cheap) and
-     complex/`torch.stft`/`torch.istft` export badly, whereas the convolutions are the actual cost;
+   * two exported graphs, because two halves each cost ~a third of the budget: the **text side**
+     (`ids → log_duration, latent_token, f0, energy`) and the **decoder compute**
+     (`from_latent → causal ConvNeXt blocks → head → (log_mag, phase)`), both with dynamic batch
+     and time/token axes;
+   * the text side uses the `torch.export`-based exporter (`dynamo=True`, needs `onnxscript`):
+     the legacy TorchScript exporter bakes the dummy token count into `nn.MultiheadAttention`'s
+     reshapes and yields a graph that *only* accepts that exact length;
+   * the iSTFT overlap-add and the phase-lock filter stay in torch: one FFT per frame each, complex
+     ops export badly, and together they are ~11 % of the budget;
    * int8 via `quantize_static` (QDQ, per-channel, int8 weights / uint8 activations) calibrated on
-     real latents, and the **measured** output deviation is reported alongside the size/speed change
-     — because ONNX Runtime's int8 *Conv* kernels need VNNI-era CPU support to actually beat fp32,
-     so the speed-up must be measured rather than assumed;
-   * `OnnxVocoder` runs the session and keeps the streaming overlap-add in torch, so int8 deployment
-     does not lose the chunked/streaming property.
+     real latents/token sequences, and the **measured** output deviation and PyTorch equivalence are
+     reported alongside the size/speed change — ONNX Runtime's int8 *Conv* kernels need VNNI-era CPU
+     support to actually beat fp32, so the speed-up must be measured rather than assumed;
+   * `OnnxTinyPipeline` composes them; measured on one CPU thread it is **3.9× faster than PyTorch**
+     (106× vs 27× real time) at **9.9 MB** total int8, with waveform cosine ≥ 0.992 vs the PyTorch
+     pipeline on the same weights.
 4. `Synthesizer.synthesize_stream` / `StreamingVocoder` — chunked, memory-bounded, numerically
    equal to offline decoding.
 5. `phase_lock(wav, method="ramp" | "smooth")` — zero parameters, magnitude untouched, band 2–8 kHz.
 
-ONNX export is checked for numerical parity with PyTorch (`< 1e-4` on the spectrogram) in
-`tests/test_onnx.py`, which skips cleanly when `onnx`/`onnxruntime` are absent.
-
-Known gaps (tracked in [ROADMAP.md](ROADMAP.md)): wiring the ONNX path into a release script, and a
-streaming *sampler* for Small (chunked decoding exists; the flow still runs in one pass).
+Known gaps (tracked in [ROADMAP.md](ROADMAP.md)): a streaming *sampler* for Small (chunked decoding
+exists; the flow still runs in one pass), and the ~13 % python/dispatch overhead measured by
+`scripts/profile_pipeline.py`.

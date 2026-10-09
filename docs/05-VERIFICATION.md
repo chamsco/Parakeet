@@ -11,14 +11,14 @@ python scripts/learn_demo.py                                # proves the stages 
 python scripts/reflow_demo.py                               # validates NFE-2 sampling (~5 min CPU)
 python scripts/export_onnx.py                               # int8 ONNX + runtime benchmark
 python scripts/profile_pipeline.py                          # where does the time actually go
-python -m pytest -q                                         # 109 tests
+python -m pytest -q                                         # 114 tests
 python scripts/bench_rtf.py --config configs/parakeet_tiny.yaml
 ```
 
 ## 1. Test suite
 
 ```
-109 passed
+114 passed
 ```
 
 Coverage by area:
@@ -34,7 +34,7 @@ Coverage by area:
 | `test_data_and_text.py` | tag-aware normalisation (numbers→words, tags preserved), tokeniser round-trip, vocab fits embedding capacity; MiniMax is **refused by default**; corpus builder writes a manifest and interleaves both teachers; latent shard cache end-to-end + collate; synthetic batch source key sets |
 | `test_curate.py` | every curation gate fires on a constructed failure (too short/long, clipped, silent, low SNR, narrowband, low MOS, ASR disagreement); **all** reasons reported, not just the first; SNR correctly reported as *unevaluable* without a noise floor; WER and punctuation-gap maths; reject records are never dropped |
 | `test_learning.py` | synthetic fixture is structurally exact (frame counts, peak, F0 declination); latent normaliser fits and inverts; token targets are exact and normalised; decoder-latent alignment; supplied-latent path leaves the encoder gradient-free; **stage freezing does not leak between stages**; and the headline: 40 CPU steps measurably improve both the representation and the distilled text side |
-| `test_onnx.py` | ONNX decoder matches PyTorch to **<1e-4**; dynamic time axis across 7/23/41 frames; int8 file is smaller and runs on CPU; the fp32↔int8 comparison reports size reduction, both latencies and the output deviation (skips if `onnx`/`onnxruntime` absent) |
+| `test_onnx.py` | ONNX decoder matches PyTorch to **<1e-4**; text side matches to **<1e-4 across token lengths 5/8/17** (the legacy exporter's baked-in length would fail this); dynamic time axis across 7/23/41 frames; int8 files are smaller and run on CPU; dtypes are validated at the wrapper boundary; external weight sidecars are counted in size; full int8 pipeline tracks PyTorch (cosine >0.95) and is smaller in total (skips if `onnx`/`onnxruntime`/`onnxscript` absent) |
 
 ## 2. Learning demo (measured)
 
@@ -73,14 +73,29 @@ Full numbers: `runs/learn_demo/report.json`.
 
 ## 3. ONNX export + int8 (measured)
 
-`scripts/export_onnx.py` exports the **decoder compute** (causal ConvNeXt blocks + head) with
-dynamic batch *and time* axes, quantises it to int8 with ONNX Runtime's static QDQ path
-(per-channel, int8 weights / uint8 activations, calibrated on real latents), and benchmarks all
-three runtimes on one CPU thread. The iSTFT stays in torch, so streaming is not lost.
+`scripts/export_onnx.py` has two modes. `--pipeline` exports **both halves** — the Tiny text side
+(attention-based, ~34 % of the budget) and the decoder compute (~40 %) — with dynamic axes,
+quantises both to int8, composes them with the cheap torch stages, and verifies equivalence against
+the pure-PyTorch path. Without `--pipeline` it benchmarks the decoder alone.
+
+### Full Tiny pipeline, one CPU thread, mean 0.572 s audio
+
+| pipeline | latency | real time | vs PyTorch |
+|---|---|---|---|
+| PyTorch fp32 | 21.20 ms | 27.0× | 1.00× |
+| ONNX fp32 | 11.86 ms | 48.3× | 1.79× |
+| **ONNX int8** | **5.42 ms** | **105.7×** | **3.91×** |
+| **ONNX int8 + phase lock (shipped)** | **8.11 ms** | **70.6×** | **2.61×** |
+
+Total model: **36.73 MB → 9.91 MB** (text side 18.76 → 5.22 MB, vocoder 17.97 → 4.68 MB).
+Equivalence against PyTorch on the same weights: **waveform cosine 0.992–0.9998**, mel L1
+0.010–0.027 — i.e. int8 changes the audio by about 1 % of full scale. (The spread is across runs
+with *different random initialisations*: each run builds a fresh untrained model, so this is a
+lower bound — a trained model quantises more gracefully than a random one.)
+
+### Decoder alone
 
 ```
-parakeet-tiny: exporting decoder compute (latent_dim=24)
-decoder compute benchmark (1 thread, 81 latent frames = 1.013s audio)
   PyTorch fp32          10.72 ms     94.52x real time
   ONNX fp32              8.72 ms     17.97 MB   1.23x vs PyTorch
   ONNX int8 (QDQ)        4.24 ms      4.68 MB   2.53x vs PyTorch
@@ -88,37 +103,47 @@ decoder compute benchmark (1 thread, 81 latent frames = 1.013s audio)
   int8 deviation: |dlog_mag|max 0.0154, |dphase|max 0.0149 rad
 ```
 
-* ONNX int8 is **2.53× faster than PyTorch** and **3.84× smaller** (18.0 → 4.7 MB) for the decoder
-  compute, with a max log-magnitude deviation of 0.015 and max phase deviation of 0.015 rad — i.e.
-  int8 changes the decoder's output by ~1.5 % in log-magnitude. (Paradee's equivalent claim is
-  "int8 costs ~0 UTMOS"; ours is a measured output deviation, which is weaker evidence but honest —
-  UTMOS needs a trained model.)
-* This CPU is a Zen 4 (AVX-512 VNNI), which is why int8 *Conv* beats fp32 here. The benchmark
-  measures rather than assumes precisely because that is hardware-dependent.
-* Numerical parity of the fp32 graph with PyTorch is asserted in `tests/test_onnx.py` (< 1e-4 on
-  the spectrogram), along with dynamic-time-axis behaviour and int8 size/run checks. Those tests
-  skip cleanly when `onnx`/`onnxruntime` are absent.
+This CPU is a Zen 4 (AVX-512 VNNI), which is why int8 *Conv* beats fp32 here — hence measuring
+rather than assuming. Numerical parity of the fp32 graphs with PyTorch is asserted in
+`tests/test_onnx.py` (decoder `<1e-4`, text side `<1e-4` across token lengths 5/8/17), along with
+int8 size/run checks, dynamic-time-axis behaviour and pipeline equivalence. Those tests skip
+cleanly when `onnx`/`onnxruntime`/`onnxscript` are absent.
+
+### Two traps found while building this, both now covered
+
+* **The legacy TorchScript exporter silently bakes the dummy sequence length into
+  `nn.MultiheadAttention`'s reshapes.** The text side exported "successfully" with `dynamo=False`
+  and then failed at inference on any sentence of a different length — a deploy-time landmine.
+  `export_text_side_onnx` now defaults to the `torch.export`-based exporter (`dynamo=True`), and
+  the parity test deliberately uses token lengths different from the traced one.
+* **The dynamo exporter writes weights to an external `.onnx.data` sidecar**, so the graph file
+  alone looked like 0.47 MB for a 3.85 M-parameter model. `onnx_artifact_bytes` sums the sidecar and
+  every size reported here goes through it (`test_onnx_artifact_bytes_counts_external_data`).
+  We also pass `external_data=False` for a single-file artifact.
+* ONNX Runtime **casts** a float input to int64 embedding indices instead of erroring, so the
+  runtime wrappers now validate dtype and raise (`test_text_side_onnx_rejects_wrong_dtype`,
+  `test_vocoder_rejects_non_float_latent`).
 
 ## 4. Pipeline profile (measured)
 
-The ONNX result above is only as useful as knowing where the time goes, so
-`scripts/profile_pipeline.py` profiles a full Tiny synthesis, one CPU thread, warm caches, mean of
-three sentences (0.565 s of audio, 4 NFE, 9.62 M params):
+`scripts/profile_pipeline.py` profiles a full Tiny synthesis, one CPU thread, mean of three
+sentences (**0.612 s** of audio, 4 NFE, 9.62 M params). Shares are of the shipped configuration
+(synthesis + phase-lock filter), which is the number that matters:
 
-| component | ms | % of full | standalone × real time |
+| component | ms | % of shipped | standalone × real time |
 |---|---|---|---|
-| text side (encoder + duration/F0/energy/latent heads) | 6.95 | **34.4 %** | 81× |
-| latent construction (align + prosody projection + de-normalise) | 0.31 | 1.5 % | 1810× |
-| decoder + iSTFT | 7.99 | **39.6 %** | 71× |
-| phase-lock filter | 2.27 | 11.2 % | 249× |
-| python/dispatch overhead | 2.66 | 13.2 % | — |
-| **full synthesize** | **20.18** | 100 % | **28.0×** |
+| decoder + iSTFT | 7.94 | **35.6 %** | 77× |
+| text side (encoder + duration/F0/energy/latent heads) | 6.80 | **30.5 %** | 90× |
+| phase-lock filter | 2.23 | 10.0 % | 275× |
+| latent construction (align + prosody + de-normalise) | 0.29 | 1.3 % | 2075× |
+| python/dispatch overhead | 2.98 | 13.4 % | — |
+| FULL (no filter) | 20.24 | 90.8 % | 30.2× |
+| **SHIPPED (with filter)** | **22.29** | 100 % | **27.4×** |
 
-**Finding: the vocoder is not the bottleneck.** It is ~40 % of the budget, with the text side taking
-an almost equal share, so int8-ONNX-ing the decoder (2.06× faster) buys roughly 20 % of the total
-path, not a step change. The next real speed win is exporting the *text* side too (its attention is
-MatMul-shaped, which int8 handles well) and trimming the 13 % Python/dispatch overhead — not more
-vocoder work. That is now the top item in the roadmap's P4.
+**Finding: the vocoder is not the bottleneck.** It is ~36 % of the budget with the text side taking
+~30 %, so int8-ONNX-ing both halves (as above) is what moves the needle: 27× → 71× for the shipped
+configuration. Remaining levers, in order: the 13 % python/dispatch overhead, then the phase-lock
+filter's 10 %.
 
 ## 5. Few-step sampling (Reflow) validation (measured)
 
