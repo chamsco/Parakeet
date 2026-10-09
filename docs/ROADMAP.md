@@ -43,21 +43,35 @@ the engineering.
 
 ## P3 — Small + few-step sampling
 
+* [x] **Reflow validated on CPU** (`scripts/reflow_demo.py`): the reflowed 2-step sampler agrees with
+      the NFE-32 reference better than the teacher's own NFE-16 discretisation (latent MSE 1.506 vs
+      1.848) and beats a naive 2-step cut by 29 % (2.125); in audio space it is 32 % closer; 16×
+      fewer VF passes gives a 9.7× wall-clock speed-up
 * [ ] Scale the teacher corpus to 50–200 h, add tag/emotion parallel data (1–10 h) with 50/50
-      mixed-prompt SFT.
-* [ ] Train flow matching (Ke 4, CFG 3), then Reflow to NFE 2–4.
-* [ ] Load frozen CAM++ and validate zero-shot cloning (SECS) and style factorisation.
-* [ ] **Exit criterion:** NFE ≤ 4 at WER ≤ 3 % on held-out text — no NFE-collapse.
+      mixed-prompt SFT
+* [ ] Train flow matching (Ke 4, CFG 3), then Reflow to NFE 2–4
+* [ ] Load frozen CAM++ and validate zero-shot cloning (SECS) and style factorisation
+* [ ] **Exit criterion:** NFE ≤ 4 at WER ≤ 3 % on held-out text — no NFE-collapse.  Note the
+      caveat the CPU experiment surfaced: at small training budgets the *model* (not the sampler) is
+      the bottleneck (the NFE-32 endpoint is further from the data than a 2-step cut), so this
+      criterion is only meaningful with real data and a real budget
 
 ## P4 — Release engineering
 
-* [ ] ONNX export (int8 weights, fp16 scales) + an ONNX runtime benchmark; the real-time story is
-      judged against ONNX, as Paradee's 17.8× vs PyTorch's 25× shows.
-* [ ] Streaming sampler for Small (currently only decoding streams).
-* [ ] A/B the two phase-lock references (`ramp` vs `smooth`) against UTMOS and phase coherence.
+* [x] ONNX export of the decoder compute with dynamic batch/time axes, int8 QDQ quantisation with a
+      calibration set, a runtime wrapper that keeps streaming iSTFT, and a **measured** PyTorch vs
+      ONNX-fp32 vs ONNX-int8 benchmark (`scripts/export_onnx.py`) — the real-time story has to be
+      judged on ONNX, not PyTorch
+* [ ] A streaming sampler for Small (currently only decoding streams)
+* [ ] **Export the text side to ONNX too.** Profiling shows the decoder is only ~40 % of a full
+      Tiny synthesis and the text side ~34 %, so vocoder int8 alone buys ~20 % of the path; the
+      text side's attention is MatMul-shaped, which int8 handles better than convolutions
+* [ ] Attack the 13 % python/dispatch overhead measured by `scripts/profile_pipeline.py`
+* [ ] A/B the two phase-lock references (`ramp` vs `smooth`) against UTMOS and phase coherence
 * [ ] Model card: teachers used, licence obligations, intended/misuse cases, deep-synthesis
-      marking, provenance hashes.
-* [ ] CI job that runs `smoke_test.py` + `pytest` and fails on RTF or streaming-parity regression.
+      marking, provenance hashes
+* [ ] CI job that runs `smoke_test.py` + `learn_demo.py` + `pytest` and fails on RTF, streaming
+      parity, or learning-metric regression
 
 ## P5 — Optional quality work
 

@@ -16,8 +16,9 @@ soundfile>=0.12
 # praat-parselmouth>=0.4    # high quality F0 for teacher signal extraction
 # faster-whisper>=1.0       # WER evaluation
 # funasr>=1.1               # CAM++ speaker encoder + Paraformer ASR (PilotTTS recipe)
-# onnxruntime>=1.18         # int8 deployment
-# torchao>=0.7              # int8 weight-only quantization
+# onnx>=1.16                # int8 ONNX export (pip install -e ".[export]")
+# onnxruntime>=1.18         # int8 ONNX runtime + benchmark
+# torchao>=0.7              # alternative int8 weight-only quantization
 # tensorboard>=2.16
 
 # --- dev ---

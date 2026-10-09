@@ -8,14 +8,17 @@ Reproduce with:
 ```bash
 python scripts/smoke_test.py --steps 2 --out runs/smoke     # trains every stage, synthesises
 python scripts/learn_demo.py                                # proves the stages learn (~10 min CPU)
-python -m pytest -q                                         # 105 tests
+python scripts/reflow_demo.py                               # validates NFE-2 sampling (~5 min CPU)
+python scripts/export_onnx.py                               # int8 ONNX + runtime benchmark
+python scripts/profile_pipeline.py                          # where does the time actually go
+python -m pytest -q                                         # 109 tests
 python scripts/bench_rtf.py --config configs/parakeet_tiny.yaml
 ```
 
 ## 1. Test suite
 
 ```
-105 passed
+109 passed
 ```
 
 Coverage by area:
@@ -31,6 +34,7 @@ Coverage by area:
 | `test_data_and_text.py` | tag-aware normalisation (numbers→words, tags preserved), tokeniser round-trip, vocab fits embedding capacity; MiniMax is **refused by default**; corpus builder writes a manifest and interleaves both teachers; latent shard cache end-to-end + collate; synthetic batch source key sets |
 | `test_curate.py` | every curation gate fires on a constructed failure (too short/long, clipped, silent, low SNR, narrowband, low MOS, ASR disagreement); **all** reasons reported, not just the first; SNR correctly reported as *unevaluable* without a noise floor; WER and punctuation-gap maths; reject records are never dropped |
 | `test_learning.py` | synthetic fixture is structurally exact (frame counts, peak, F0 declination); latent normaliser fits and inverts; token targets are exact and normalised; decoder-latent alignment; supplied-latent path leaves the encoder gradient-free; **stage freezing does not leak between stages**; and the headline: 40 CPU steps measurably improve both the representation and the distilled text side |
+| `test_onnx.py` | ONNX decoder matches PyTorch to **<1e-4**; dynamic time axis across 7/23/41 frames; int8 file is smaller and runs on CPU; the fp32↔int8 comparison reports size reduction, both latencies and the output deviation (skips if `onnx`/`onnxruntime` absent) |
 
 ## 2. Learning demo (measured)
 
@@ -67,7 +71,85 @@ filter) and raises 2–8 kHz phase coherence from 0.136 to 0.178.
 Listen to `runs/learn_demo/{target,generated,generated_phase_locked,baseline_untrained_text}.wav`.
 Full numbers: `runs/learn_demo/report.json`.
 
-## 3. Smoke test output (measured)
+## 3. ONNX export + int8 (measured)
+
+`scripts/export_onnx.py` exports the **decoder compute** (causal ConvNeXt blocks + head) with
+dynamic batch *and time* axes, quantises it to int8 with ONNX Runtime's static QDQ path
+(per-channel, int8 weights / uint8 activations, calibrated on real latents), and benchmarks all
+three runtimes on one CPU thread. The iSTFT stays in torch, so streaming is not lost.
+
+```
+parakeet-tiny: exporting decoder compute (latent_dim=24)
+decoder compute benchmark (1 thread, 81 latent frames = 1.013s audio)
+  PyTorch fp32          10.72 ms     94.52x real time
+  ONNX fp32              8.72 ms     17.97 MB   1.23x vs PyTorch
+  ONNX int8 (QDQ)        4.24 ms      4.68 MB   2.53x vs PyTorch
+  int8 size reduction 3.84x | int8 speedup vs ONNX fp32 2.06x
+  int8 deviation: |dlog_mag|max 0.0154, |dphase|max 0.0149 rad
+```
+
+* ONNX int8 is **2.53× faster than PyTorch** and **3.84× smaller** (18.0 → 4.7 MB) for the decoder
+  compute, with a max log-magnitude deviation of 0.015 and max phase deviation of 0.015 rad — i.e.
+  int8 changes the decoder's output by ~1.5 % in log-magnitude. (Paradee's equivalent claim is
+  "int8 costs ~0 UTMOS"; ours is a measured output deviation, which is weaker evidence but honest —
+  UTMOS needs a trained model.)
+* This CPU is a Zen 4 (AVX-512 VNNI), which is why int8 *Conv* beats fp32 here. The benchmark
+  measures rather than assumes precisely because that is hardware-dependent.
+* Numerical parity of the fp32 graph with PyTorch is asserted in `tests/test_onnx.py` (< 1e-4 on
+  the spectrogram), along with dynamic-time-axis behaviour and int8 size/run checks. Those tests
+  skip cleanly when `onnx`/`onnxruntime` are absent.
+
+## 4. Pipeline profile (measured)
+
+The ONNX result above is only as useful as knowing where the time goes, so
+`scripts/profile_pipeline.py` profiles a full Tiny synthesis, one CPU thread, warm caches, mean of
+three sentences (0.565 s of audio, 4 NFE, 9.62 M params):
+
+| component | ms | % of full | standalone × real time |
+|---|---|---|---|
+| text side (encoder + duration/F0/energy/latent heads) | 6.95 | **34.4 %** | 81× |
+| latent construction (align + prosody projection + de-normalise) | 0.31 | 1.5 % | 1810× |
+| decoder + iSTFT | 7.99 | **39.6 %** | 71× |
+| phase-lock filter | 2.27 | 11.2 % | 249× |
+| python/dispatch overhead | 2.66 | 13.2 % | — |
+| **full synthesize** | **20.18** | 100 % | **28.0×** |
+
+**Finding: the vocoder is not the bottleneck.** It is ~40 % of the budget, with the text side taking
+an almost equal share, so int8-ONNX-ing the decoder (2.06× faster) buys roughly 20 % of the total
+path, not a step change. The next real speed win is exporting the *text* side too (its attention is
+MatMul-shaped, which int8 handles well) and trimming the 13 % Python/dispatch overhead — not more
+vocoder work. That is now the top item in the roadmap's P4.
+
+## 5. Few-step sampling (Reflow) validation (measured)
+
+This is the experiment behind the "lightning fast" claim for Parakeet-Small: SupertonicTTS needs
+NFE 32, and cutting steps naively collapses quality (their WER 2.64 → 11.43 at NFE 4). Our recipe
+adds a Reflow stage to make NFE 2 viable. `scripts/reflow_demo.py` tests that on CPU with no
+corpus — 45.04 M model, 200 autoencoder fixture steps, 300 flow steps, 150 Reflow steps, **~5 min**:
+
+```
+  latent MSE vs teacher@32:  teacher@16 1.8476 | naive@2 2.1248 | reflow@2 1.5056
+  audio log-mel L1 vs decoded reference: naive@2 0.3128 | reflow@2 0.2130
+  timing: NFE 32 = 275 ms | NFE 2 = 28 ms  ->  9.7x wall-clock (16x fewer VF passes)
+```
+
+* **The reflowed 2-step sampler agrees with the NFE-32 reference better than the teacher's own
+  NFE-16 discretisation** (1.506 vs 1.848) and 29 % better than a naive 2-step cut (2.125). In audio
+  space, comparing both samplers against the *reference decoded through the same autoencoder* (so
+  the AE's error is common-mode), Reflow is 32 % closer (0.213 vs 0.313).
+* 16× fewer velocity-field passes gives **9.7× wall-clock** speed-up at this sequence length — the
+  gap is the once-per-sample conditioning work, which is why the number is not 16×.
+
+**And the honest negative result, which is the more useful half:** this experiment validates the
+*sampler*, not the *model*. With 15 s of synthetic audio the flow is nowhere near converged — the
+NFE-32 endpoint sits **2.24** from the data latent while a naive 2-step cut sits at **0.79**, i.e. at
+this training budget *sampling longer makes things worse*, and Reflow faithfully reproduces a
+teacher that is still wrong. Likewise the mel-vs-target metric is saturated: the autoencoder's own
+round-trip error (1.669) is **21× larger** than the difference between the two samplers (0.081), so
+it cannot discriminate at this fixture quality. Both are reported as diagnostics in
+`runs/reflow_demo/report.json`, not as pass criteria.
+
+## 6. Smoke test output (measured)
 
 ```
 parakeet-tiny [tiny] sr=24000 mel=80@93.8Hz latent=24 compress=1/6 voice=constant
@@ -118,7 +200,7 @@ overhead — it is not a valid throughput measurement until the model predicts s
 learning demo (§2) trains properly but on 15 seconds of *synthetic* audio, so it demonstrates that
 the machinery learns, not that the model is good.
 
-## 4. Deliberate engineering checks worth calling out
+## 7. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
@@ -154,7 +236,7 @@ the machinery learns, not that the model is good.
   `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
   else, rather than surfacing a cryptic `torch.stft` message.
 
-## 5. Environment notes
+## 8. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).

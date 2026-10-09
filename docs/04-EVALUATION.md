@@ -49,6 +49,17 @@ theirs.
 
 `scripts/smoke_test.py` already prints the correctness and speed halves of this table on every run:
 per-stage losses, parameter counts, int8 size, phase coherence before/after, streaming vs offline
-difference, and RTF at one thread. `parakeet/eval/metrics.py` provides `evaluate_pair()` (student
-vs teacher) and `EvalReport.to_json()` for run-over-run comparison; wire it into a release script
-once a checkpoint exists (`docs/ROADMAP.md` P4).
+difference, and RTF at one thread. Additional CPU-verifiable harnesses:
+
+| Script | What it establishes |
+|---|---|
+| `scripts/learn_demo.py` | the stages actually learn (before/after metrics with pass/fail) |
+| `scripts/reflow_demo.py` | NFE-2 sampling is viable after Reflow, and reports what the experiment *cannot* conclude |
+| `scripts/export_onnx.py` | PyTorch vs ONNX-fp32 vs ONNX-int8 latency, size, and output deviation |
+| `scripts/profile_pipeline.py` | component-wise share of a full synthesis, so optimisation targets the right thing |
+
+Use `profile_pipeline.py` as a release gate too: if the "bottleneck" line moves to the text side or
+to python/dispatch overhead, the ONNX work is done and the next lever is elsewhere.
+`parakeet/eval/metrics.py` provides `evaluate_pair()` (student vs teacher) and `EvalReport.to_json()`
+for run-over-run comparison; wire it into a release script once a checkpoint exists
+(`docs/ROADMAP.md` P4).

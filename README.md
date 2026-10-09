@@ -58,13 +58,29 @@ Two variants share every block:
 | measured RTF, 1 CPU thread, fp32 | **0.044–0.052 → 19–23× real time** across runs | 1.92 on a *randomly initialised* 0.04 s output (overhead-dominated; not a valid number until trained) |
 | intended use | laptop / on-device | GPU server or a fast CPU with a few steps |
 
+## Measured so far (one CPU thread, no GPU)
+
+| | Number | Where |
+|---|---|---|
+| Full Tiny synthesis | **~20 ms for 0.57 s audio → 19–28× real time** (fp32 PyTorch) | `smoke_test.py`, `profile_pipeline.py` |
+| Decoder compute alone | 94.5× real time fp32 → **2.53× faster as int8 ONNX** (18.0 → 4.7 MB, 3.84× smaller) | `export_onnx.py` |
+| Where the time goes | decoder 40 %, text side 34 %, phase lock 11 %, python 13 % — the vocoder is *not* the bottleneck | `profile_pipeline.py` |
+| Streaming decoder | **exactly equal** to offline decoding (5.6e-09) | `test_inference.py` |
+| Does it learn? | AE recon **36 %** better, text side **91 %**, text→audio **26 %** vs untrained, duration MAE **3 ms**, generated/target log-mel cosine **0.954** | `learn_demo.py` |
+| Is NFE 2 viable? | reflowed 2-step agrees with the NFE-32 reference **better than the teacher's own NFE-16** (1.51 vs 1.85) and 29 % better than a naive 2-step cut; **9.7× wall-clock** at NFE 2 | `reflow_demo.py` |
+| Int8 weights (simulated) | 12.0 MB Tiny / 56.3 MB Small | `smoke_test.py` |
+
+Full protocol, caveats and negative results: [docs/05-VERIFICATION.md](docs/05-VERIFICATION.md).
+
 ## Quickstart (CPU, no data, no GPU)
 
 ```bash
 python -m venv .venv && .venv/Scripts/pip install -e ".[dev]"     # Windows
 python scripts/smoke_test.py --steps 2          # trains every stage, synthesises, quantises
 python scripts/learn_demo.py --quick            # proves the stages learn (before/after metrics)
-python -m pytest -q                            # 105 tests
+python scripts/reflow_demo.py --quick           # validates NFE-2 sampling after Reflow
+python scripts/export_onnx.py                   # int8 ONNX vocoder + PyTorch/ONNX benchmark
+python -m pytest -q                            # 109 tests
 python scripts/bench_rtf.py --config configs/parakeet_tiny.yaml --steps 2
 ```
 
@@ -98,12 +114,13 @@ parakeet/
   train/      losses (MRSTFT, MPD/MSD, phase, distillation) + the five staged training loops
   data/       text/tags, teacher backends + licence gate, curation filters, feature cache,
               datasets, structured synthetic fixtures for CPU experiments
-  inference/  streaming synthesizer, phase-lock filter, int8 quantisation
+  inference/  streaming synthesizer, phase-lock filter, int8 + ONNX int8 (QDQ) export and runtime
   eval/       RTF, MCD, spectral convergence, phase coherence, optional UTMOS/WER/SECS, learning probes
 configs/      parakeet_tiny.yaml (9.6M) | parakeet_small.yaml (45M) | parakeet_small_44k.yaml
-scripts/      smoke_test.py | learn_demo.py | train.py | make_teacher_corpus.py | bench_rtf.py
-tests/        105 tests: config, audio DSP, models, losses, all five stages, inference,
-              data/corpus paths, curation filters, and learning regressions
+scripts/      smoke_test.py | learn_demo.py | reflow_demo.py | export_onnx.py |
+              profile_pipeline.py | train.py | make_teacher_corpus.py | bench_rtf.py
+tests/        109 tests: config, audio DSP, models, losses, all five stages, inference,
+              data/corpus paths, curation filters, ONNX parity, and learning regressions
 ```
 
 ## Honest limitations

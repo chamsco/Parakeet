@@ -18,7 +18,8 @@ dependencies = [
 [project.optional-dependencies]
 audio = ["soundfile>=0.12", "librosa>=0.10", "praat-parselmouth>=0.4"]
 teachers = ["transformers>=4.44", "snac>=1.2", "kokoro>=0.9", "misaki>=0.9"]
-eval = ["faster-whisper>=1.0", "onnxruntime>=1.18"]
+eval = ["faster-whisper>=1.0"]
+export = ["onnx>=1.16", "onnxruntime>=1.18"]
 dev = ["pytest>=8.0", "tqdm>=4.66"]
 
 [tool.setuptools.packages.find]

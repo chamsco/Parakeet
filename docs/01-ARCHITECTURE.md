@@ -123,9 +123,23 @@ FlowBlock: causal-free ConvNeXtBlock(dim, k=7) ─► cross-attention into
 1. `quantize_weights_(bits=8, per_channel=True)` — weight-only, per-output-channel, fp16 scales.
    Refuses sub-8-bit without explicit per-channel acknowledgement (Paradee: 4-bit → UTMOS 3.98).
 2. `save_int8_state_dict` — int8 weights + fp16 scales + fp16 norms/embeddings in one file.
-3. `Synthesizer.synthesize_stream` / `StreamingVocoder` — chunked, memory-bounded, numerically
+3. **ONNX export + int8 QDQ** (`parakeet/inference/onnx_export.py`, `scripts/export_onnx.py`):
+   * the exported graph is the **decoder compute** — `from_latent` → causal ConvNeXt blocks → head →
+     `(log_mag, phase)` — with dynamic batch **and time** axes;
+   * the iSTFT overlap-add stays outside the graph: it is one FFT per frame (cheap) and
+     complex/`torch.stft`/`torch.istft` export badly, whereas the convolutions are the actual cost;
+   * int8 via `quantize_static` (QDQ, per-channel, int8 weights / uint8 activations) calibrated on
+     real latents, and the **measured** output deviation is reported alongside the size/speed change
+     — because ONNX Runtime's int8 *Conv* kernels need VNNI-era CPU support to actually beat fp32,
+     so the speed-up must be measured rather than assumed;
+   * `OnnxVocoder` runs the session and keeps the streaming overlap-add in torch, so int8 deployment
+     does not lose the chunked/streaming property.
+4. `Synthesizer.synthesize_stream` / `StreamingVocoder` — chunked, memory-bounded, numerically
    equal to offline decoding.
-4. `phase_lock(wav, method="ramp" | "smooth")` — zero parameters, magnitude untouched, band 2–8 kHz.
+5. `phase_lock(wav, method="ramp" | "smooth")` — zero parameters, magnitude untouched, band 2–8 kHz.
 
-Known gaps (tracked in [ROADMAP.md](ROADMAP.md)): ONNX export, and a streaming *sampler* for
-Small (chunked decoding exists; the flow still runs in one pass).
+ONNX export is checked for numerical parity with PyTorch (`< 1e-4` on the spectrogram) in
+`tests/test_onnx.py`, which skips cleanly when `onnx`/`onnxruntime` are absent.
+
+Known gaps (tracked in [ROADMAP.md](ROADMAP.md)): wiring the ONNX path into a release script, and a
+streaming *sampler* for Small (chunked decoding exists; the flow still runs in one pass).
