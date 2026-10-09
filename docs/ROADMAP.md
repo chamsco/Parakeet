@@ -72,8 +72,17 @@ the engineering.
       streaming audio matching the offline filter at cosine 0.9994.  Cost is explicit: 2.81× total
       compute at block 16, 1.07× at block 128
 * [ ] Attack the 13 % python/dispatch overhead measured by `scripts/profile_pipeline.py`
-* [ ] A/B the two phase-lock references (`ramp` vs `smooth`) against UTMOS and phase coherence (the
-      filter is 10 % of the shipped path, so this trades quality against latency)
+* [x] A/B the two phase-lock references (`ramp` vs `smooth`) in `scripts/phase_lock_ab.py`. The
+      delay grid was **under-configured**: 64 points over [0, 1/60 s] is 260 µs, more than two
+      periods of phase error at 8 kHz. At matched strength 64 → 256 triples the coherence the filter
+      adds to glottal-locked speech while *halving* what it adds to white noise, so 256 is now the
+      default in both the offline and streaming filters. Two negative findings are reported rather
+      than buried: `smooth` is inert on both the within-frame and the temporal statistic, and the
+      filter adds coherence to noise too, so the metric cannot demonstrate speech-specific locking.
+      Perceptual benefit remains unmeasured (no UTMOS here), and the fixtures cannot serve as the
+      test signal at all (they randomise harmonic phase and score like noise)
+* [ ] Re-run the A/B against UTMOS on real audio, and reconsider the band and `strength` with a
+      perceptual metric rather than a phase statistic
 * [x] CI: `.github/workflows/ci.yml` runs the suite plus the smoke test and three fast demos on
       every push (Python 3.11 + 3.13); timing-sensitive benchmarks are a `workflow_dispatch` job
 * [x] End-to-end recipe dry run with dependency-free fixture teachers

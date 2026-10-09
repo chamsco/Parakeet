@@ -12,14 +12,14 @@ python scripts/reflow_demo.py                               # validates NFE-2 sa
 python scripts/streaming_demo.py                            # blockwise streaming + TTFA (~7 min CPU)
 python scripts/export_onnx.py --pipeline                    # int8 ONNX + runtime benchmark
 python scripts/profile_pipeline.py                          # where does the time actually go
-python -m pytest -q                                         # 194 tests
+python -m pytest -q                                         # 196 tests
 python scripts/bench_rtf.py --config configs/parakeet_tiny.yaml
 ```
 
 ## 1. Test suite
 
 ```
-194 passed
+196 passed
 ```
 
 Coverage by area:
@@ -557,7 +557,61 @@ The lesson is the same one as round 11, one level up: *unexecuted code is unveri
 looks are not evidence.* The fixtures made ten demos possible and, in doing so, hid the only path
 that matters for the real corpus.
 
-## 14. Smoke test output (measured)
+## 14. Phase-lock A/B: what the filter does, and what the statistic cannot show (measured)
+
+The phase-locking filter is the only *quality* intervention here that is not a trained model. It
+rewrites the phase of synthesized speech between 2 and 8 kHz, leaves the magnitudes alone, and
+reportedly moves UTMOS 4.39 → 4.41; it costs ~10 % of the shipped CPU pipeline.
+`scripts/phase_lock_ab.py` separates three questions and refuses to blur them.
+
+**First, the test signal had to be fixed.** The obvious choice — the synthetic corpus fixtures — is
+invalid: `render_token` assigns every harmonic a **random** phase, so the fixtures score 0.149 on the
+phase-concentration statistic against **0.144 for white noise**. The filter targets a glottal pulse
+train, whose phase is linear in frequency, so the A/B uses a partially glottal-locked stack (70 %
+linear phase + 30 % jitter + a noise floor) alongside white noise as a control.
+
+**Second, the statistic has a floor.** `phase_coherence` maximises over a delay grid, so white noise
+scores ~0.14 rather than 0 — and *any* linear-phase imposition raises it. That makes "coherence went
+up" a much weaker claim than it looks.
+
+Results (6 signals × 3 s, one CPU thread):
+
+| configuration | coherence | noise (control) | speech−noise gap | mel L1 cost | cost |
+|---|---|---|---|---|---|
+| baseline | 0.2456 | 0.1435 | +0.1023 | — | — |
+| ramp 0.7, n_tau=64 *(old default)* | 0.2514 | 0.1788 | **+0.0727** | 0.007 | 1.5 ms/audio-s |
+| ramp 0.7, n_tau=256 | 0.2576 | 0.1643 | +0.0935 | 0.014 | 1.6 ms/audio-s |
+| ramp 0.7, n_tau=1024 | 0.2608 | 0.1648 | +0.0962 | 0.014 | 2.3 ms/audio-s |
+| ramp 1.0, n_tau=64 | 0.2600 | 0.1945 | +0.0658 | 0.018 | 1.5 ms/audio-s |
+| ramp 1.0, n_tau=1024 | 0.2667 | 0.1755 | +0.0915 | 0.023 | 2.4 ms/audio-s |
+| smooth 0.7 | 0.2433 | 0.1430 | +0.1003 | 0.001 | 1.3 ms/audio-s |
+
+Three findings, one of them negative:
+
+1. **The delay grid was too coarse, and that was a real defect in the shipped configuration.** The
+   filter searches delays τ on a grid of `n_tau` points; resolution bounds the achievable lock
+   across the band (64 points over [0, 1/60 s] is 260 µs — more than two periods of phase error at
+   8 kHz). At matched strength, 64 → 256 roughly **triples** the coherence added to glottal-locked
+   speech (+0.0058 → +0.0120) while **reducing** what it adds to white noise (+0.0353 → +0.0208):
+   less of the effect is the filter's own arithmetic. The default is now **256** in both the offline
+   and the streaming filter, and a test asserts they stay in sync. Cost: 1.5 → 1.6 ms per audio
+   second.
+2. **`smooth` mode is inert on this statistic.** It changes within-frame coherence by −0.004…−0.0004
+   and temporal coherence by less than 0.002, at a tiny fidelity cost. Either Paradee's variant
+   operates on something neither statistic captures, or this implementation of it does not reproduce
+   the paper's mechanism. We report the measurement rather than the intention.
+3. **The filter adds coherence to white noise too, so the speech-vs-noise gap *narrows*** — from
+   +0.1023 to +0.0727 at the old default, and even at the best configuration it only returns to
+   +0.0915. **The within-frame concentration statistic therefore cannot demonstrate speech-specific
+   locking**; it measures that a linear phase was imposed, not that the signal had one. `buzz` in
+   `eval/metrics.py` is `1 − coherence` and inherits exactly this weakness.
+
+What is deliberately **not** claimed: that any of this sounds better. UTMOS is unavailable in this
+environment, so the paper's 4.39 → 4.41 stays a citation. The honest summary is that the filter
+provably imposes the linear phase it is designed to impose, that its resolution was under-configured
+until now, and that its *benefit* is unmeasured.
+
+## 15. Smoke test output (measured)
 
 ```
 parakeet-tiny [tiny] sr=24000 mel=80@93.8Hz latent=24 compress=1/6 voice=constant
@@ -608,7 +662,7 @@ overhead — it is not a valid throughput measurement until the model predicts s
 learning demo (§2) trains properly but on 15 seconds of *synthetic* audio, so it demonstrates that
 the machinery learns, not that the model is good.
 
-## 15. Deliberate engineering checks worth calling out
+## 16. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
@@ -644,7 +698,7 @@ the machinery learns, not that the model is good.
   `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
   else, rather than surfacing a cryptic `torch.stft` message.
 
-## 16. Environment notes
+## 17. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).

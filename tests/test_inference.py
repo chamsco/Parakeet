@@ -179,3 +179,59 @@ def test_shipped_tiny_config_synthesizes(tiny_yaml):
     assert wav.shape[-1] > 0
     assert torch.isfinite(wav).all()
     assert synth.buzz_metric(wav) >= 0.0
+
+
+def test_phase_lock_default_grid_is_the_measured_choice():
+    """The delay-grid resolution bounds the achievable lock.
+
+    The A/B in ``scripts/phase_lock_ab.py`` measured 64 -> 256 roughly tripling the coherence the
+    filter adds to glottal-locked speech while *reducing* what it adds to white noise (i.e. less of
+    the effect is the filter's own arithmetic).  Both the offline and the streaming filter must ship
+    that default, or the improvement never reaches the shipped path.
+    """
+    import inspect
+
+    from parakeet.inference import StreamingPhaseLock, phase_lock
+
+    assert inspect.signature(phase_lock).parameters["n_tau"].default == 256
+    assert inspect.signature(StreamingPhaseLock.__init__).parameters["n_tau"].default == 256
+
+
+def test_finer_delay_grid_locks_noise_less_and_speech_more():
+    """Regression for the measured finding, on one second of signal so it stays cheap.
+
+    Note what is *not* asserted: that the filter helps glottal-locked speech more than noise.  The
+    A/B measured the opposite in this statistic (noise gains more coherence than speech-like phase,
+    so the speech-vs-noise gap narrows), which means within-frame phase concentration cannot
+    demonstrate speech-specific locking on its own.  Only claims this test can support are asserted;
+    the negative result lives in scripts/phase_lock_ab.py and docs/05-VERIFICATION.md.
+    """
+    from parakeet.inference import phase_coherence, phase_lock
+
+    sr = 24000
+    generator = torch.Generator().manual_seed(0)
+    noise = torch.randn(sr, generator=generator) * 0.05
+
+    def coherence(signal, n_tau=None):
+        filtered = (
+            signal[None] if n_tau is None else phase_lock(signal[None], sample_rate=sr, n_tau=n_tau)[0][None]
+        )
+        return float(phase_coherence(filtered, sample_rate=sr))
+
+    noise_gain_fine = coherence(noise, 1024) - coherence(noise)
+    noise_gain_coarse = coherence(noise, 64) - coherence(noise)
+    assert noise_gain_fine < noise_gain_coarse, (
+        f"a finer grid must add less coherence to noise ({noise_gain_fine:.4f} vs "
+        f"{noise_gain_coarse:.4f})"
+    )
+
+    # and a partially glottal-locked signal must gain *something*: the filter is not a no-op
+    f0 = 120.0
+    t = torch.arange(sr, dtype=torch.float32) / sr
+    harmonics = torch.arange(1, 40, dtype=torch.float32)
+    freqs = f0 * harmonics
+    jitter = 0.3 * torch.rand(39, generator=generator) * 2 * torch.pi
+    phase = -2 * torch.pi * freqs / f0 + jitter
+    wave = (harmonics.pow(-1)[:, None] * torch.sin(2 * torch.pi * freqs[:, None] * t + phase[:, None])).sum(0)
+    locked = wave / wave.abs().max() * 0.3
+    assert coherence(locked, 1024) > coherence(locked), "the filter must have an effect on speech"

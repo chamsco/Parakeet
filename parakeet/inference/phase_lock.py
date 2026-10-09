@@ -85,7 +85,14 @@ def phase_lock(
     win_length: Optional[int] = None,
     band: Tuple[float, float] = (2000.0, 8000.0),
     strength: float = 0.7,
-    n_tau: int = 64,
+    #: Delay-grid resolution for the linear-phase reference.  This is not an arbitrary knob: the
+    #: achievable lock across a 2-8 kHz band is bounded by it.  With 64 points over [0, 1/60 s] the
+    #: spacing is 260 us, i.e. more than two periods of phase error at 8 kHz.  Measured (round 12,
+    #: scripts/phase_lock_ab.py): going 64 -> 256 at matched strength triples the coherence the
+    #: filter adds to glottal-locked speech (+0.0058 -> +0.0120) while *reducing* what it adds to
+    #: white noise (+0.0353 -> +0.0208) -- less of the effect is its own arithmetic.  Cost is
+    #: ~1.5 -> 1.6 ms per audio second.
+    n_tau: int = 256,
     smooth_frames: int = 13,
     method: str = "ramp",
     f0: Optional[torch.Tensor] = None,
@@ -204,7 +211,10 @@ class StreamingPhaseLock:
         band: Tuple[float, float] = (2000.0, 8000.0),
         strength: float = 0.7,
         method: str = "ramp",
-        n_tau: int = 64,
+        #: must match :func:`phase_lock`'s default: the delay-grid resolution bounds the achievable
+        #: lock, and a coarse grid mostly adds phase structure the signal never had (see the A/B in
+        #: scripts/phase_lock_ab.py)
+        n_tau: int = 256,
         smooth_frames: int = 13,
     ) -> None:
         self.sample_rate = sample_rate
