@@ -12,14 +12,14 @@ python scripts/reflow_demo.py                               # validates NFE-2 sa
 python scripts/streaming_demo.py                            # blockwise streaming + TTFA (~7 min CPU)
 python scripts/export_onnx.py --pipeline                    # int8 ONNX + runtime benchmark
 python scripts/profile_pipeline.py                          # where does the time actually go
-python -m pytest -q                                         # 227 tests
+python -m pytest -q                                         # 233 tests
 python scripts/bench_rtf.py --config configs/parakeet_tiny.yaml
 ```
 
 ## 1. Test suite
 
 ```
-227 passed
+233 passed
 ```
 
 Coverage by area:
@@ -36,6 +36,7 @@ Coverage by area:
 | `test_curate.py` | every curation gate fires on a constructed failure (too short/long, clipped, silent, low SNR, narrowband, low MOS, ASR disagreement); **all** reasons reported, not just the first; SNR correctly reported as *unevaluable* without a noise floor; WER and punctuation-gap maths; reject records are never dropped |
 | `test_learning.py` | synthetic fixture is structurally exact (frame counts, peak, F0 declination); latent normaliser fits and inverts; token targets are exact and normalised; decoder-latent alignment; supplied-latent path leaves the encoder gradient-free; **stage freezing does not leak between stages**; and the headline: 40 CPU steps measurably improve both the representation and the distilled text side |
 | `test_onnx.py` | ONNX decoder matches PyTorch to **<1e-4**; text side matches to **<1e-4 across token lengths 5/8/17** (the legacy exporter's baked-in length would fail this); dynamic time axis across 7/23/41 frames; int8 files are smaller and run on CPU; dtypes are validated at the wrapper boundary; external weight sidecars are counted in size; full int8 pipeline tracks PyTorch (cosine >0.95) and is smaller in total (skips if `onnx`/`onnxruntime`/`onnxscript` absent) |
+| `test_real_audio.py` | the voicing threshold admits more frames as it rises **while the pitch estimate stays put** (the real-speech signature of a threshold that was too strict); an unvoiced token inherits the nearest voiced pitch instead of 0 Hz; the unaligned split neither collapses nor ignores the energy; the Kokoro runtime dispatch lands on an importable backend and rejects an unknown voice with the available list; the DNSMOS wrapper reads `ovrl_mos` rather than defaulting to 0.0 (the bug the teacher control caught); the real-audio, real-training and real-evaluation evidence all record their provenance, their controls and their caveats |
 | `test_real_audio.py` | the voicing threshold admits more frames as it rises **while the pitch estimate stays put** (the real-speech signature of a threshold that was too strict); an unvoiced token inherits the nearest voiced pitch instead of 0 Hz; the unaligned split neither collapses nor ignores the energy; the Kokoro runtime dispatch lands on an importable backend and rejects an unknown voice with the available list; the real-audio evidence records its provenance and its duration caveat |
 | `test_ablation.py` | the offered lite config really is smaller and really trains and synthesizes; it **matches the geometry the ablation recommended** (read from the committed evidence, so it holds in a clone); and the evidence records its own limitations (a caveat, a held-out split of ≥ 3 items, both train and val fits) — a study without its caveat is an overclaim |
 | `test_model_card.py` | every claim cites **committed** evidence whose SHA-256 matches the manifest; a missing report comes back `unmeasured` and a corrupted value comes back `fail` (positive controls on the check itself); the rendered card states its limitations (no checkpoint, out-of-scope uses, no UTMOS) and its licence table is generated from the teacher specs |
@@ -807,7 +808,50 @@ corpus is 16 prompts, and the duration targets are the unaligned fallback.  What
 that the data path works on real audio — and that the fixtures had been hiding three real defects
 precisely because they are not speech.
 
-## 20. Smoke test output (measured)
+## 20. Training and evaluating on real speech — the first real numbers (measured)
+
+Round 17 got real audio through the data path. This round **trains on it** and measures what the
+papers measure. Corpus: 21 curated Kokoro utterances, **74.7 s** of real 24 kHz speech.
+
+| stage | before | after | change |
+|---|---|---|---|
+| autoencoder, real speech (300 steps, 24 min) | recon log-mel L1 2.0121 | **1.3864** | **−31.1 %** |
+| text side, real teacher signals (400 steps, 18 s) | teacher-signal loss 3.9990 | **0.8060** | **−79.8 %** |
+| text → audio vs the real reference (21 utts) | — | log-mel cosine **0.9404** | — |
+
+Then `scripts/real_eval.py` measures the trained checkpoint with a naturalness metric, an ASR, and —
+critically — **the teacher as a control**:
+
+| metric | student | teacher (Kokoro) | control's purpose |
+|---|---|---|---|
+| DNSMOS P.835 overall | **1.77** | **2.61** | a naturalness metric that does not separate them is broken |
+| WER (`faster-whisper base.en`) | **1.00** | **0.00** | the recogniser must transcribe the teacher's audio correctly |
+| RTF, one thread | **0.019 (52× real time)** | — | the shipped path on real speech |
+
+**The honest reading: the student is not yet intelligible.** WER 1.00 means `base.en` could not
+recover a single intended word from the generated audio, and DNSMOS 1.77 against a 2.61 teacher is a
+wide gap. This is what a 75-second corpus and a 25-minute CPU budget buy, and it is the first time
+this project could say so with real numbers instead of proxies. The controls are what make those
+numbers trustworthy: the ASR scores the *same text spoken by Kokoro* at 0.00 WER, and the
+naturalness metric rates Kokoro well above the student.
+
+Two things had to be fixed to get here, both found by the controls rather than by inspection:
+
+* **`utmos` is not installable here** — it needs `fairseq`, whose sdist does not build on this
+  Python. `SpeechMOS` (DNSMOS P.835) installs and is the metric the curation gate already references
+  (`min_dnsmos` 3.5, PilotTTS), so UTMOS is reported **unavailable with its reason** and DNSMOS
+  carries the naturalness evidence.
+* **The DNSMOS wrapper read the wrong key names.** `dnsmos.run` returns `ovrl_mos`, `sig_mos`,
+  `bak_mos`, `p808_mos`; the wrapper looked for `mos_ovrl` and defaulted to 0.0 — scoring *real Kokoro
+  speech* at zero. Only the teacher control exposed it, because a metric that rates a real teacher at
+  zero is obviously broken. Fixed, pinned by a monkeypatched regression test, and the sub-scores now
+  travel in the metric's `detail` so a low number can be diagnosed.
+
+Not claimed: that this is a usable model. The corpus is one voice set, the duration targets are the
+unaligned fallback, and the WER recogniser is `base.en` rather than the papers' `large-v3`, which
+makes the WER an upper bound. What changed is that these are now *measurements*.
+
+## 21. Smoke test output (measured)
 
 ```
 parakeet-tiny [tiny] sr=24000 mel=80@93.8Hz latent=24 compress=1/6 voice=constant
@@ -858,7 +902,7 @@ overhead — it is not a valid throughput measurement until the model predicts s
 learning demo (§2) trains properly but on 15 seconds of *synthetic* audio, so it demonstrates that
 the machinery learns, not that the model is good.
 
-## 21. Deliberate engineering checks worth calling out
+## 22. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
@@ -894,7 +938,7 @@ the machinery learns, not that the model is good.
   `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
   else, rather than surfacing a cryptic `torch.stft` message.
 
-## 22. Environment notes
+## 23. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).

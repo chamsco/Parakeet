@@ -98,6 +98,77 @@ def test_make_batch_source_falls_back_to_synthetic_batches(fast_cfg):
     assert "ids" in batch and "latent_token" in batch
 
 
+# ------------------------------------------------------------------ raw-waveform source
+def test_waveform_corpus_source_pads_and_reports_lengths(tmp_path):
+    """The autoencoder trains on audio; until round 18 there was no library source for that, which
+    is part of why no real-audio autoencoder training had ever happened."""
+    import numpy as np
+    import soundfile as sf
+
+    from parakeet.data.dataset import WaveformCorpusSource
+
+    (tmp_path / "wav").mkdir(parents=True, exist_ok=True)
+    lengths = [24000, 12000]  # 1 s and 0.5 s at 24 kHz
+    lines = []
+    for i, n in enumerate(lengths):
+        wave = (np.sin(np.arange(n) * 0.05) * 0.3).astype(np.float32)
+        sf.write(str(tmp_path / "wav" / f"u{i}.wav"), wave, 24000)
+        lines.append(
+            json.dumps(
+                {
+                    "utt_id": f"u{i}",
+                    "text": "hello",
+                    "teacher": "kokoro",
+                    "wav_path": f"wav/u{i}.wav",
+                    "sample_rate": 24000,
+                    "duration_s": n / 24000,
+                }
+            )
+        )
+    manifest = tmp_path / "manifest.jsonl"
+    manifest.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    source = WaveformCorpusSource(manifest, batch_size=2, seed=0, shuffle=False)
+    assert len(source) == 2
+    batch = source()
+    assert batch["wav"].shape == (2, max(lengths)), "shorter items are zero-padded"
+    assert batch["wav_lengths"].tolist() == lengths
+    assert float(batch["wav"][1, lengths[1] :].abs().max()) == 0.0, "padding must be zeros"
+
+    # resumable like the other sources
+    state = source.state_dict()
+    fresh = WaveformCorpusSource(manifest, batch_size=2, seed=999, shuffle=False)
+    fresh.load_state_dict(state)
+    assert torch.equal(fresh()["wav"], source()["wav"])
+
+
+def test_waveform_corpus_source_rejects_an_empty_manifest(tmp_path):
+    from parakeet.data.dataset import WaveformCorpusSource
+
+    manifest = tmp_path / "empty.jsonl"
+    manifest.write_text("\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="no records"):
+        WaveformCorpusSource(manifest)
+
+
+def test_optional_metrics_record_their_configuration():
+    """A WER from `base.en` is not comparable to a `large-v3` WER, so the number carries its own
+    recogniser and the dataclass has somewhere to put it."""
+    import inspect
+
+    from parakeet.eval.metrics import OptionalMetric, utmos, whisper_wer
+
+    assert "model_size" in inspect.signature(whisper_wer).parameters
+    assert inspect.signature(whisper_wer).parameters["model_size"].default == "large-v3"
+    metric = OptionalMetric(0.25, True, detail="faster-whisper base.en")
+    assert metric.detail == "faster-whisper base.en"
+    # both metric wrappers must be callable without the optional dependency installed
+    missing_utmos = utmos([torch.zeros(24000)])
+    assert isinstance(missing_utmos.available, bool)
+    if not missing_utmos.available:
+        assert missing_utmos.reason, "an unavailable metric must say why"
+
+
 # ------------------------------------------------------------------ corpus -> cache helper
 def test_cache_teacher_corpus_keeps_the_mixture_from_provenance(fast_cfg, tmp_path):
     """Regression: the CLI used to pass no mixture, silently making every weight 1.0."""

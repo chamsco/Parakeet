@@ -1,7 +1,7 @@
 {
-  "generated": "2026-10-09T12:30:05",
+  "generated": "2026-10-09T13:06:03",
   "git": {
-    "rev": "bfb0c8c",
+    "rev": "1c5a441",
     "dirty": true
   },
   "note": "Committed snapshots of the reports the model card cites.  Refresh with `python scripts/model_card.py --refresh-evidence` after re-running the demos; the hashes make a stale bundle visible.",
@@ -102,7 +102,21 @@
       "status": "copied",
       "source": "runs/real_corpus_report.json",
       "evidence": "docs/evidence/real_teacher_audio.json",
-      "sha256": "31d386168d14e69a1c1b2e3e4d23b7bf1e901d72d8a0dadb96dc3548d22c1812"
+      "sha256": "073fd2790daefaec8127cd8a0b3933361d6ea10ce05b5418853318a261809eaf"
+    },
+    {
+      "claim": "real_training",
+      "status": "copied",
+      "source": "runs/real_train/report.json",
+      "evidence": "docs/evidence/real_training.json",
+      "sha256": "03017ed58a0ed731ed312bcc041f9eda0971e4e6a7f6ad34d137b37e58129f1f"
+    },
+    {
+      "claim": "real_evaluation",
+      "status": "copied",
+      "source": "runs/real_eval/report.json",
+      "evidence": "docs/evidence/real_evaluation.json",
+      "sha256": "973d4cef499c2e003b1f825d257e0ffe4664cff69eaebffb7e5fc5756d3165f1"
     },
     {
       "claim": "learning_progress",

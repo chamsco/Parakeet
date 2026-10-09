@@ -190,6 +190,70 @@ def test_sherpa_backend_rejects_an_unknown_voice_with_the_available_list():
         backend._speaker_id("am_michael")
 
 
+def test_dnsmos_wrapper_reads_the_overall_score_not_a_default(monkeypatch):
+    """Regression: the first wrapper looked for `mos_ovrl` and silently returned 0.0.
+
+    `speechmos.dnsmos.run` returns keys ``ovrl_mos``, ``sig_mos``, ``bak_mos``, ``p808_mos`` -- note
+    the word order.  A defaulted lookup scored *every* sample 0.0, including real Kokoro speech, and
+    only the teacher-vs-student control made that visible: a naturalness metric that rates a real
+    teacher at zero is broken, not opinionated.
+    """
+    import sys
+    import types
+
+    fake = types.ModuleType("speechmos.dnsmos")
+
+    def run(sample, sr, **kwargs):
+        return {"ovrl_mos": 3.25, "sig_mos": 3.51, "bak_mos": 3.90, "p808_mos": 3.72}
+
+    fake.run = run
+    package = types.ModuleType("speechmos")
+    package.dnsmos = fake
+    monkeypatch.setitem(sys.modules, "speechmos", package)
+    monkeypatch.setitem(sys.modules, "speechmos.dnsmos", fake)
+
+    from parakeet.eval.metrics import dnsmos_score
+
+    metric = dnsmos_score([torch.randn(24000) * 0.05], sample_rate=24000)
+    assert metric.available, metric.reason
+    assert metric.value == pytest.approx(3.25), "must read ovrl_mos, not fall back to 0.0"
+    assert "ovrl" in metric.detail and "p808" in metric.detail, (
+        "the sub-scores diagnose why a sample is low and must travel with the value"
+    )
+
+
+def test_real_training_evidence_records_a_real_baseline():
+    """The first real-audio training evidence must include the numbers *and* the limits."""
+    path = ROOT / "docs" / "evidence" / "real_training.json"
+    if not path.exists():
+        pytest.skip("no real-training evidence committed")
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    assert payload["corpus"]["audio_seconds"] > 10.0
+    assert payload["autoencoder"]["recon_after"] < payload["autoencoder"]["recon_before"]
+    assert payload["text_side"]["loss_after"] < payload["text_side"]["loss_before"]
+    assert 0.0 < payload["text_to_audio"]["log_mel_cosine"] <= 1.0
+    joined = " ".join(payload["caveats"]).lower()
+    assert "not a converged model" in joined
+    assert "no perceptual metric" in joined or "utmos" in joined
+
+
+def test_real_evaluation_evidence_reports_its_controls():
+    """A naturalness number without the teacher control, and WER without its recogniser, are not
+    results."""
+    path = ROOT / "docs" / "evidence" / "real_evaluation.json"
+    if not path.exists():
+        pytest.skip("no real-evaluation evidence committed")
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    naturalness = payload["naturalness"]
+    assert naturalness["student"] is not None and naturalness["teacher"] is not None
+    assert naturalness["teacher"] > naturalness["student"], "the control must separate them"
+    wer = payload["wer"]
+    assert wer["recogniser"], "WER must name the recogniser that produced it"
+    assert wer["teacher"] is not None and wer["teacher"] < 0.5, "the ASR must work on the teacher"
+    assert payload["utmos"]["available"] is False
+    assert payload["utmos"]["reason"], "an unavailable metric must say why"
+
+
 def test_real_audio_evidence_records_its_provenance_and_limitations():
     """The first real-speech evidence must say what it is, and what it is not."""
     path = ROOT / "docs" / "evidence" / "real_audio.json"

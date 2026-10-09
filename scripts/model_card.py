@@ -162,6 +162,22 @@ CLAIMS: List[Dict[str, Any]] = [
         "fmt": "{passed}/{total} checks",
     },
     {
+        "id": "real_training",
+        "statement": "the student **trains on real speech** (autoencoder + text side, Kokoro corpus)",
+        "report": ["runs/real_train/report.json"],
+        "field": "checks",
+        "op": "all_true",
+        "fmt": "{passed}/{total} checks",
+    },
+    {
+        "id": "real_evaluation",
+        "statement": "real-speech evaluation with a naturalness metric **and its teacher control**",
+        "report": ["runs/real_eval/report.json"],
+        "field": "checks",
+        "op": "all_true",
+        "fmt": "{passed}/{total} checks",
+    },
+    {
         "id": "learning_progress",
         "statement": "the stages learn: autoencoder reconstruction improves",
         "report": ["runs/learn_demo/report.json"],

@@ -272,6 +272,90 @@ def make_batch_source(
     )
 
 
+class WaveformCorpusSource:
+    """Batches of **raw waveforms** from a teacher corpus (what the autoencoder stage trains on).
+
+    Declared late but needed early: the autoencoder is the one stage that trains on audio, and until
+    now every demo hand-rolled its own padding source for it -- there was no library path from a
+    corpus manifest to a waveform batch, which is why no real-audio autoencoder training had ever
+    happened.  Items are padded to the longest in the batch and returned with a length mask.
+    """
+
+    def __init__(
+        self,
+        manifest: str | Path,
+        batch_size: int = 4,
+        corpus_dir: Optional[str | Path] = None,
+        max_seconds: Optional[float] = None,
+        seed: int = 0,
+        limit: Optional[int] = None,
+        shuffle: bool = True,
+    ) -> None:
+        import soundfile as sf  # noqa: F401  (imported for its side effect on error messages)
+
+        self.manifest = Path(manifest)
+        self.corpus_dir = Path(corpus_dir) if corpus_dir else self.manifest.parent
+        self.records = [
+            json.loads(line)
+            for line in self.manifest.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        if limit is not None:
+            self.records = self.records[:limit]
+        if not self.records:
+            raise ValueError(f"no records in {self.manifest}")
+        self.batch_size = batch_size
+        self.max_seconds = max_seconds
+        self.generator = torch.Generator().manual_seed(seed)
+        self.shuffle = shuffle
+        self.order: List[int] = []
+        self.pos = 0
+
+    def __len__(self) -> int:
+        return len(self.records)
+
+    def _load(self, index: int) -> torch.Tensor:
+        import soundfile as sf
+
+        record = self.records[index]
+        wav, sample_rate = sf.read(str(self.corpus_dir / record["wav_path"]), dtype="float32")
+        tensor = torch.from_numpy(wav).reshape(-1)
+        if self.max_seconds is not None:
+            tensor = tensor[: int(self.max_seconds * sample_rate)]
+        return tensor
+
+    def __call__(self) -> Dict[str, torch.Tensor]:
+        if self.pos + self.batch_size > len(self.order):
+            self.order = (
+                torch.randperm(len(self.records), generator=self.generator).tolist()
+                if self.shuffle
+                else list(range(len(self.records)))
+            )
+            self.pos = 0
+        indices = self.order[self.pos : self.pos + self.batch_size]
+        self.pos += self.batch_size
+        waves = [self._load(i) for i in indices]
+        width = max(w.numel() for w in waves)
+        batch = torch.zeros(len(waves), width)
+        lengths = torch.zeros(len(waves), dtype=torch.long)
+        for i, w in enumerate(waves):
+            batch[i, : w.numel()] = w
+            lengths[i] = w.numel()
+        return {"wav": batch, "wav_lengths": lengths}
+
+    def state_dict(self) -> Dict[str, object]:
+        return {"generator": self.generator.get_state(), "order": list(self.order),
+                "pos": int(self.pos)}
+
+    def load_state_dict(self, state: Dict[str, object]) -> None:
+        if not state:
+            return
+        if state.get("generator") is not None:
+            self.generator.set_state(state["generator"])
+        self.order = list(state.get("order") or [])
+        self.pos = int(state.get("pos") or 0)
+
+
 class SyntheticBatchSource:
     """Random but *shape-correct* batches for dry runs and CPU smoke tests.
 

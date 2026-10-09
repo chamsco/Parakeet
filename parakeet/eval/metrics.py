@@ -108,6 +108,9 @@ class OptionalMetric:
     value: Optional[float]
     available: bool
     reason: str = ""
+    #: which configuration produced the value (e.g. the Whisper size).  A WER from `base.en` is not
+    #: comparable to one from `large-v3`, so the number must travel with its own provenance.
+    detail: str = ""
 
 
 def utmos(wavs: Sequence[torch.Tensor], sample_rate: int = 24000) -> OptionalMetric:
@@ -119,12 +122,75 @@ def utmos(wavs: Sequence[torch.Tensor], sample_rate: int = 24000) -> OptionalMet
     try:  # pragma: no cover - requires the optional dependency
         predictor = utmos.Score(sample_rate=sample_rate)
         scores = [predictor.score(w.reshape(-1).numpy()) for w in wavs]
-        return OptionalMetric(float(np.mean(scores)), True)
+        return OptionalMetric(float(np.mean(scores)), True, detail="utmos22 strong")
     except Exception as exc:  # pragma: no cover
         return OptionalMetric(None, False, str(exc))
 
 
-def whisper_wer(audio: Sequence[torch.Tensor], texts: Sequence[str], sample_rate: int = 24000) -> OptionalMetric:
+def dnsmos_score(audio: Sequence[torch.Tensor], sample_rate: int = 24000) -> OptionalMetric:
+    """DNSMOS P.835 (pip install speechmos) -- reference-free naturalness.
+
+    This is the metric the curation gate already references (``CurateConfig.min_dnsmos`` = 3.5, from
+    PilotTTS), and unlike UTMOS it installs here: ``utmos`` needs ``fairseq``, whose sdist cannot
+    build on this Python.  DNSMOS wants 16 kHz input, and it resamples with a polyphase filter
+    (scipy is present with librosa), falling back to linear interpolation.
+
+    Returns the **overall** MOS (``ovrl_mos``); the signal/background sub-scores and the P.808 score
+    travel in ``detail``, because they are what diagnose *why* a sample scores low.
+    """
+    try:
+        from speechmos import dnsmos  # type: ignore  # noqa: F401
+    except Exception as exc:  # pragma: no cover - optional dependency
+        return OptionalMetric(None, False, f"`speechmos` not installed ({exc.__class__.__name__})")
+    try:  # pragma: no cover - requires the optional dependency
+        results = []
+        for wav in audio:
+            mono = wav.reshape(-1)
+            if sample_rate != 16000:
+                try:
+                    from scipy.signal import resample_poly
+
+                    mono = torch.from_numpy(
+                        resample_poly(mono.numpy(), 16000, sample_rate).astype("float32")
+                    )
+                except Exception:  # noqa: BLE001 - scipy is optional; linear is a fallback
+                    target = int(mono.numel() * 16000 / sample_rate)
+                    mono = torch.nn.functional.interpolate(
+                        mono.reshape(1, 1, -1), size=target, mode="linear", align_corners=False
+                    ).reshape(-1)
+            results.append(dnsmos.run(mono.numpy(), 16000, return_df=False))
+        # keys are `ovrl_mos`, `sig_mos`, `bak_mos`, `p808_mos` -- NOT `mos_ovrl`, which is what the
+        # first version of this wrapper looked for, silently returning 0.0 for real speech
+        overall = [
+            float(r.get("ovrl_mos", r.get("p808_mos", float("nan")))) if isinstance(r, dict)
+            else float(np.asarray(r).reshape(-1)[-1])
+            for r in results
+        ]
+        if results and isinstance(results[0], dict):
+            detail = (
+                f"dnsmos p835 ovrl | sig {np.mean([r['sig_mos'] for r in results]):.2f} "
+                f"bak {np.mean([r['bak_mos'] for r in results]):.2f} "
+                f"p808 {np.mean([r['p808_mos'] for r in results]):.2f}"
+            )
+        else:
+            detail = "dnsmos p835 ovrl"
+        return OptionalMetric(float(np.mean(overall)), True, detail=detail)
+    except Exception as exc:  # pragma: no cover
+        return OptionalMetric(None, False, str(exc))
+
+
+def whisper_wer(
+    audio: Sequence[torch.Tensor],
+    texts: Sequence[str],
+    sample_rate: int = 24000,
+    model_size: str = "large-v3",
+) -> OptionalMetric:
+    """WER of synthesized audio against the intended text, via faster-whisper.
+
+    ``model_size`` matters and is recorded in ``detail``: the papers report WER with a large ASR
+    model, and a smaller one (practical on CPU) yields a different, usually higher, number.  A WER
+    without its recogniser attached is not a result.
+    """
     try:
         from faster_whisper import WhisperModel  # type: ignore
     except Exception as exc:  # pragma: no cover
@@ -132,7 +198,7 @@ def whisper_wer(audio: Sequence[torch.Tensor], texts: Sequence[str], sample_rate
     try:  # pragma: no cover
         import re
 
-        model = WhisperModel("large-v3", device="auto", compute_type="int8")
+        model = WhisperModel(model_size, device="cpu", compute_type="int8")
         total_err = total_ref = 0
         for w, ref in zip(audio, texts):
             segments, _ = model.transcribe(w.reshape(-1).numpy(), language="en")
@@ -142,7 +208,7 @@ def whisper_wer(audio: Sequence[torch.Tensor], texts: Sequence[str], sample_rate
             err = sum(1 for a, b in zip(r, h) if a != b) + abs(len(r) - len(h))
             total_err += err
             total_ref += max(1, len(r))
-        return OptionalMetric(total_err / max(1, total_ref), True)
+        return OptionalMetric(total_err / max(1, total_ref), True, detail=f"faster-whisper {model_size}")
     except Exception as exc:  # pragma: no cover
         return OptionalMetric(None, False, str(exc))
 
