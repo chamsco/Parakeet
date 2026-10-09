@@ -78,6 +78,7 @@ Two variants share every block:
 | **Does the repository actually contain the project?** | verified by cloning the pushed repo and running its tests there — an unanchored .gitignore rule (data/) had kept the entire parakeet/data package out of GitHub for ten commits; a hygiene test now fails if any package file is untracked | 	est_provenance_and_hygiene.py |
 | **Is the real teacher path correct?** | it had never been executed (weights/API needed) and **was wrong**: Orpheus codebooks were grouped contiguously instead of the published `{0}`/`{1,4}`/`{2,3,5,6}`, which decodes to noise. Now verified element-wise against a reimplementation of the published decoder, with a positive control | `test_teacher_backends.py` |
 | **Does the phase-lock filter lock?** | yes, and its delay grid was under-configured: 64 → 256 (now the default) triples the coherence added to glottal-locked speech while *reducing* what it adds to white noise. **But the speech-vs-noise gap narrows, so the statistic cannot show speech-specific locking** — and the perceptual claim stays a citation, since UTMOS is unavailable | `phase_lock_ab.py` |
+| **Does resume actually resume?** | yes — a crashed-then-resumed run is **bit-identical** to an uninterrupted one (parameters, losses and LR all differ by 0.000e+00). Checkpoints carry optimizer, EMA, discriminator, RNG and batch order, and the LR schedule continues instead of restarting | `resume_demo.py` |
 | Does the whole recipe run? | **yes, offline** — prompts → corpus → cache → distillation → synthesis, 6/6 checks pass with dependency-free fixture teachers | `recipe_dry_run.py` |
 | Int8 weights (simulated) | 12.0 MB Tiny / 56.3 MB Small | `smoke_test.py` |
 
@@ -94,10 +95,11 @@ python scripts/streaming_demo.py --quick        # blockwise streaming + TTFA vs 
 python scripts/mixture_demo.py --quick          # the teacher mixture steering the student
 python scripts/voice_demo.py --quick            # multi-voice conditioning vs a control
 python scripts/phase_lock_ab.py --quick          # phase-lock filter: lock, fidelity cost, latency
+python scripts/resume_demo.py --quick            # crash + resume is byte-for-byte exact
 python scripts/recipe_dry_run.py --stage flow    # Small flow path + paired references
 python scripts/recipe_dry_run.py --quick        # the WHOLE recipe offline, no teachers needed
 python scripts/export_onnx.py                   # int8 ONNX vocoder + PyTorch/ONNX benchmark
-python -m pytest -q                            # 196 tests
+python -m pytest -q                            # 204 tests
 python scripts/bench_rtf.py --config configs/parakeet_tiny.yaml --steps 2
 ```
 
@@ -137,7 +139,7 @@ configs/      parakeet_tiny.yaml (9.6M) | parakeet_small.yaml (45M) | parakeet_s
 scripts/      smoke_test.py | learn_demo.py | reflow_demo.py | streaming_demo.py |
               mixture_demo.py | voice_demo.py | recipe_dry_run.py | export_onnx.py | profile_pipeline.py |
               train.py | make_teacher_corpus.py | bench_rtf.py
-tests/        196 tests: config, audio DSP, models, losses, all five stages, inference,
+tests/        204 tests: config, audio DSP, models, losses, all five stages, inference,
               streaming, mixture weighting, data/corpus paths, curation, ONNX/int8, learning
 .github/      ci.yml -- suite + smoke test + fast demos on every push; benchmarks on demand
 ```

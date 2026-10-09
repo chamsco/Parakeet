@@ -86,10 +86,11 @@ def main() -> int:
 
     model = build_model(cfg)
     if args.resume:
-        from parakeet.train.common import load_checkpoint
-
-        load_checkpoint(args.resume, model)
-        print(f"resumed from {args.resume}")
+        # NOTE: the model is *not* loaded here.  run_stage does the full restore -- optimizer, EMA,
+        # discriminator, LR schedule position, RNG and batch order -- so that resuming continues the
+        # run instead of restarting it with warm weights.  Loading only the model here (as this
+        # script used to) silently discarded all of that.
+        print(f"will resume from {args.resume} (full state: optimizer, EMA, discriminator, schedule)")
 
     print(f"stage={args.stage} variant={cfg.variant} params={count_parameters(model)/1e6:.3f}M")
 
@@ -130,6 +131,7 @@ def main() -> int:
         device=args.device,
         log_fn=log_fn,
         run_metadata=_cache_provenance(args.cache),
+        resume_from=args.resume,
     )
     Path(cfg.train.out_dir).mkdir(parents=True, exist_ok=True)
     (Path(cfg.train.out_dir) / f"{args.stage}_final.json").write_text(json.dumps(logs, indent=2))

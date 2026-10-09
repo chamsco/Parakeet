@@ -95,6 +95,31 @@ def cosine_warmup_scheduler(
     return torch.optim.lr_scheduler.LambdaLR(optimizer, fn)
 
 
+def _rng_state() -> Dict[str, Any]:
+    """Every RNG that affects a training step, so a resumed run can be bit-identical."""
+    import numpy as np
+
+    return {
+        "torch": torch.get_rng_state(),
+        "python": random.getstate(),
+        "numpy": np.random.get_state(),
+    }
+
+
+def _restore_rng(state: Optional[Dict[str, Any]]) -> bool:
+    if not state:
+        return False
+    import numpy as np
+
+    if "torch" in state:
+        torch.set_rng_state(state["torch"])
+    if "python" in state:
+        random.setstate(state["python"])
+    if "numpy" in state:
+        np.random.set_state(state["numpy"])
+    return True
+
+
 def save_checkpoint(
     path: str | Path,
     model: nn.Module,
@@ -105,11 +130,19 @@ def save_checkpoint(
     discriminator: Optional[nn.Module] = None,
     extra: Optional[Dict[str, Any]] = None,
 ) -> Path:
+    """Save a **resumable** checkpoint: model, optimizer, EMA, discriminator, step, RNG.
+
+    Saving only the weights is the classic way to lose a long run: on resume the optimizer moments,
+    the EMA (which is the teacher for Reflow and the better-quality final weights), the critic and
+    the RNG state are all gone, so the loss jumps and the schedule restarts.  ``run_stage`` already
+    loaded all of them; it just never wrote them.
+    """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     payload: Dict[str, Any] = {
         "model": model.state_dict(),
         "step": step,
+        "rng": _rng_state(),
     }
     if optimizer is not None:
         payload["optimizer"] = optimizer.state_dict()
@@ -133,7 +166,9 @@ def load_checkpoint(
     discriminator: Optional[nn.Module] = None,
     map_location: Optional[str] = None,
     strict: bool = True,
+    restore_rng: bool = True,
 ) -> Dict[str, Any]:
+    """Restore everything :func:`save_checkpoint` wrote; returns the payload."""
     payload = torch.load(Path(path), map_location=map_location or "cpu", weights_only=False)
     model.load_state_dict(payload["model"], strict=strict)
     if optimizer is not None and "optimizer" in payload:
@@ -142,6 +177,7 @@ def load_checkpoint(
         ema.load_state_dict(payload["ema"])
     if discriminator is not None and "discriminator" in payload:
         discriminator.load_state_dict(payload["discriminator"])
+    payload["rng_restored"] = bool(_restore_rng(payload.get("rng"))) if restore_rng else False
     return payload
 
 

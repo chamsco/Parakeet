@@ -12,14 +12,14 @@ python scripts/reflow_demo.py                               # validates NFE-2 sa
 python scripts/streaming_demo.py                            # blockwise streaming + TTFA (~7 min CPU)
 python scripts/export_onnx.py --pipeline                    # int8 ONNX + runtime benchmark
 python scripts/profile_pipeline.py                          # where does the time actually go
-python -m pytest -q                                         # 196 tests
+python -m pytest -q                                         # 204 tests
 python scripts/bench_rtf.py --config configs/parakeet_tiny.yaml
 ```
 
 ## 1. Test suite
 
 ```
-196 passed
+204 passed
 ```
 
 Coverage by area:
@@ -36,6 +36,7 @@ Coverage by area:
 | `test_curate.py` | every curation gate fires on a constructed failure (too short/long, clipped, silent, low SNR, narrowband, low MOS, ASR disagreement); **all** reasons reported, not just the first; SNR correctly reported as *unevaluable* without a noise floor; WER and punctuation-gap maths; reject records are never dropped |
 | `test_learning.py` | synthetic fixture is structurally exact (frame counts, peak, F0 declination); latent normaliser fits and inverts; token targets are exact and normalised; decoder-latent alignment; supplied-latent path leaves the encoder gradient-free; **stage freezing does not leak between stages**; and the headline: 40 CPU steps measurably improve both the representation and the distilled text side |
 | `test_onnx.py` | ONNX decoder matches PyTorch to **<1e-4**; text side matches to **<1e-4 across token lengths 5/8/17** (the legacy exporter's baked-in length would fail this); dynamic time axis across 7/23/41 frames; int8 files are smaller and run on CPU; dtypes are validated at the wrapper boundary; external weight sidecars are counted in size; full int8 pipeline tracks PyTorch (cosine >0.95) and is smaller in total (skips if `onnx`/`onnxruntime`/`onnxscript` absent) |
+| `test_resume.py` | **an interrupted-then-resumed run is bit-identical to an uninterrupted one** (max parameter difference exactly 0); checkpoints carry model + optimizer + EMA + discriminator + step + RNG; the RNG stream is restored (and can be opted out); the LR schedule continues instead of restarting; batch-order state round-trips; the step resumed from is reported; a missing checkpoint raises |
 | `test_teacher_backends.py` | the three **real** teacher backends (the only code that had never been executed) verified with injected stubs: the Orpheus codebook-to-SNAC-level mapping asserted element-wise against a reimplementation of the published decoder — with a positive control proving the old contiguous grouping fails it — plus level shapes, partial-frame dropping, token filtering, prompt wrapping and sampling settings; Kokoro chunk concatenation, empty output and durations fallback; MiniMax request payload/headers, hex WAV decode, missing-audio error and the licence gate |
 | `test_provenance_and_hygiene.py` | **every `.py` under `parakeet/` is tracked by git** (the unanchored `data/` ignore rule hid the whole data package for ten commits), plus scripts/CI/configs ship; no public name in the package is referenced nowhere (with an explicit allowlist escape hatch); `run_stage` writes `run.json` with git revision, config SHA-256, versions, and the trainable/frozen report, and merges caller provenance; `SpeakerConfig.freeze` really freezes the identity encoder while the Q-Former adapts; a saved checkpoint round-trips from both a raw encoder state dict and a full-model state dict, and a mismatched one raises |
 | `test_pipeline_wiring.py` | `make_batch_source` pairs references for the flow stage only (and honours the config cap, and falls back to synthetic batches); `cache_teacher_corpus` takes the mixture from `corpus_meta.json` (the CLI used to pass none), prefers a curated `kept.jsonl` including in `curated/`, and errors without a manifest; the P1 gates discriminate, **reject digital silence even with duration/bandwidth/SNR relaxed** (`min_rms_dbfs`), and score `silence_ratio` 1.0 for it; a curated manifest round-trips into a valid cache |
@@ -611,7 +612,42 @@ environment, so the paper's 4.39 → 4.41 stays a citation. The honest summary i
 provably imposes the linear phase it is designed to impose, that its resolution was under-configured
 until now, and that its *benefit* is unmeasured.
 
-## 15. Smoke test output (measured)
+## 15. Checkpoint/resume: a resumed run continues, byte for byte (measured)
+
+`train.py --resume` used to restore **only the model**. The optimizer moments, the EMA (which is the
+Reflow teacher *and* the better-quality final weights), the discriminator, the LR schedule position,
+the RNG and the batch order were all discarded — so a resumed run silently restarted the cosine
+schedule from its warmup peak and reshuffled its data. Nothing in the repo could notice: the loss
+after a resume looks plausible either way. On a 50k-step GPU run you would find out as worse final
+quality.
+
+Now `save_checkpoint` writes model + optimizer + EMA + discriminator + step + RNG (torch, python,
+numpy) + the batch source's order/RNG state, `load_checkpoint` restores all of it, and
+`run_stage(resume_from=...)` repositions the LR schedule. `train.py --resume` passes it through to
+`run_stage` instead of loading the model itself.
+
+Verified on the **real** data path (fixture corpus → latent cache → `LatentShardBatchSource`), with a
+simulated crash rather than a clean stop (`scripts/resume_demo.py`, 120 steps, ~3 min):
+
+| quantity | difference between an uninterrupted run and a crashed-then-resumed run |
+|---|---|
+| final parameters | **0.000e+00** |
+| loss at each shared step | **0.000e+00** |
+| learning rate at each shared step | **0.000e+00** |
+| loss across the interruption | 0.6337 → 0.6337 (no jump) |
+
+The checkpoint contains `config`, `ema`, `extra`, `optimizer`, `rng`, `step` (and the model), and the
+CLI path was checked separately: `train.py --dry-run --steps 2` then `--resume … --steps 4` prints
+`resumed from … at step 2 (lr 6.000e-07)` and writes a `run.json` recording the stage, git revision
+and config hash.
+
+**One semantic caveat, found by this demo's own control.** The cosine schedule is parameterised by
+the *total* step budget, so resuming with a different `--steps` gives a different schedule — and a
+different trajectory — by construction. The demo's first version compared a 40-step run against a
+20-step run and "detected" a divergence of 8.8e-3 that was entirely its own doing. A control
+(`pre_interruption_runs_match`) now isolates that, so a real resume regression cannot hide behind it.
+
+## 16. Smoke test output (measured)
 
 ```
 parakeet-tiny [tiny] sr=24000 mel=80@93.8Hz latent=24 compress=1/6 voice=constant
@@ -662,7 +698,7 @@ overhead — it is not a valid throughput measurement until the model predicts s
 learning demo (§2) trains properly but on 15 seconds of *synthetic* audio, so it demonstrates that
 the machinery learns, not that the model is good.
 
-## 16. Deliberate engineering checks worth calling out
+## 17. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
@@ -698,7 +734,7 @@ the machinery learns, not that the model is good.
   `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
   else, rather than surfacing a cryptic `torch.stft` message.
 
-## 17. Environment notes
+## 18. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).

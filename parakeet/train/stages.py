@@ -21,6 +21,7 @@ which is what keeps the Tiny recipe cheap enough to run on rented GPU hours.
 
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Tuple
 
@@ -39,6 +40,7 @@ from .common import (
     cosine_warmup_scheduler,
     count_trainable,
     freeze_,
+    load_checkpoint,
     resolve_device,
     save_checkpoint,
     seed_everything,
@@ -257,7 +259,14 @@ def _named_top_level(model: nn.Module):
 
 
 def _module_trainable(module: nn.Module) -> bool:
-    return any(p.requires_grad for p in module.parameters())
+    """True if the module has parameters and at least one is trainable.
+
+    A module with *no* parameters (a normaliser holding only buffers, say) is neither trainable nor
+    frozen -- reporting it as frozen would be a false alarm in the diagnostic that exists to catch
+    stages that train nothing.
+    """
+    params = list(module.parameters())
+    return any(p.requires_grad for p in params) if params else True
 
 
 def run_stage(
@@ -271,6 +280,7 @@ def run_stage(
     log_fn: Optional[Callable[[Dict[str, float]], None]] = None,
     ema_model: Optional[nn.Module] = None,
     run_metadata: Optional[Dict[str, Any]] = None,
+    resume_from: Optional[str] = None,
 ) -> Dict[str, float]:
     """Minimal, dependency-free training loop.
 
@@ -370,7 +380,37 @@ def run_stage(
     text_criterion = TextSideDistillLoss()
     teacher = ema_model
 
-    for step in range(steps):
+    # ------------------------------------------------------------------ resume
+    start_step = 0
+    if resume_from:
+        payload = load_checkpoint(
+            resume_from,
+            model,
+            optimizer=opt,
+            ema=ema,
+            discriminator=losses["adversarial"] if disc_opt is not None else None,
+        )
+        start_step = int(payload.get("step") or 0)
+        # Put the LR schedule where it left off.  The loop calls sched.step() *after* each update,
+        # so advancing once here makes iteration `start_step` use fn(start_step) -- exactly the LR an
+        # uninterrupted run would have used.  Without this a resumed run silently restarts the
+        # cosine schedule from the warmup peak.
+        if start_step > 0:
+            sched.last_epoch = start_step - 1
+            # torch warns that the scheduler stepped before the optimizer stepped, which is exactly
+            # what repositioning a schedule looks like; the alternative is a private-API poke at
+            # _step_count.  The LR below is verified by test_resume_continues_the_lr_schedule.
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", UserWarning)
+                sched.step()
+        batch_state = (payload.get("extra") or {}).get("batch_state")
+        if batch_state is not None and hasattr(batches, "load_state_dict"):
+            batches.load_state_dict(batch_state)
+        resumed_from_step = start_step
+        print(f"[stage {stage}] resumed from {resume_from} at step {start_step} "
+              f"(lr {sched.get_last_lr()[0]:.3e})")
+
+    for step in range(start_step, steps):
         batch = batches()
         batch = {k: (v.to(dev) if isinstance(v, torch.Tensor) else v) for k, v in batch.items()}
         opt.zero_grad(set_to_none=True)
@@ -431,13 +471,44 @@ def run_stage(
             meter.reset()
         if cfg.train.save_every and (step + 1) % cfg.train.save_every == 0:
             save_checkpoint(
-                out_dir / f"{stage}_step{step+1}.pt", model, opt, step + 1, cfg, ema=ema
+                out_dir / f"{stage}_step{step+1}.pt",
+                model,
+                opt,
+                step + 1,
+                cfg,
+                ema=ema,
+                discriminator=losses["adversarial"] if disc_opt is not None else None,
+                extra={"stage": stage, "batch_state": _batch_state(batches)},
             )
 
     final = meter.mean() or dict(logs)
     final["step"] = steps
-    save_checkpoint(out_dir / f"{stage}_last.pt", model, opt, steps, cfg, ema=ema)
+    if resume_from:
+        # carried through the *final* dict: the per-interval logs are replaced by meter.mean(),
+        # so writing it into `logs` earlier silently disappeared
+        final["resumed_from"] = float(start_step)
+    save_checkpoint(
+        out_dir / f"{stage}_last.pt",
+        model,
+        opt,
+        steps,
+        cfg,
+        ema=ema,
+        discriminator=losses["adversarial"] if disc_opt is not None else None,
+        extra={"stage": stage, "batch_state": _batch_state(batches)},
+    )
     return final
+
+
+def _batch_state(batches) -> Optional[Dict[str, Any]]:
+    """The batch source's RNG/order state, when it exposes one (needed for an exact resume)."""
+    getter = getattr(batches, "state_dict", None)
+    if not callable(getter):
+        return None
+    try:
+        return getter()
+    except Exception:  # noqa: BLE001 - a source without serialisable state must not break saving
+        return None
 
 
 def train_all_stages(

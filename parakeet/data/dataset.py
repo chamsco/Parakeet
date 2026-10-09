@@ -158,6 +158,27 @@ class LatentShardBatchSource:
         self.pos += self.batch_size
         return idx
 
+    def state_dict(self) -> Dict[str, object]:
+        """Batch-order state, so a resumed run sees the same samples in the same order.
+
+        Without this, resuming a run silently reshuffles: the model, optimizer and schedule are
+        restored but the *data* sequence restarts, which is enough to make the resumed trajectory
+        diverge from an uninterrupted one.
+        """
+        return {
+            "generator": self.generator.get_state(),
+            "order": list(self.order),
+            "pos": int(self.pos),
+        }
+
+    def load_state_dict(self, state: Dict[str, object]) -> None:
+        if not state:
+            return
+        if state.get("generator") is not None:
+            self.generator.set_state(state["generator"])
+        self.order = list(state.get("order") or [])
+        self.pos = int(state.get("pos") or 0)
+
     def _partner(self, index: int, groups: Sequence[Sequence[int]]) -> Optional[int]:
         """Another utterance from one of ``groups``, never ``index`` itself."""
         for group in groups:
@@ -265,6 +286,14 @@ class SyntheticBatchSource:
 
     def rand(self, *shape) -> torch.Tensor:
         return torch.randn(*shape, generator=self.generator)
+
+    def state_dict(self) -> Dict[str, object]:
+        """Batch-order state (see :meth:`LatentShardBatchSource.state_dict`)."""
+        return {"generator": self.generator.get_state(), "order": [], "pos": 0}
+
+    def load_state_dict(self, state: Dict[str, object]) -> None:
+        if state and state.get("generator") is not None:
+            self.generator.set_state(state["generator"])
 
     def __call__(self) -> Dict[str, torch.Tensor]:
         b = self.batch_size
