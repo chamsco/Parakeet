@@ -1250,7 +1250,24 @@ quarter of its sentences to a 3 s floor. The surviving corpus is what matters:
 | val | 79 | 6.1 | 50 (unseen) |
 
 4× the distinct training text and 2× the audio of round 24, on the same kind of prompt-disjoint
-hold-out — so the comparison isolates text diversity.
+hold-out — so the comparison isolates text diversity. **And it is not enough either:**
+
+| evaluated on the same 24 utterances from 50 unseen prompts | 47-prompt model | 185-prompt model |
+|---|---|---|
+| student WER | 1.000 | **0.997** |
+| student DNSMOS | 1.486 | **1.600** |
+| log-mel cosine | 0.9484 | **0.9525** |
+| speed | 142× real time | 128× real time |
+| teacher WER / DNSMOS (controls) | 0.168 / 3.257 | 0.168 / 3.257 |
+
+More distinct text improves both proxies again and leaves WER at chance.  Together with round 24 that is
+a useful negative result with two parts: **corpus duration is not the constraint (round 24), and neither
+is text diversity alone (round 25)** — 47 → 185 prompts moved DNSMOS 1.49 → 1.60 and WER 1.000 → 0.997.
+The remaining suspects are the text side's inductive bias (character input relearning English
+spelling-to-sound from a few hundred sentences) and its capacity, and the next round has a verified
+lever for the first of those.  Note also that the teacher's own WER on this hold-out is 0.168, not
+0.000 — novel prose is genuinely harder for `base.en` than the hand-written prompts were, which is
+itself a reason to keep the control attached to every number.
 
 ### The other lever, verified available: phoneme input
 

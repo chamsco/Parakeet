@@ -1,7 +1,7 @@
 {
-  "generated": "2026-10-09T18:27:46",
+  "generated": "2026-10-09T20:24:36",
   "git": {
-    "rev": "e61458a",
+    "rev": "a50e58f",
     "dirty": true
   },
   "note": "Committed snapshots of the reports the model card cites.  Refresh with `python scripts/model_card.py --refresh-evidence` after re-running the demos; the hashes make a stale bundle visible.",
@@ -110,6 +110,13 @@
       "source": "runs/real_diagnose/report.json",
       "evidence": "docs/evidence/real_diagnosis.json",
       "sha256": "46edb94cb590ab5431f13f6b227de912fda548dd3c303642061f7693b9873f21"
+    },
+    {
+      "claim": "text_diversity_ab",
+      "status": "copied",
+      "source": "runs/text_diversity_ab.json",
+      "evidence": "docs/evidence/text_diversity_ab.json",
+      "sha256": "289c7e26b0d319e08bc68b9e11d4e2f0400ed08f2e1097679b06db20ff6c9a4f"
     },
     {
       "claim": "data_scale_ab",

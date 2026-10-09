@@ -1,0 +1,53 @@
+{
+  "question": "does 4x more distinct text improve the student on prompts it has never seen?",
+  "arms": {
+    "prompts_47": "round 24: 129 utterances over 47 hand-written prompts (10.9 min audio)",
+    "prompts_185": "round 25: 304 curated utterances over 185 public-domain prompts (22.2 min)"
+  },
+  "held_out": {
+    "split": "prompt-disjoint",
+    "manifest": "val.jsonl",
+    "prompts": 50,
+    "utterances": 24
+  },
+  "student": {
+    "wer": {
+      "prompts_47": 1.0,
+      "prompts_185": 0.9971509971509972
+    },
+    "dnsmos": {
+      "prompts_47": 1.486378553895553,
+      "prompts_185": 1.6000652823110553
+    },
+    "log_mel_cosine": {
+      "prompts_47": 0.948414978881677,
+      "prompts_185": 0.9525314668814341
+    },
+    "x_realtime": {
+      "prompts_47": 141.5918443481163,
+      "prompts_185": 128.4559194562096
+    }
+  },
+  "controls": {
+    "teacher_wer": {
+      "prompts_47": 0.16809116809116809,
+      "prompts_185": 0.16809116809116809
+    },
+    "teacher_dnsmos": {
+      "prompts_47": 3.256975451989378,
+      "prompts_185": 3.256975451989378
+    }
+  },
+  "verdict": {
+    "wer_improved": true,
+    "still_at_chance": true,
+    "note": "If WER improved, text diversity was indeed the binding constraint.  If it did not, the constraint is the text side's inductive bias (character input must relearn English spelling-to-sound from this data) rather than the amount of text -- and the next lever is phoneme input, which was verified available in round 25 (espeakng-loader + phonemizer produce IPA locally, including for unseen words)."
+  },
+  "checks": {
+    "controls_hold_on_the_hold_out": true,
+    "text_diversity_improves_the_mel_proxy": true,
+    "text_diversity_improves_the_perceptual_proxy": true,
+    "both_arms_stay_far_faster_than_real_time": true,
+    "the_wer_outcome_is_recorded": true
+  }
+}
