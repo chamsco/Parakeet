@@ -154,6 +154,14 @@ CLAIMS: List[Dict[str, Any]] = [
         "fmt": "{passed}/{total} checks",
     },
     {
+        "id": "real_teacher_audio",
+        "statement": "the documented data path runs on **real teacher speech** (Kokoro-82M, Apache-2.0)",
+        "report": ["runs/real_corpus_report.json"],
+        "field": "checks",
+        "op": "all_true",
+        "fmt": "{passed}/{total} checks",
+    },
+    {
         "id": "learning_progress",
         "statement": "the stages learn: autoencoder reconstruction improves",
         "report": ["runs/learn_demo/report.json"],
@@ -581,7 +589,13 @@ def render(results: List[Dict[str, Any]], args) -> str:
 
 
 def refresh_evidence() -> Dict[str, Any]:
-    """Copy the freshest run report for each claim into the committed evidence bundle."""
+    """Copy the freshest run report for each claim into the committed evidence bundle.
+
+    A claim whose *run* report is absent but whose committed evidence exists is **retained**, not
+    failed: some evidence needs a 320 MB model download (the real-teacher corpus) and re-running it
+    in CI would be a burden with no benefit, while the committed bundle still lets any clone verify
+    the claim.
+    """
     import hashlib
     import shutil
 
@@ -590,11 +604,19 @@ def refresh_evidence() -> Dict[str, Any]:
     entries: List[Dict[str, Any]] = []
     for claim in CLAIMS:
         source = next((ROOT / c for c in claim["report"] if (ROOT / c).exists()), None)
-        if source is None:
-            entries.append({"claim": claim["id"], "status": "no_source",
-                            "expected": claim["report"]})
-            continue
         target = ROOT / _evidence_path(claim)
+        if source is None:
+            entries.append(
+                {
+                    "claim": claim["id"],
+                    "status": "retained" if target.exists() else "no_source",
+                    "expected": claim["report"],
+                    "sha256": (
+                        hashlib.sha256(target.read_bytes()).hexdigest() if target.exists() else None
+                    ),
+                }
+            )
+            continue
         shutil.copyfile(source, target)
         entries.append(
             {
@@ -651,11 +673,14 @@ def main() -> int:
     if args.refresh_evidence:
         manifest = refresh_evidence()
         copied = sum(1 for e in manifest["entries"] if e["status"] == "copied")
-        print(f"evidence bundle refreshed: {copied}/{len(manifest['entries'])} entries copied")
+        retained = sum(1 for e in manifest["entries"] if e["status"] == "retained")
+        print(f"evidence bundle refreshed: {copied} copied, {retained} retained (source needs a "
+              f"model download), {len(manifest['entries']) - copied - retained} missing")
         for entry in manifest["entries"]:
-            if entry["status"] != "copied":
-                print(f"  !! {entry['claim']}: no source report ({entry['expected']})")
-        if copied != len(manifest["entries"]):
+            if entry["status"] not in {"copied", "retained"}:
+                print(f"  !! {entry['claim']}: no report and no committed evidence "
+                      f"({entry['expected']})")
+        if copied + retained != len(manifest["entries"]):
             return 1
 
     reports_root = Path(args.reports_root).resolve()

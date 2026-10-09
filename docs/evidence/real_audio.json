@@ -1,0 +1,251 @@
+{
+  "teacher": {
+    "name": "kokoro",
+    "kind": "local_pkg",
+    "runtime": "SherpaKokoroBackend",
+    "weights_license": "Apache-2.0",
+    "allows_training": true
+  },
+  "corpus": {
+    "utterances": 16,
+    "audio_seconds": 53.120333333333335,
+    "voices": [
+      "af_heart",
+      "af_bella",
+      "af_sky",
+      "af_sarah"
+    ],
+    "synthesis_rtf": 0.5276068285212154
+  },
+  "pitch_tracking": {
+    "voiced_default_threshold": 0.631492730230093,
+    "voiced_old_threshold_0_25": 0.42048053815960884,
+    "voiced_autocorr": 0.7313463054597378,
+    "median_f0_range_hz": [
+      93.52458953857422,
+      197.38612365722656
+    ],
+    "per_utterance": [
+      {
+        "utt_id": "kokoro_0000000",
+        "voice": "af_heart",
+        "seconds": 2.821125,
+        "voiced_default": 0.7169811129570007,
+        "voiced_old_threshold": 0.5396226644515991,
+        "voiced_autocorr": 0.7396226525306702,
+        "median_f0_hz": 195.9003448486328,
+        "median_f0_old_threshold": 209.24563598632812,
+        "confidence": 0.854202389717102
+      },
+      {
+        "utt_id": "kokoro_0000001",
+        "voice": "af_bella",
+        "seconds": 3.501916666666667,
+        "voiced_default": 0.44680851697921753,
+        "voiced_old_threshold": 0.2522796392440796,
+        "voiced_autocorr": 0.6474164128303528,
+        "median_f0_hz": 161.28268432617188,
+        "median_f0_old_threshold": 156.7723388671875,
+        "confidence": 0.7670421004295349
+      },
+      {
+        "utt_id": "kokoro_0000002",
+        "voice": "af_sky",
+        "seconds": 2.859208333333333,
+        "voiced_default": 0.5799256563186646,
+        "voiced_old_threshold": 0.22676579654216766,
+        "voiced_autocorr": 0.7286245226860046,
+        "median_f0_hz": 93.52458953857422,
+        "median_f0_old_threshold": 92.4506607055664,
+        "confidence": 0.620880663394928
+      },
+      {
+        "utt_id": "kokoro_0000003",
+        "voice": "af_sarah",
+        "seconds": 3.0227083333333336,
+        "voiced_default": 0.8521126508712769,
+        "voiced_old_threshold": 0.672535240650177,
+        "voiced_autocorr": 0.8591549396514893,
+        "median_f0_hz": 139.5255584716797,
+        "median_f0_old_threshold": 139.0279541015625,
+        "confidence": 0.8493647575378418
+      },
+      {
+        "utt_id": "kokoro_0000004",
+        "voice": "af_heart",
+        "seconds": 3.293625,
+        "voiced_default": 0.7508090734481812,
+        "voiced_old_threshold": 0.5792880058288574,
+        "voiced_autocorr": 0.7443365454673767,
+        "median_f0_hz": 196.67152404785156,
+        "median_f0_old_threshold": 193.6538848876953,
+        "confidence": 0.8275212049484253
+      },
+      {
+        "utt_id": "kokoro_0000005",
+        "voice": "af_bella",
+        "seconds": 3.552583333333333,
+        "voiced_default": 0.36826348304748535,
+        "voiced_old_threshold": 0.26047903299331665,
+        "voiced_autocorr": 0.6077844500541687,
+        "median_f0_hz": 162.4726104736328,
+        "median_f0_old_threshold": 163.64898681640625,
+        "confidence": 0.8997256755828857
+      },
+      {
+        "utt_id": "kokoro_0000006",
+        "voice": "af_sky",
+        "seconds": 3.101208333333333,
+        "voiced_default": 0.5429553389549255,
+        "voiced_old_threshold": 0.2336769700050354,
+        "voiced_autocorr": 0.6941580772399902,
+        "median_f0_hz": 103.76725769042969,
+        "median_f0_old_threshold": 106.43978881835938,
+        "confidence": 0.6509528160095215
+      },
+      {
+        "utt_id": "kokoro_0000007",
+        "voice": "af_sarah",
+        "seconds": 3.363541666666667,
+        "voiced_default": 0.8354430198669434,
+        "voiced_old_threshold": 0.7373417615890503,
+        "voiced_autocorr": 0.8544303774833679,
+        "median_f0_hz": 147.1608123779297,
+        "median_f0_old_threshold": 142.49176025390625,
+        "confidence": 0.8668590188026428
+      },
+      {
+        "utt_id": "kokoro_0000008",
+        "voice": "af_heart",
+        "seconds": 3.108375,
+        "voiced_default": 0.6952054500579834,
+        "voiced_old_threshold": 0.44863012433052063,
+        "voiced_autocorr": 0.7089040875434875,
+        "median_f0_hz": 197.38612365722656,
+        "median_f0_old_threshold": 197.38612365722656,
+        "confidence": 0.7974833250045776
+      },
+      {
+        "utt_id": "kokoro_0000009",
+        "voice": "af_bella",
+        "seconds": 3.675,
+        "voiced_default": 0.4202898442745209,
+        "voiced_old_threshold": 0.26376810669898987,
+        "voiced_autocorr": 0.6637681126594543,
+        "median_f0_hz": 159.74661254882812,
+        "median_f0_old_threshold": 160.7255859375,
+        "confidence": 0.8427470326423645
+      },
+      {
+        "utt_id": "kokoro_0000010",
+        "voice": "af_sky",
+        "seconds": 2.888125,
+        "voiced_default": 0.5719557404518127,
+        "voiced_old_threshold": 0.17343173921108246,
+        "voiced_autocorr": 0.7269372940063477,
+        "median_f0_hz": 107.06454467773438,
+        "median_f0_old_threshold": 78.87954711914062,
+        "confidence": 0.6331155300140381
+      },
+      {
+        "utt_id": "kokoro_0000011",
+        "voice": "af_sarah",
+        "seconds": 3.0492083333333335,
+        "voiced_default": 0.8251748085021973,
+        "voiced_old_threshold": 0.6538461446762085,
+        "voiced_autocorr": 0.8531468510627747,
+        "median_f0_hz": 146.2273406982422,
+        "median_f0_old_threshold": 142.58152770996094,
+        "confidence": 0.8513315916061401
+      },
+      {
+        "utt_id": "kokoro_0000012",
+        "voice": "af_heart",
+        "seconds": 3.539083333333333,
+        "voiced_default": 0.7108433842658997,
+        "voiced_old_threshold": 0.5331325531005859,
+        "voiced_autocorr": 0.7379518151283264,
+        "median_f0_hz": 183.98532104492188,
+        "median_f0_old_threshold": 180.0563507080078,
+        "confidence": 0.8471276760101318
+      },
+      {
+        "utt_id": "kokoro_0000013",
+        "voice": "af_bella",
+        "seconds": 4.1146666666666665,
+        "voiced_default": 0.44041451811790466,
+        "voiced_old_threshold": 0.29015544056892395,
+        "voiced_autocorr": 0.6036269664764404,
+        "median_f0_hz": 163.2105255126953,
+        "median_f0_old_threshold": 157.3200225830078,
+        "confidence": 0.8407599925994873
+      },
+      {
+        "utt_id": "kokoro_0000014",
+        "voice": "af_sky",
+        "seconds": 3.489875,
+        "voiced_default": 0.5518292784690857,
+        "voiced_old_threshold": 0.25304877758026123,
+        "voiced_autocorr": 0.7225610017776489,
+        "median_f0_hz": 122.87110900878906,
+        "median_f0_old_threshold": 92.91212463378906,
+        "confidence": 0.6102286577224731
+      },
+      {
+        "utt_id": "kokoro_0000015",
+        "voice": "af_sarah",
+        "seconds": 3.740083333333333,
+        "voiced_default": 0.7948718070983887,
+        "voiced_old_threshold": 0.6096866130828857,
+        "voiced_autocorr": 0.809116780757904,
+        "median_f0_hz": 148.60208129882812,
+        "median_f0_old_threshold": 145.66510009765625,
+        "confidence": 0.8442175984382629
+      }
+    ]
+  },
+  "curation": {
+    "n_total": 16,
+    "n_kept": 9,
+    "n_rejected": 7,
+    "reason_counts": {
+      "too_short": 3,
+      "narrowband": 4
+    },
+    "note": "published thresholds, first time applied to real speech rather than fixtures"
+  },
+  "cache": {
+    "items": 9,
+    "teacher_names": [
+      "kokoro"
+    ],
+    "voice_names": [
+      "af_bella",
+      "af_heart",
+      "af_sky"
+    ],
+    "per_token_f0_hz_range": [
+      99.99609375,
+      199.6044158935547
+    ],
+    "latent_frames_range": [
+      291,
+      386
+    ]
+  },
+  "duration_targets": "UNIFORM FALLBACK: the sherpa-onnx runtime does not expose Kokoro's per-token timings, so duration targets here are an even split, not the teacher's own timing.  The `kokoro` pip pipeline supplies them but cannot be installed in this environment (misaki->spacy->blis).",
+  "checks": {
+    "teacher_is_permitted": true,
+    "teacher_is_real_not_a_fixture": true,
+    "corpus_has_real_audio": true,
+    "real_speech_is_detected_as_voiced": true,
+    "threshold_fix_helps_real_speech": true,
+    "f0_is_plausible_for_speech": true,
+    "curation_ran_on_real_speech": true,
+    "cache_built_from_real_audio": true,
+    "cache_uses_the_curated_set": true,
+    "targets_are_plausible": true
+  },
+  "caveat": "Structural, not a quality claim: no autoencoder training happens here and the real corpus is small.  It shows that real 24 kHz speech flows through the documented data path, and what real speech does to thresholds previously exercised only on formants.",
+  "seconds_total": 29.276077999995323
+}

@@ -93,12 +93,30 @@ def extract_signals(
 
     n_tokens = int(token_ids.numel())
     if durations is None:
-        # documented fallback: a *uniform* split of the frames across tokens.  (The comment used to
-        # claim "energy valleys" while splitting uniformly, and computed an energy vector it never
-        # used.)  It keeps training running when no aligner was available, and SignalTargets records
-        # which source was used so the caller can see it.
-        q = torch.linspace(0, n_frames, n_tokens + 1).long()
-        durations = q[1:] - q[:-1]
+        # Documented fallback when no aligner ran.  It used to split the frames *uniformly*, which
+        # on real speech puts many token spans entirely inside pauses -- measured on a real Kokoro
+        # corpus, that produced per-token F0 targets of 0 Hz for whole utterances (the student would
+        # be taught that letters in a pause are 60 Hz).  An equal-*energy* split is a crude aligner
+        # but a far better prior; it is **blended with the uniform split** because pure equal-energy
+        # collapses on a signal that is mostly silence (measured: [56, 1, 1, 1, ...] frames), and a
+        # blend can never be worse than half-uniform while still following the energy.
+        weights = torch.pow(10.0, energy[0, :n_frames].float() / 20.0).clamp_min(1e-6)
+        cumulative = torch.cumsum(weights, 0)
+        cumulative = cumulative / cumulative[-1].clamp_min(1e-9)
+        uniform = torch.linspace(0.0, 1.0, n_tokens + 1)[1:-1]
+        energy_edges = torch.searchsorted(cumulative, uniform).float()
+        uniform_edges = uniform * n_frames
+        edges = (0.5 * energy_edges + 0.5 * uniform_edges).round().long().tolist()
+        boundaries = [0] + [int(v) for v in edges] + [n_frames]
+        for i in range(1, len(boundaries) - 1):  # strictly increasing: one frame minimum per token
+            boundaries[i] = max(boundaries[i], boundaries[i - 1] + 1)
+        boundaries[-1] = n_frames
+        durations = torch.tensor(
+            [boundaries[i + 1] - boundaries[i] for i in range(len(boundaries) - 1)],
+            dtype=torch.long,
+        ).clamp_min(1)
+        if n_tokens > n_frames:  # degenerate: more tokens than frames
+            durations = torch.cat([durations, torch.ones(n_tokens - len(durations), dtype=torch.long)])
     elif not isinstance(durations, torch.Tensor):
         durations = torch.as_tensor(durations, dtype=torch.long)
 
@@ -162,6 +180,7 @@ def aggregate_to_tokens(
     durations: Sequence[int],
     n_tokens: Optional[int] = None,
     ignore_zeros: bool = False,
+    carry_nearest: bool = False,
 ) -> List[float]:
     """Average a frame-level series over each token's frame span.
 
@@ -173,6 +192,12 @@ def aggregate_to_tokens(
     ``ignore_zeros`` matters for F0: unvoiced frames carry the value 0, and including them in the
     mean tells the student that a half-voiced token has *half* the pitch it really has.  The mean is
     then taken over voiced frames only, and a fully unvoiced span stays 0.
+
+    ``carry_nearest`` then replaces those zeros with the nearest voiced token's value.  A text token
+    whose span fell inside a pause is an *alignment* artifact, not a 60 Hz pitch: writing 0 there
+    teaches the student that pause-adjacent letters are the lowest pitch in the range.  Measured on
+    a real Kokoro corpus without an aligner, whole utterances came back with 0 Hz targets before
+    this; the fill count is reported so the approximation stays visible.
     """
     out: List[float] = []
     start = 0
@@ -187,6 +212,13 @@ def aggregate_to_tokens(
         if len(out) < n_tokens:  # pad rather than misalign
             out.extend([0.0] * (n_tokens - len(out)))
         out = out[:n_tokens]
+    if carry_nearest and out:
+        filled = [i for i, v in enumerate(out) if v == 0]
+        voiced = [i for i, v in enumerate(out) if v != 0]
+        if filled and voiced:
+            for i in filled:
+                nearest = min(voiced, key=lambda j: abs(j - i))
+                out[i] = out[nearest]
     return out
 
 
@@ -276,7 +308,9 @@ def build_latent_cache(
         n_frames = min(sig.n_frames, latent.shape[-1])
         n_tokens = int(ids.numel())
         # per-token prosody targets (frame-level series averaged over each token's span)
-        f0_tokens = aggregate_to_tokens(sig.f0_norm, sig.durations, n_tokens, ignore_zeros=True)
+        f0_tokens = aggregate_to_tokens(
+            sig.f0_norm, sig.durations, n_tokens, ignore_zeros=True, carry_nearest=True
+        )
         energy_tokens = aggregate_to_tokens(sig.energy_norm, sig.durations, n_tokens)
 
         voice = str(rec.get("voice") or "")

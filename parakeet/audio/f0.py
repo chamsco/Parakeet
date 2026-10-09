@@ -48,7 +48,7 @@ def estimate_f0_yin(
     frame_length: int = 1024,
     fmin: float = 60.0,
     fmax: float = 500.0,
-    threshold: float = 0.20,
+    threshold: float = 0.50,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """YIN pitch tracker (de Cheveigné & Kawahara, 2002).
 
@@ -57,6 +57,15 @@ def estimate_f0_yin(
     a formant period, which is not a corner case here -- it is the whole signal model.  Measured on
     the fixture voices, the autocorrelation estimator reported 134.5 Hz for an 81 Hz voice, and
     those wrong values become the F0 *targets* the student is trained to imitate.
+
+    The default CMND threshold is 0.50 rather than the paper's canonical 0.10-0.15 because this
+    implementation additionally requires a **local minimum** below the threshold, a stricter
+    criterion than the paper's.  Measured on real Kokoro speech (round 17): raising it from 0.15 to
+    0.55 lifts the voiced fraction from 0.39 to 0.81 (af_heart), 0.08 to 0.73 (af_sky) and 0.23 to
+    0.50 (af_bella) **while the median F0 stays flat** (204->199, 100->105, 158->159 Hz) -- the
+    extra frames are genuinely voiced, not noise.  At the previous 0.25 most real speech was
+    discarded, so per-token F0 targets were averaged over a small minority of frames.  Above ~0.70
+    the median starts moving (142 Hz for af_sky), so the useful range is 0.45-0.55.
 
     Returns ``(f0_hz, voiced, confidence)`` of shape ``(B, T)``; unvoiced frames are 0.
     """
@@ -126,20 +135,28 @@ def estimate_f0(
     frame_length: int = 1024,
     fmin: float = 60.0,
     fmax: float = 500.0,
-    threshold: float = 0.30,
+    threshold: Optional[float] = None,
     method: str = "yin",
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     """Pitch tracking.  ``method="yin"`` (default) or ``"autocorr"`` (legacy, formant-biased).
+
+    ``threshold`` defaults are **per method** and deliberately different: 0.50 for the CMND of YIN
+    (its local-minimum requirement makes it stricter than the paper's threshold; see
+    :func:`estimate_f0_yin` for the real-speech measurement behind that number) and 0.30 for the
+    normalised autocorrelation peak, its historical value.  A single shared default would silently
+    make one of the two paths wrong.
 
     Returns ``(f0_hz, voiced, confidence)`` each of shape ``(B, T)``; unvoiced frames have
     ``f0_hz == 0``.
     """
     if method == "yin":
         return estimate_f0_yin(
-            wav, sample_rate, hop_length, frame_length, fmin, fmax, threshold=min(threshold, 0.25)
+            wav, sample_rate, hop_length, frame_length, fmin, fmax,
+            threshold=0.50 if threshold is None else threshold,
         )
     if method != "autocorr":
         raise ValueError(f"unknown pitch method {method!r}")
+    threshold = 0.30 if threshold is None else threshold
 
     if wav.dim() == 1:
         wav = wav.unsqueeze(0)

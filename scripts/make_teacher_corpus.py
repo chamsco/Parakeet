@@ -41,7 +41,12 @@ from parakeet.models import build_model  # noqa: E402
 
 DEFAULT_VOICES = {
     "orpheus": ["tara", "leah", "jess", "leo", "dan", "mia", "zac", "zoe"],
-    "kokoro": ["af_heart", "af_bella", "am_michael", "bf_emma"],
+    # the 11 speakers in the kokoro-en-v0_19 bundle (the 53/103-speaker multi-lang bundles add more;
+    # SherpaKokoroBackend raises on a name it does not have rather than using the wrong speaker)
+    "kokoro": [
+        "af_heart", "af_bella", "af_nicole", "af_sarah", "af_sky", "af_nova",
+        "af_river", "af_alloy", "af_aoede", "af_jessica", "af_kore",
+    ],
     "minimax": ["English_expressive_narrator"],
     # fixtures: distinct pitches, so a multi-voice fixture corpus exercises voice conditioning
     "stub_low": ["low", "mid", "high"],

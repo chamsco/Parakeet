@@ -1,7 +1,7 @@
 {
-  "generated": "2026-10-09T10:59:23",
+  "generated": "2026-10-09T12:30:05",
   "git": {
-    "rev": "e1c0226",
+    "rev": "bfb0c8c",
     "dirty": true
   },
   "note": "Committed snapshots of the reports the model card cites.  Refresh with `python scripts/model_card.py --refresh-evidence` after re-running the demos; the hashes make a stale bundle visible.",
@@ -96,6 +96,13 @@
       "source": "runs/phase_lock_ab/report.json",
       "evidence": "docs/evidence/phase_lock_locks.json",
       "sha256": "b1e8bd4817908cd6baf32d6fe469e6ca30a6110b29993dfba976019441be3a08"
+    },
+    {
+      "claim": "real_teacher_audio",
+      "status": "copied",
+      "source": "runs/real_corpus_report.json",
+      "evidence": "docs/evidence/real_teacher_audio.json",
+      "sha256": "31d386168d14e69a1c1b2e3e4d23b7bf1e901d72d8a0dadb96dc3548d22c1812"
     },
     {
       "claim": "learning_progress",

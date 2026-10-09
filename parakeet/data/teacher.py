@@ -285,6 +285,106 @@ class StubTeacherBackend(TeacherBackend):
         return (wav / peak * 0.3).numpy().astype(np.float32), self.sample_rate
 
 
+class SherpaKokoroBackend(TeacherBackend):
+    """Kokoro-82M through **sherpa-onnx** -- the runtime that actually installs on this machine.
+
+    The `kokoro` pip package depends on ``misaki[en]`` -> ``spacy`` -> ``blis``, which has no wheel
+    for this Python and no Rust toolchain to build from source, so that path is closed here.
+    sherpa-onnx ships prebuilt wheels, carries its own espeak-ng G2P, and runs the *same*
+    Apache-2.0 Kokoro-82M weights (``hexgrad/Kokoro-82M``), so the teacher and its licence are
+    unchanged -- only the runtime is.
+
+    Voices are the 11 English speaker embeddings in the ``kokoro-en-v0_19`` bundle; the id order is
+    the canonical one documented at
+    https://k2-fsa.github.io/sherpa/onnx/tts/pretrained_models/kokoro.html (the first 11 entries of
+    the 53-speaker map).  A name outside the bundle raises with the available list rather than
+    silently synthesising with the wrong speaker.
+    """
+
+    spec = KOKORO
+    EN_V0_19_VOICES: Tuple[str, ...] = (
+        "af_alloy", "af_aoede", "af_bella", "af_heart", "af_jessica", "af_kore",
+        "af_nicole", "af_nova", "af_river", "af_sarah", "af_sky",
+    )
+    DEFAULT_DIR = "data/teachers/kokoro-en-v0_19"
+    DOWNLOAD_HINT = (
+        "download the Apache-2.0 bundle with:\n"
+        "  curl -L -o kokoro-en-v0_19.tar.bz2 "
+        "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-en-v0_19.tar.bz2\n"
+        "  tar xf kokoro-en-v0_19.tar.bz2 -C data/teachers/\n"
+        "or point PARAKEET_KOKORO_DIR at an extracted bundle"
+    )
+
+    def __init__(
+        self,
+        model_dir: Optional[str] = None,
+        num_threads: int = 2,
+        provider: str = "cpu",
+        voices: Optional[Sequence[str]] = None,
+    ) -> None:
+        import os
+
+        import sherpa_onnx  # type: ignore
+
+        directory = Path(
+            model_dir or os.environ.get("PARAKEET_KOKORO_DIR") or self.DEFAULT_DIR
+        )
+        required = {
+            "model.onnx": directory / "model.onnx",
+            "voices.bin": directory / "voices.bin",
+            "tokens.txt": directory / "tokens.txt",
+            "espeak-ng-data": directory / "espeak-ng-data",
+        }
+        missing = [name for name, path in required.items() if not path.exists()]
+        if missing:
+            raise FileNotFoundError(
+                f"Kokoro bundle incomplete at {directory}: missing {missing}.\n{self.DOWNLOAD_HINT}"
+            )
+        config = sherpa_onnx.OfflineTtsConfig(
+            model=sherpa_onnx.OfflineTtsModelConfig(
+                kokoro=sherpa_onnx.OfflineTtsKokoroModelConfig(
+                    model=str(required["model.onnx"]),
+                    voices=str(required["voices.bin"]),
+                    tokens=str(required["tokens.txt"]),
+                    data_dir=str(required["espeak-ng-data"]),
+                ),
+                num_threads=num_threads,
+                provider=provider,
+                debug=False,
+            ),
+            max_num_sentences=1,
+        )
+        self.tts = sherpa_onnx.OfflineTts(config)
+        self.sample_rate = int(self.tts.sample_rate)
+        self.model_dir = directory
+        self.voices = tuple(voices or self.EN_V0_19_VOICES)
+
+    def _speaker_id(self, voice: Optional[str]) -> int:
+        if not voice:
+            return 0
+        if voice in self.voices:
+            return self.voices.index(voice)
+        raise ValueError(
+            f"voice {voice!r} is not in this bundle (available: {list(self.voices)}).  The "
+            "54-speaker kokoro-multi-lang bundles have more; check the speaker map before adding one."
+        )
+
+    def synthesize(self, text: str, voice: str = "af_heart") -> Tuple[np.ndarray, int]:
+        sid = self._speaker_id(voice)
+        audio = self.tts.generate(text=normalize_text(text, keep_tags=True), sid=sid, speed=1.0)
+        wav = np.asarray(audio.samples, dtype=np.float32).reshape(-1)
+        return wav, int(audio.sample_rate)
+
+    def durations(self, text: str, voice: str = "af_heart") -> Optional[List[float]]:
+        """sherpa-onnx does not expose Kokoro's per-token durations; reported as unavailable.
+
+        The ``kokoro`` pip pipeline does, which is why :meth:`KokoroBackend.durations` exists -- but
+        returning invented timings would be worse than returning None, and the cache falls back to
+        the uniform split and says so.
+        """
+        return None
+
+
 class OrpheusBackend(TeacherBackend):
     """Local Orpheus (Llama-3.2-3B + SNAC 24 kHz) inference.
 
@@ -457,9 +557,24 @@ class MiniMaxBackend(TeacherBackend):
         return wav, sr
 
 
+def _kokoro_runtime() -> type:
+    """Prefer the runtime that imports.  Same teacher, same licence, different packaging.
+
+    ``kokoro`` (the official pip package) needs ``misaki[en]``, which needs spacy/blis wheels that do
+    not exist for every Python; sherpa-onnx ships prebuilt wheels and bundles its own G2P.  Either
+    way the weights are hexgrad/Kokoro-82M under Apache-2.0.
+    """
+    try:
+        import kokoro  # noqa: F401
+
+        return KokoroBackend
+    except Exception:  # noqa: BLE001 - any import failure means "not usable here"
+        return SherpaKokoroBackend
+
+
 BACKENDS: Dict[str, type] = {
     "orpheus": OrpheusBackend,
-    "kokoro": KokoroBackend,
+    "kokoro": _kokoro_runtime(),
     "minimax": MiniMaxBackend,
     "stub_low": StubTeacherBackend,
     "stub_high": StubTeacherBackend,

@@ -12,14 +12,14 @@ python scripts/reflow_demo.py                               # validates NFE-2 sa
 python scripts/streaming_demo.py                            # blockwise streaming + TTFA (~7 min CPU)
 python scripts/export_onnx.py --pipeline                    # int8 ONNX + runtime benchmark
 python scripts/profile_pipeline.py                          # where does the time actually go
-python -m pytest -q                                         # 219 tests
+python -m pytest -q                                         # 227 tests
 python scripts/bench_rtf.py --config configs/parakeet_tiny.yaml
 ```
 
 ## 1. Test suite
 
 ```
-219 passed
+227 passed
 ```
 
 Coverage by area:
@@ -36,6 +36,7 @@ Coverage by area:
 | `test_curate.py` | every curation gate fires on a constructed failure (too short/long, clipped, silent, low SNR, narrowband, low MOS, ASR disagreement); **all** reasons reported, not just the first; SNR correctly reported as *unevaluable* without a noise floor; WER and punctuation-gap maths; reject records are never dropped |
 | `test_learning.py` | synthetic fixture is structurally exact (frame counts, peak, F0 declination); latent normaliser fits and inverts; token targets are exact and normalised; decoder-latent alignment; supplied-latent path leaves the encoder gradient-free; **stage freezing does not leak between stages**; and the headline: 40 CPU steps measurably improve both the representation and the distilled text side |
 | `test_onnx.py` | ONNX decoder matches PyTorch to **<1e-4**; text side matches to **<1e-4 across token lengths 5/8/17** (the legacy exporter's baked-in length would fail this); dynamic time axis across 7/23/41 frames; int8 files are smaller and run on CPU; dtypes are validated at the wrapper boundary; external weight sidecars are counted in size; full int8 pipeline tracks PyTorch (cosine >0.95) and is smaller in total (skips if `onnx`/`onnxruntime`/`onnxscript` absent) |
+| `test_real_audio.py` | the voicing threshold admits more frames as it rises **while the pitch estimate stays put** (the real-speech signature of a threshold that was too strict); an unvoiced token inherits the nearest voiced pitch instead of 0 Hz; the unaligned split neither collapses nor ignores the energy; the Kokoro runtime dispatch lands on an importable backend and rejects an unknown voice with the available list; the real-audio evidence records its provenance and its duration caveat |
 | `test_ablation.py` | the offered lite config really is smaller and really trains and synthesizes; it **matches the geometry the ablation recommended** (read from the committed evidence, so it holds in a clone); and the evidence records its own limitations (a caveat, a held-out split of ≥ 3 items, both train and val fits) — a study without its caveat is an overclaim |
 | `test_model_card.py` | every claim cites **committed** evidence whose SHA-256 matches the manifest; a missing report comes back `unmeasured` and a corrupted value comes back `fail` (positive controls on the check itself); the rendered card states its limitations (no checkpoint, out-of-scope uses, no UTMOS) and its licence table is generated from the teacher specs |
 | `test_resume.py` | **an interrupted-then-resumed run is bit-identical to an uninterrupted one** (max parameter difference exactly 0); checkpoints carry model + optimizer + EMA + discriminator + step + RNG; the RNG stream is restored (and can be opted out); the LR schedule continues instead of restarting; batch-order state round-trips; the step resumed from is reported; a missing checkpoint raises |
@@ -759,7 +760,54 @@ Three things this shows, and one it deliberately does not:
 A side effect worth noting: the `n_voices` guard added in round 8 rejected this script twice while it
 was being developed (a 3-voice corpus with a 2-voice config), i.e. the cheap check keeps paying.
 
-## 19. Smoke test output (measured)
+## 19. Real teacher speech, at last — and the assumption that blocked it was false (measured)
+
+For sixteen rounds every measurement here used synthetic fixtures, on the stated basis that the
+teachers needed a GPU and 6 GB of weights.  Round 17 tested that assumption instead of repeating it:
+**PyPI and HuggingFace were both reachable all along**, and **Kokoro-82M is Apache-2.0 and runs
+faster than real time on this CPU**.
+
+The official `kokoro` pip package still cannot install here — it needs `misaki[en]` → `spacy` →
+`blis`, which has no wheel for this Python and no Rust toolchain to build from source.  But
+`sherpa-onnx` ships prebuilt wheels, bundles its own espeak-ng G2P, and runs the *same* weights, so
+`SherpaKokoroBackend` was added: same teacher, same licence, different runtime.  A name outside the
+bundle raises with the available list rather than synthesising with the wrong speaker.
+
+`scripts/real_corpus_demo.py` then ran the documented chain on real 24 kHz speech — teacher → corpus
+→ curation → latent cache — and **real speech immediately found three things that fixtures could
+not**:
+
+1. **The pitch tracker's voicing threshold was far too strict for speech.** At the old 0.25,
+   real utterances were only 0.42 voiced; at 0.50 they are 0.63, and the median F0 does not move
+   (93–198 Hz either way), which is the signature of admitting genuinely-voiced frames rather than
+   noise.  Above ~0.70 the median starts drifting (142 Hz on one voice), so the useful range is
+   0.45–0.55.  The threshold is now per method: 0.50 for YIN's CMND (its local-minimum requirement
+   makes it stricter than the paper's 0.10–0.15) and 0.30 for the legacy autocorrelation peak.
+   Fixtures could never show this — a formant stack is periodic everywhere, so every threshold
+   looked fine.
+2. **The unaligned duration fallback produced 0 Hz pitch targets.** With no aligner the frames were
+   split *uniformly*, which on real speech puts token spans entirely inside pauses; measured, whole
+   utterances came back with per-token F0 of 0 Hz (60 Hz in normalised space — the lowest pitch in
+   the range, taught for letters next to a pause).  The fallback is now an energy-weighted split
+   **blended with uniform** (pure equal-energy collapses on a mostly-silent signal — measured
+   `[56, 1, 1, 1, …]`), and a token whose span is entirely unvoiced inherits the nearest voiced
+   token's pitch instead of 0.  Per-token targets went from **0–186 Hz** to **100–200 Hz**.
+3. **The published curation gates, run on real speech for the first time.** Kept **9/16**: three
+   rejected `too_short` (the CosyVoice ≥ 3 s rule, which real short prompts fail) and four
+   `narrowband` (bandwidth99 < 5 kHz).  Kept-set statistics are now real: rms −25 dB,
+   bandwidth99 **5617 Hz**, and SNR **45 dB** — evaluable at all, where on fixtures the estimator
+   correctly refused with `snr_unevaluable`.
+
+All ten checks pass, and the evidence is committed as `docs/evidence/real_audio.json` with the
+teacher's licence, runtime, per-utterance pitch statistics and the explicit duration caveat.  The
+corpus itself is not committed (`data/` is ignored; the bundle is 320 MB).
+
+**What this does not show:** the model quality.  No autoencoder training happens in this script, the
+corpus is 16 prompts, and the duration targets are the unaligned fallback.  What it establishes is
+that the data path works on real audio — and that the fixtures had been hiding three real defects
+precisely because they are not speech.
+
+## 20. Smoke test output (measured)
 
 ```
 parakeet-tiny [tiny] sr=24000 mel=80@93.8Hz latent=24 compress=1/6 voice=constant
@@ -810,7 +858,7 @@ overhead — it is not a valid throughput measurement until the model predicts s
 learning demo (§2) trains properly but on 15 seconds of *synthetic* audio, so it demonstrates that
 the machinery learns, not that the model is good.
 
-## 20. Deliberate engineering checks worth calling out
+## 21. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
@@ -846,7 +894,7 @@ the machinery learns, not that the model is good.
   `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
   else, rather than surfacing a cryptic `torch.stft` message.
 
-## 21. Environment notes
+## 22. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
