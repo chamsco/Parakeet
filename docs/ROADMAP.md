@@ -74,10 +74,13 @@ the engineering.
 * [ ] Attack the 13 % python/dispatch overhead measured by `scripts/profile_pipeline.py`
 * [ ] A/B the two phase-lock references (`ramp` vs `smooth`) against UTMOS and phase coherence (the
       filter is 10 % of the shipped path, so this trades quality against latency)
+* [x] CI: `.github/workflows/ci.yml` runs the suite plus the smoke test and three fast demos on
+      every push (Python 3.11 + 3.13); timing-sensitive benchmarks are a `workflow_dispatch` job
+* [x] End-to-end recipe dry run with dependency-free fixture teachers
+      (`scripts/recipe_dry_run.py`) — it immediately found two bugs in the documented cache path
+      that no per-part demo could see
 * [ ] Model card: teachers used, licence obligations, intended/misuse cases, deep-synthesis
       marking, provenance hashes
-* [ ] CI job that runs `smoke_test.py` + `learn_demo.py` + `pytest` and fails on RTF, streaming
-      parity, or learning-metric regression
 
 ## P5 — Optional quality work
 

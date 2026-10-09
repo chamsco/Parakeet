@@ -241,6 +241,77 @@ def test_cache_preserves_teacher_provenance_and_weights(fast_cfg, tmp_path):
     assert len(set(batch["teacher_weight"].tolist())) == 2
 
 
+def test_cache_token_shapes_are_consistent(fast_cfg, tmp_path):
+    """Regression: every token-level target must share the token count.
+
+    The cache used to store *frame-level* F0 and energy while the text side predicts per token, so
+    `train.py --stage distill-text --cache ...` crashed with a 45-token prediction against a
+    315-frame target -- and no demo caught it because they all used the in-memory target builder.
+    Two more invariants are pinned here: the cache tokenises without special tokens (matching
+    inference), and per-token durations are the frame counts.
+    """
+    from parakeet.data.text import TextTokenizer
+
+    cfg = copy.deepcopy(fast_cfg)
+    manifest = _corpus_with_two_teachers(cfg, tmp_path, per_teacher=2)
+    model = build_model(cfg)
+    tokenizer = TextTokenizer(mode=cfg.text.mode)
+    cache = build_latent_cache(
+        manifest, tmp_path / "cache2", cfg, model.autoencoder, tokenizer=tokenizer,
+        teacher_weights={"orpheus": 0.7, "kokoro": 0.3},
+    )
+    dataset = LatentShardDataset(cache)
+    for i in range(len(dataset)):
+        item = dataset[i]
+        n_tokens = int(item["ids"].numel())
+        assert n_tokens == int(item["durations"].numel()), "one duration per text token"
+        assert n_tokens == int(item["f0"].numel()), "F0 must be per token, not per frame"
+        assert n_tokens == int(item["energy"].numel()), "energy must be per token, not per frame"
+        assert int(item["latent_token"].shape[0]) == n_tokens
+        assert int(item["latent"].shape[-1]) == int(item["n_frames"])
+        assert int(item["log_mel"].shape[-1]) >= int(item["n_frames"])
+
+
+def test_cache_ids_match_inference_tokenisation(fast_cfg, tmp_path):
+    """The cache and the Synthesizer must tokenise identically (both without specials)."""
+    import soundfile as sf
+
+    from parakeet.inference import Synthesizer
+    from parakeet.data.text import TextTokenizer
+
+    cfg = copy.deepcopy(fast_cfg)
+    text = "hello tokeniser"
+    wav = torch.zeros(cfg.audio.sample_rate, dtype=torch.float32)
+    wav[: cfg.audio.sample_rate // 2] = 0.1
+    (tmp_path / "wav").mkdir(parents=True, exist_ok=True)
+    path = tmp_path / "wav" / "one.wav"
+    sf.write(str(path), wav.numpy(), cfg.audio.sample_rate)
+    manifest = tmp_path / "manifest.jsonl"
+    manifest.write_text(
+        json.dumps(
+            {
+                "utt_id": "one",
+                "text": text,
+                "teacher": "orpheus",
+                "wav_path": "wav/one.wav",
+                "sample_rate": cfg.audio.sample_rate,
+                "duration_s": 1.0,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    model = build_model(cfg)
+    cache = build_latent_cache(
+        manifest, tmp_path / "c3", cfg, model.autoencoder,
+        tokenizer=TextTokenizer(mode=cfg.text.mode),
+    )
+    cached_ids = LatentShardDataset(cache)[0]["ids"].tolist()
+    synth = Synthesizer(model, cfg, device="cpu", apply_phase_lock=False)
+    inference_ids, _mask, _tags = synth.prepare_text(text)
+    assert cached_ids == inference_ids[0].tolist(), "cache/inference tokenisation must match"
+
+
 def test_training_step_reads_weights_from_the_batch(fast_cfg):
     """The stage functions must pick the weight up without any extra plumbing."""
     cfg = copy.deepcopy(fast_cfg)

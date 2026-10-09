@@ -1,0 +1,97 @@
+name: ci
+
+# Why this exists: round 6 found that the teacher-mixture plumbing had never been connected, and
+# that a later change silently reversed an earlier fix (the per-sample mask was not expanded across
+# channels, inflating the latent term 24x).  Both were caught only because a test happened to cover
+# the path.  This workflow runs the whole CPU-verifiable surface on every push so that the next one
+# is caught automatically.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: install (CPU torch, no CUDA download)
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -e ".[dev,audio]"
+
+      - name: unit tests
+        # ONNX/int8 tests skip themselves when onnx/onnxruntime are absent
+        run: python -m pytest -q
+
+      - name: smoke test -- every training stage, 2 steps, synthesise
+        run: python scripts/smoke_test.py --steps 2 --out runs/smoke
+
+      - name: learn demo -- the stages actually fit
+        run: python scripts/learn_demo.py --quick --out runs/ci_learn
+
+      - name: mixture demo -- the mixture reaches the gradient
+        run: python scripts/mixture_demo.py --quick --out runs/ci_mixture
+
+      - name: recipe dry run -- the whole pipeline end to end, offline
+        run: python scripts/recipe_dry_run.py --quick --out runs/ci_recipe
+
+      - name: upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-reports-py${{ matrix.python-version }}
+          path: |
+            runs/ci_learn/report.json
+            runs/ci_mixture/report.json
+            runs/ci_recipe/report.json
+            runs/ci_recipe/synthesized.wav
+
+  benchmarks:
+    # The slower, timing-sensitive checks run on demand only: they measure real-time factors and
+    # ONNX latency, which are meaningless on a shared CI runner.
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: install
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -e ".[dev,audio,export]"
+      - name: real-time factor
+        run: python scripts/bench_rtf.py --config configs/parakeet_tiny.yaml --steps 2 --out runs/rtf.json
+      - name: pipeline profile
+        run: python scripts/profile_pipeline.py --config configs/parakeet_tiny.yaml --out runs/profile.json
+      - name: int8 ONNX pipeline
+        run: python scripts/export_onnx.py --config configs/parakeet_tiny.yaml --pipeline --out runs/onnx
+      - name: streaming and TTFA
+        run: python scripts/streaming_demo.py --out runs/streaming
+      - name: reflow (few-step sampling)
+        run: python scripts/reflow_demo.py --out runs/reflow
+      - uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-reports
+          path: runs/*.json

@@ -22,6 +22,7 @@ from parakeet.data.teacher import (
     resolve_mix,
     synthesize_corpus,
 )
+
 from parakeet.data.text import TAGS, CharVocab, TextTokenizer, normalize_text
 from parakeet.models import build_model
 
@@ -105,6 +106,48 @@ def test_resolve_mix_parsing():
     assert resolve_mix(None) == DEFAULT_MIX
     assert resolve_mix(["orpheus=0.7", "kokoro=0.3"]) == {"orpheus": 0.7, "kokoro": 0.3}
     assert resolve_mix(["orpheus"]) == {"orpheus": 1.0}
+
+
+def test_stub_teachers_are_excluded_from_the_default_mixture():
+    """Fixtures must never be distilled by accident."""
+    from parakeet.data.teacher import STUB_HIGH, STUB_LOW
+
+    assert "stub_low" not in DEFAULT_MIX and "stub_high" not in DEFAULT_MIX
+    assert STUB_LOW.kind == "local_fixture" and STUB_LOW.allows_training
+    assert "SYNTHETIC FIXTURE" in STUB_LOW.notes
+    with pytest.raises(TeacherLicenseError):
+        check_teacher("minimax")  # real restricted teacher still gated
+
+
+def test_stub_backend_is_deterministic_and_text_dependent():
+    low = build_backend("stub_low")
+    high = build_backend("stub_high")
+    assert low.f0 < high.f0
+
+    wav_a, sr = low.synthesize("hello world")
+    wav_b, _ = low.synthesize("hello world")
+    assert sr == 24000 and wav_a.size > 0
+    assert np.array_equal(wav_a, wav_b), "same text must render identically"
+
+    wav_c, _ = low.synthesize("a much longer sentence to speak aloud")
+    assert wav_c.size > wav_a.size, "longer text must render longer audio"
+
+    wav_low, _ = low.synthesize("hello world")
+    wav_high, _ = high.synthesize("hello world")
+    assert wav_high.size == wav_low.size
+    # different pitch presets -> different content, same shape
+    assert not np.allclose(wav_low, wav_high)
+
+
+def test_stub_backend_duration_hash_is_process_stable():
+    """``hash()`` on strings is randomised per process; the fixture must not depend on it."""
+    import zlib
+
+    low = build_backend("stub_low")
+    assert low._stable_hash("ab") == zlib.crc32(b"0:ab")
+    assert low._token_frames("a") == low.frames_per_token[0] + (
+        low._stable_hash("a") % (low.frames_per_token[1] - low.frames_per_token[0] + 1)
+    )
 
 
 class DummyBackend(TeacherBackend):

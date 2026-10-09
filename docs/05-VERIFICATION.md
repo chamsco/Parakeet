@@ -12,14 +12,14 @@ python scripts/reflow_demo.py                               # validates NFE-2 sa
 python scripts/streaming_demo.py                            # blockwise streaming + TTFA (~7 min CPU)
 python scripts/export_onnx.py --pipeline                    # int8 ONNX + runtime benchmark
 python scripts/profile_pipeline.py                          # where does the time actually go
-python -m pytest -q                                         # 135 tests
+python -m pytest -q                                         # 140 tests
 python scripts/bench_rtf.py --config configs/parakeet_tiny.yaml
 ```
 
 ## 1. Test suite
 
 ```
-135 passed
+140 passed
 ```
 
 Coverage by area:
@@ -286,7 +286,44 @@ regressing, and now pinned by `test_per_sample_masking_counts_channels`), the we
 `tiny_text_step` and `flow_step`, weight repetition under `Ke>1` context expansion, and the cache
 preserving teacher provenance.
 
-## 8. Smoke test output (measured)
+## 8. End-to-end recipe dry run (measured)
+
+Every other demo tests a part. `scripts/recipe_dry_run.py` runs the recipe **in the order the
+documentation claims**, offline, with two synthetic fixture teachers (so no network, no API key, no
+3B checkpoint):
+
+```
+prompts -> synthesize_corpus -> manifest.jsonl -> build_latent_cache -> LatentShardDataset
+        -> run_stage("distill-text") -> Synthesizer.synthesize
+```
+
+It found **two real bugs in the documented training path that no per-part demo could see**:
+
+* the cache stored **frame-level** F0 and energy while the text side predicts **per token**, so
+  `train.py --stage distill-text --cache …` crashed with a 45-token prediction against a 315-frame
+  target.  Every demo used the in-memory target builder, which was already correct;
+* the cache tokenised **with** BOS/EOS while inference tokenises without, so a model trained from a
+  cache would learn two tokens that inference never supplies.
+
+Both are fixed (`aggregate_to_tokens`, `add_special=False`) and pinned by
+`test_cache_token_shapes_are_consistent` / `test_cache_ids_match_inference_tokenisation`.
+
+Result (full run, 6 prompts, 120 autoencoder steps, 250 distillation steps, ~4 min):
+
+| check | outcome |
+|---|---|
+| corpus uses both fixture teachers | PASS (mixture 0.6/0.4, interleaved) |
+| autoencoder improved | PASS |
+| cache records the mixture | PASS (`teacher_names`, `teacher_weights` in `cache_meta.json`) |
+| teacher weights reach the batch | PASS (`[0.6, 0.6, 0.4, 0.6]` in one batch — both values present) |
+| distillation improved | PASS (**4.8993 → 1.0418**, 79 % better) |
+| synthesis produces audio | PASS (3.32 s, phase coherence 2–8 kHz 0.175) |
+
+The lesson generalises: every bug found in rounds 6–7 — the mixture never reaching the loss, the 24×
+mask bug, these two — lived in the *seams between* components, which is exactly what a per-part demo
+suite cannot see, and why this end-to-end run earns its four minutes.
+
+## 9. Smoke test output (measured)
 
 ```
 parakeet-tiny [tiny] sr=24000 mel=80@93.8Hz latent=24 compress=1/6 voice=constant
@@ -337,7 +374,7 @@ overhead — it is not a valid throughput measurement until the model predicts s
 learning demo (§2) trains properly but on 15 seconds of *synthetic* audio, so it demonstrates that
 the machinery learns, not that the model is good.
 
-## 9. Deliberate engineering checks worth calling out
+## 10. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
@@ -373,7 +410,7 @@ the machinery learns, not that the model is good.
   `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
   else, rather than surfacing a cryptic `torch.stft` message.
 
-## 10. Environment notes
+## 11. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
