@@ -385,25 +385,3 @@ def build_memory(
     return memory, torch.cat([text_mask, cond_mask], dim=1)
 
 
-def expand_for_context_sharing(
-    batch: dict, ke: int
-) -> dict:
-    """SupertonicTTS context-sharing batch expansion.
-
-    Repeats every conditioning tensor ``Ke`` times along the batch axis *without* touching
-    the (large) noise tensor, so the vector-field estimator sees ``Ke`` distinct
-    noise/time draws per unique text+speaker pair at the cost of a little memory.
-    """
-    if ke <= 1:
-        return batch
-    out = {}
-    for k, v in batch.items():
-        if isinstance(v, torch.Tensor) and k not in {"x0", "x1"}:
-            out[k] = v.repeat_interleave(ke, dim=0)
-        else:
-            out[k] = v
-    return out
-
-
-def length_mask(lengths: torch.Tensor, t_max: Optional[int] = None) -> torch.Tensor:
-    return sequence_mask(lengths, t_max)

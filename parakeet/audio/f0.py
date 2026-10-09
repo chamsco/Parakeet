@@ -274,18 +274,3 @@ def bins_to_f0(
     return torch.where(bins > 0, f0, torch.zeros_like(f0))
 
 
-def interpolate_f0(f0: torch.Tensor, voiced: torch.Tensor) -> torch.Tensor:
-    """Fill unvoiced gaps with the nearest voiced value (log-domain), for smooth targets."""
-    f0 = f0.clone()
-    voiced = voiced.bool()
-    if not bool(voiced.any()):
-        return f0
-    logf0 = torch.where(voiced, torch.log(f0.clamp_min(1e-3)), torch.full_like(f0, float("nan")))
-    b, t = logf0.shape
-    idx = torch.arange(t, device=f0.device).expand(b, t)
-    idx = torch.where(voiced, idx, torch.zeros_like(idx))
-    idx = torch.cummax(idx, dim=-1).values
-    last_valid = torch.gather(logf0, -1, idx.clamp(max=t - 1).long())
-    filled = torch.where(torch.isnan(logf0), last_valid, logf0)
-    filled = torch.nan_to_num(filled, nan=0.0)
-    return torch.where(voiced, torch.exp(filled), torch.zeros_like(f0))

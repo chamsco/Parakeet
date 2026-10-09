@@ -11,9 +11,12 @@ build/
 dist/
 
 # --- data (never commit corpora / teacher dumps) ---
-data/
-runs/
-checkpoints/
+# NOTE: these MUST stay root-anchored.  An unanchored `data/` also matches the Python package
+# `parakeet/data/`, which silently kept the whole data pipeline (tokenizer, teacher backends,
+# feature cache, datasets, curation) out of the repository for the first ten commits.
+/data/
+/runs/
+/checkpoints/
 *.wav
 *.flac
 *.mp3

@@ -19,7 +19,7 @@ that the package is runnable and unit-testable without network access.
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Dict, Optional
 
 import torch
 import torch.nn as nn
@@ -149,6 +149,53 @@ class SpeakerConditioner(nn.Module):
         #: learned constant voice (Tiny / single-voice variant, "replaces the style input
         #: with a learned constant" -- Paradee §2)
         self.constant_style = nn.Parameter(torch.randn(1, cfg.n_query, cfg.style_dim) * 0.02)
+        self.load_report: Dict[str, object] = {}
+        if cfg.checkpoint:
+            self._load_speaker_checkpoint(cfg.checkpoint)
+        if cfg.freeze:
+            # the documented production path: identity comes from frozen CAM++ weights, and only the
+            # Q-Former adapts.  ``cfg.freeze``/``cfg.checkpoint`` were declared but never read, so
+            # every run trained the randomly-initialised stand-in and could not clone a real voice.
+            for p in self.speaker.parameters():
+                p.requires_grad = False
+
+    def _load_speaker_checkpoint(self, path: str) -> None:
+        """Load CAM++ weights from a raw encoder state dict *or* a full-model checkpoint.
+
+        Checkpoint key layouts vary (``stem.weight``, ``speaker.stem.weight``,
+        ``speaker.speaker.stem.weight``, ...), so every plausible prefix is tried and the one with
+        the most shape-matching tensors wins.  A checkpoint with no overlap raises rather than
+        silently training a random encoder -- which is the failure mode this flag exists to avoid.
+        """
+        payload = torch.load(path, map_location="cpu", weights_only=False)
+        state = payload.get("model", payload.get("state_dict", payload))
+        if not isinstance(state, dict):
+            raise ValueError(f"speaker checkpoint {path!r} does not contain a state dict")
+        own = self.speaker.state_dict()
+        prefixes = ("", "speaker.", "speaker.speaker.", "model.speaker.", "conditioner.speaker.")
+        best: Dict[str, torch.Tensor] = {}
+        for prefix in prefixes:
+            candidate = {
+                (k[len(prefix):] if prefix and k.startswith(prefix) else k): v
+                for k, v in state.items()
+            }
+            hits = {k: v for k, v in candidate.items() if k in own and own[k].shape == v.shape}
+            if len(hits) > len(best):
+                best = hits
+        if not best:
+            raise ValueError(
+                f"speaker checkpoint {path!r} contains none of the {len(own)} expected tensors; "
+                f"got keys like {list(state)[:5]}"
+            )
+        missing = [k for k in own if k not in best]
+        self.speaker.load_state_dict(best, strict=False)
+        self.load_report = {
+            "path": path,
+            "loaded": len(best),
+            "total": len(own),
+            "missing": missing[:8],
+            "frozen": bool(self.cfg.freeze),
+        }
 
     def forward(
         self,
@@ -223,7 +270,3 @@ class SpeakerConditioner(nn.Module):
         return F.relu((a * b).sum(dim=-1) - margin).mean()
 
 
-def speaker_embedding_from_audio(
-    model: SpeakerConditioner, mel: torch.Tensor, mask: Optional[torch.Tensor] = None
-) -> torch.Tensor:
-    return model.speaker(mel, mask)

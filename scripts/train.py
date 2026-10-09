@@ -29,6 +29,33 @@ from parakeet.train.stages import STAGE_STEPS, run_stage  # noqa: E402
 STAGES = list(STAGE_STEPS)
 
 
+def _cache_provenance(cache: str | None) -> dict:
+    """Which data produced this run: teacher mixture, voices and a content hash of the cache index.
+
+    Recorded in ``<out_dir>/run.json`` so a checkpoint can be traced back to its corpus, which is the
+    point of provenance for a distillation pipeline built on someone else's voices.
+    """
+    if not cache:
+        return {}
+    from parakeet.train.common import file_fingerprint
+
+    cache_dir = Path(cache)
+    meta: dict = {}
+    meta_path = cache_dir / "cache_meta.json"
+    if meta_path.exists():
+        payload = json.loads(meta_path.read_text(encoding="utf-8"))
+        meta = {
+            "teachers": payload.get("teacher_names"),
+            "teacher_weights": payload.get("teacher_weights"),
+            "voices": payload.get("voice_names"),
+            "n_shards": payload.get("n_shards"),
+        }
+    index = cache_dir / "index.json"
+    if index.exists():
+        meta["cache_index_sha256"] = file_fingerprint(index)
+    return meta
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Train a Parakeet stage")
     ap.add_argument("--config", required=True)
@@ -102,6 +129,7 @@ def main() -> int:
         out_dir=cfg.train.out_dir,
         device=args.device,
         log_fn=log_fn,
+        run_metadata=_cache_provenance(args.cache),
     )
     Path(cfg.train.out_dir).mkdir(parents=True, exist_ok=True)
     (Path(cfg.train.out_dir) / f"{args.stage}_final.json").write_text(json.dumps(logs, indent=2))

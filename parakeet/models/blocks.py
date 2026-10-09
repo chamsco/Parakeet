@@ -210,10 +210,6 @@ def sequence_mask(lengths: torch.Tensor, max_len: Optional[int] = None) -> torch
     return idx < lengths[:, None]
 
 
-def lengths_to_mask(mask: torch.Tensor) -> torch.Tensor:
-    return mask.to(torch.bool)
-
-
 def masked_mean(x: torch.Tensor, mask: Optional[torch.Tensor], dim: int = 1) -> torch.Tensor:
     if mask is None:
         return x.mean(dim=dim)

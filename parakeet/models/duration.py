@@ -77,10 +77,6 @@ class UtteranceLengthPredictor(nn.Module):
         return self.net(pooled).squeeze(-1)  # log-length
 
 
-def frames_from_durations(durations: torch.Tensor) -> torch.Tensor:
-    return durations.sum(dim=-1)
-
-
 def align_tokens_to_frames(
     token_features: torch.Tensor,
     durations: torch.Tensor,

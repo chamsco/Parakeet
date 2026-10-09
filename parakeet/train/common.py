@@ -7,7 +7,8 @@ import json
 import math
 import os
 import random
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, Optional
 
@@ -164,13 +165,6 @@ class Meter:
         self.count = 0
 
 
-@dataclass
-class StageStats:
-    step: int = 0
-    loss: float = 0.0
-    extras: Dict[str, float] = field(default_factory=dict)
-
-
 def count_trainable(model: nn.Module) -> int:
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
@@ -180,12 +174,82 @@ def freeze_(module: nn.Module, frozen: bool = True) -> None:
         p.requires_grad = not frozen
 
 
-def write_run_metadata(out_dir: str | Path, cfg: ParakeetConfig, extra: Optional[Dict[str, Any]] = None) -> Path:
+def git_revision(short: bool = True) -> Optional[Dict[str, Optional[str]]]:
+    """``{"rev": ..., "dirty": ...}`` for the checkout this module lives in, or None.
+
+    Best effort by design: a wheel installed outside a git checkout, or a machine without git, must
+    not stop a run -- provenance is recorded when it is available, and its absence is visible.
+    """
+    import subprocess
+
+    root = Path(__file__).resolve().parents[2]
+    try:
+        rev = subprocess.run(
+            ["git", "rev-parse", "--short" if short else "HEAD", "HEAD"],
+            cwd=root, capture_output=True, text=True, timeout=10,
+        )
+        if rev.returncode != 0:
+            return None
+        status = subprocess.run(
+            ["git", "status", "--porcelain"], cwd=root, capture_output=True, text=True, timeout=10
+        )
+        return {
+            "rev": rev.stdout.strip(),
+            "dirty": bool(status.stdout.strip()) if status.returncode == 0 else None,
+        }
+    except Exception:  # noqa: BLE001 - provenance must never break a run
+        return None
+
+
+def config_fingerprint(cfg: ParakeetConfig) -> str:
+    """Stable hash of the full config, so a checkpoint can be tied to the exact recipe."""
+    import hashlib
+
+    payload = json.dumps(to_dict(cfg), sort_keys=True, default=str)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def file_fingerprint(path: str | Path) -> Optional[str]:
+    """SHA-256 of a file's bytes (corpus manifests, cache indexes), or None if unreadable."""
+    import hashlib
+
+    try:
+        return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    except OSError:
+        return None
+
+
+def write_run_metadata(
+    out_dir: str | Path,
+    cfg: ParakeetConfig,
+    extra: Optional[Dict[str, Any]] = None,
+    stage: Optional[str] = None,
+) -> Path:
+    """Write ``run.json``: what code, what config and what data produced this run.
+
+    This is the provenance record that makes a distillation result auditable -- which git revision,
+    which config (by hash), which teacher mixture and which corpus the weights came from.  It was
+    dead code until round 11, so no run had ever written one.
+    """
+    import platform
+
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
-    meta = {"config": to_dict(cfg)}
+    meta: Dict[str, Any] = {
+        "created": datetime.now().isoformat(timespec="seconds"),
+        "stage": stage,
+        "git": git_revision(),
+        "config_sha256": config_fingerprint(cfg),
+        "config": to_dict(cfg),
+        "environment": {
+            "python": platform.python_version(),
+            "platform": platform.platform(),
+            "torch": getattr(torch, "__version__", None),
+            "numpy": getattr(__import__("numpy"), "__version__", None),
+        },
+    }
     if extra:
         meta["extra"] = extra
     path = out / "run.json"
-    path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
+    path.write_text(json.dumps(meta, indent=2, default=str), encoding="utf-8")
     return path

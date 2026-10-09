@@ -443,5 +443,3 @@ def build_model(cfg: ParakeetConfig) -> nn.Module:
     raise ValueError(f"unknown variant {cfg.variant!r}")
 
 
-def text_masks(lengths: torch.Tensor, max_len: int) -> torch.Tensor:
-    return sequence_mask(lengths, max_len)

@@ -22,7 +22,7 @@ which is what keeps the Tiny recipe cheap enough to run on rented GPU hours.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
 
 import torch
 import torch.nn as nn
@@ -37,10 +37,12 @@ from .common import (
     Meter,
     build_optimizer,
     cosine_warmup_scheduler,
+    count_trainable,
     freeze_,
     resolve_device,
     save_checkpoint,
     seed_everything,
+    write_run_metadata,
 )
 from .losses import (
     AdversarialVocoderLoss,
@@ -48,6 +50,7 @@ from .losses import (
     MultiResolutionSTFTLoss,
     SpectralAnnealer,
     TextSideDistillLoss,
+    consistency_distillation_loss,
 )
 
 
@@ -209,7 +212,9 @@ def reflow_step(
     memory, memory_mask, x0, x1 = reflow_targets(cfg, teacher, batch, teacher_steps, cfg_scale)
     x_t, t, v_target = reflow_pair(x0, x1)
     v_pred = model.vf(x_t, t, memory, memory_mask)
-    loss = F.mse_loss(v_pred, v_target)
+    # the named loss rather than a second inline MSE: they were duplicates, and the named one
+    # already supports a frame mask for callers that need it
+    loss = consistency_distillation_loss(v_pred, v_target)
     return loss, {"reflow": loss.detach(), "x1_std": x1.std().detach()}
 
 
@@ -246,6 +251,15 @@ STAGE_STEPS: Dict[str, str] = {
 }
 
 
+def _named_top_level(model: nn.Module):
+    """Direct child modules with names, for the frozen/trainable report."""
+    return list(model.named_children())
+
+
+def _module_trainable(module: nn.Module) -> bool:
+    return any(p.requires_grad for p in module.parameters())
+
+
 def run_stage(
     stage: str,
     cfg: ParakeetConfig,
@@ -256,12 +270,19 @@ def run_stage(
     device: Optional[str] = None,
     log_fn: Optional[Callable[[Dict[str, float]], None]] = None,
     ema_model: Optional[nn.Module] = None,
+    run_metadata: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, float]:
     """Minimal, dependency-free training loop.
 
     ``batches`` is a zero-argument callable returning a batch dict (a DataLoader iterator in
     practice, a synthetic generator in the smoke test).  Keeping it a callable is what lets
     the CPU smoke test exercise every stage without any real corpus.
+
+    ``run_metadata`` is merged into the provenance written to ``<out_dir>/run.json`` (git revision,
+    config hash, trainable parameter count, plus whatever the caller knows -- teacher mixture,
+    corpus fingerprint).  The trainable count is also logged, because a stage that trains far fewer
+    parameters than intended has silently done nothing: that exact bug (an inherited freeze list)
+    made ``distill-decoder`` train nothing at all before it was caught.
     """
     if stage not in STAGE_STEPS:
         raise ValueError(f"unknown stage {stage!r}; expected one of {sorted(STAGE_STEPS)}")
@@ -302,6 +323,36 @@ def run_stage(
     ema = EMAModel(model, cfg.train.ema_decay)
     meter = Meter()
     logs: Dict[str, float] = {}
+
+    total_params = sum(p.numel() for p in model.parameters())
+    trainable = count_trainable(model)
+    frozen = [
+        name for name, module in _named_top_level(model) if not _module_trainable(module)
+    ]
+    logs["trainable_params"] = float(trainable)
+    logs["frozen_modules"] = float(len(frozen))
+    if log_fn is not None:
+        log_fn(
+            {
+                "step": 0,
+                "loss": float("nan"),
+                "trainable_params": float(trainable),
+                "total_params": float(total_params),
+                "frozen": ",".join(frozen) if frozen else "none",
+            }
+        )
+    write_run_metadata(
+        out_dir,
+        cfg,
+        stage=stage,
+        extra={
+            "max_steps": int(steps),
+            "total_params": int(total_params),
+            "trainable_params": int(trainable),
+            "frozen_modules": frozen,
+            **(run_metadata or {}),
+        },
+    )
 
     mel_module = MelSpectrogram(cfg.audio)
     losses: Dict[str, nn.Module] = {

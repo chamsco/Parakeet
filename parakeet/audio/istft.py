@@ -167,17 +167,3 @@ class OLAISTFT(nn.Module):
         return (n_frames - 1) * self.hop_length + self.n_fft
 
 
-def stft_magnitude_phase(spec: torch.Tensor):
-    return spec.abs(), torch.angle(spec)
-
-
-def magphase_to_complex(mag: torch.Tensor, phase: torch.Tensor) -> torch.Tensor:
-    return torch.polar(mag, phase)
-
-
-def db(x: torch.Tensor) -> torch.Tensor:
-    return 20.0 * torch.log10(x.clamp_min(1e-8))
-
-
-def next_pow2(n: int) -> int:
-    return 1 << int(math.ceil(math.log2(max(2, n))))

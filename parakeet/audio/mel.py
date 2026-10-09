@@ -108,12 +108,3 @@ class MelSpectrogram(nn.Module):
         return max(0, (n_samples - self.cfg.n_fft) // self.cfg.hop_length + 1)
 
 
-def mel_to_linear_pinv(fb: torch.Tensor) -> torch.Tensor:
-    """Pseudo-inverse of the mel filterbank, for mel-only vocoder baselines (ZipVoice-style)."""
-    return torch.linalg.pinv(fb)
-
-
-def spec_energy(spec: torch.Tensor) -> float:
-    """Mean spectral energy in dB, used by data-pipeline quality gates."""
-    p = spec.abs().pow(2).mean().clamp_min(1e-12)
-    return float(10.0 * math.log10(float(p)))
