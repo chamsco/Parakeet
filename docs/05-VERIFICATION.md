@@ -12,14 +12,14 @@ python scripts/reflow_demo.py                               # validates NFE-2 sa
 python scripts/streaming_demo.py                            # blockwise streaming + TTFA (~7 min CPU)
 python scripts/export_onnx.py --pipeline                    # int8 ONNX + runtime benchmark
 python scripts/profile_pipeline.py                          # where does the time actually go
-python -m pytest -q                                         # 255 tests
+python -m pytest -q                                         # 258 tests
 python scripts/bench_rtf.py --config configs/parakeet_tiny.yaml
 ```
 
 ## 1. Test suite
 
 ```
-255 passed
+258 passed
 ```
 
 Coverage by area:
@@ -1221,7 +1221,48 @@ if any gradient is non-finite, so the update is skipped) — and the run caps cl
 likely, the trigger. A test injects a NaN gradient with a finite loss and asserts the step is skipped
 and no parameter is left non-finite.
 
-## 27. Smoke test output (measured)
+## 27. Text diversity: 185 public-domain prompts instead of 47 (measured)
+
+Round 24's hold-out named the binding constraint: the model had only ever seen **47 distinct
+sentences**, so more *audio* (21 → 129 utterances) moved the proxies but left WER at 1.000 on unseen
+prompts. Duration was never the constraint — *text* was.
+
+`scripts/build_prompts.py` takes 600 sentences from five public-domain novels (Austen, Doyle, Carroll,
+Wells, Shelley — 4 810 usable sentences after length/character filtering, interleaved so no split is one
+author) and records the provenance of every source, because a corpus whose licence cannot be traced is
+not usable. Synthesis is cheap (RTF 0.49), so 450 prompts × 2 voices = 900 utterances and **62.6
+minutes** of audio took 31 minutes to generate.
+
+Curation kept **383 of 900**:
+
+| reason | count | what it means |
+|---|---|---|
+| `narrowband` | 333 (37 %) | bandwidth99 < 5 kHz — the CosyVoice constant meeting a different synthesiser |
+| `too_short` | 227 (25 %) | < 3 s — the CosyVoice minimum meeting *natural prose*, which is mostly short sentences |
+| `low_mos` | 0 | everything that survived cleared the calibrated 2.0 DNSMOS floor |
+
+The `too_short` count is a third borrowed threshold biting on real text: an ordinary novel loses a
+quarter of its sentences to a 3 s floor. The surviving corpus is what matters:
+
+| | utterances | minutes | prompts |
+|---|---|---|---|
+| train | 304 | 22.2 | **185** |
+| val | 79 | 6.1 | 50 (unseen) |
+
+4× the distinct training text and 2× the audio of round 24, on the same kind of prompt-disjoint
+hold-out — so the comparison isolates text diversity.
+
+### The other lever, verified available: phoneme input
+
+If more text is not enough, the remaining suspect is the text side's *inductive bias*: character input
+has to relearn English spelling-to-sound from a few hundred sentences, where the papers feed phonemes.
+That depends on a local phonemiser, and the obvious route (`misaki` → spacy → blis) does not build here
+— so it was checked rather than assumed: `espeakng-loader` + `phonemizer` produce correct IPA locally,
+including for words the corpus never contains (`quixotic → kwɪksɑːɾɪk`,
+`perspicacious → pɚspɪkeɪʃəs`) over a 39-symbol vocabulary. Recorded so the next round starts from a
+verified capability instead of a hope.
+
+## 28. Smoke test output (measured)
 
 ```
 parakeet-tiny [tiny] sr=24000 mel=80@93.8Hz latent=24 compress=1/6 voice=constant
@@ -1272,7 +1313,7 @@ overhead — it is not a valid throughput measurement until the model predicts s
 learning demo (§2) trains properly but on 15 seconds of *synthetic* audio, so it demonstrates that
 the machinery learns, not that the model is good.
 
-## 27. Deliberate engineering checks worth calling out
+## 29. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
@@ -1308,7 +1349,7 @@ the machinery learns, not that the model is good.
   `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
   else, rather than surfacing a cryptic `torch.stft` message.
 
-## 28. Environment notes
+## 30. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).

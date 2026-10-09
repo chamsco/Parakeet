@@ -105,6 +105,10 @@ def main() -> int:
     ap.add_argument("--val-prompts", type=int, default=12, help="prompts held out for validation")
     ap.add_argument("--out", default="data/scaled_corpus")
     ap.add_argument("--prompt-limit", type=int, default=None)
+    ap.add_argument("--prompts-file", default=None,
+                    help="one prompt per line (e.g. from scripts/build_prompts.py).  Text diversity is "
+                         "the measured binding constraint, so a large public-domain list is preferred "
+                         "over the built-in 60")
     args = ap.parse_args()
 
     spec = check_teacher("kokoro")
@@ -116,6 +120,16 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
 
     prompts = PROMPTS[: args.prompt_limit] if args.prompt_limit else PROMPTS
+    prompt_source = "built-in list (60 sentences)"
+    if args.prompts_file:
+        prompts = [
+            line.strip()
+            for line in Path(args.prompts_file).read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        if args.prompt_limit:
+            prompts = prompts[: args.prompt_limit]
+        prompt_source = f"{args.prompts_file} ({len(prompts)} prompts)"
     texts = [t for t in prompts for _ in voices]
     voice_list = [v for _ in prompts for v in voices]
     print(f"teacher {spec.name} ({spec.weights_license}, training allowed: {spec.allows_training})")
@@ -165,6 +179,7 @@ def main() -> int:
 
     payload = {
         "teacher": {"name": spec.name, "license": spec.weights_license, "runtime": type(backend).__name__},
+        "prompts_source": prompt_source,
         "voices": voices,
         "prompts": len(prompts),
         "synthesised": len(records),

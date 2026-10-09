@@ -1,0 +1,34 @@
+{
+  "teacher": {
+    "name": "kokoro",
+    "license": "Apache-2.0",
+    "runtime": "SherpaKokoroBackend"
+  },
+  "prompts_source": "data\\prompts\\prompts.txt (450 prompts)",
+  "voices": [
+    "af_alloy",
+    "af_aoede"
+  ],
+  "prompts": 450,
+  "synthesised": 900,
+  "kept": 383,
+  "curation_reasons": {
+    "narrowband": 333,
+    "too_short": 227
+  },
+  "audio_minutes": 62.60677013888889,
+  "synthesis_rtf": 0.49398084389369556,
+  "split": {
+    "by": "prompt (text), so validation text is unseen",
+    "train_utterances": 304,
+    "train_prompts": 185,
+    "val_utterances": 79,
+    "val_prompts": 50,
+    "train_minutes": 22.211338194444444,
+    "val_minutes": 6.066805555555556
+  },
+  "caveats": [
+    "all 11 voices in this bundle are af_*: the corpus is single-gender",
+    "synthesised speech, so it inherits Kokoro's own artefacts as the ceiling"
+  ]
+}

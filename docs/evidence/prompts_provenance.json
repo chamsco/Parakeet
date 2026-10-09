@@ -1,0 +1,57 @@
+{
+  "count": 600,
+  "filters": {
+    "min_words": 8,
+    "max_words": 22
+  },
+  "sources": [
+    {
+      "title": "Pride and Prejudice",
+      "author": "Jane Austen",
+      "url": "https://www.gutenberg.org/files/1342/1342-0.txt",
+      "licence": "public domain (Project Gutenberg)",
+      "sentences_kept": 1671,
+      "chars": 728748
+    },
+    {
+      "title": "The Adventures of Sherlock Holmes",
+      "author": "Arthur Conan Doyle",
+      "url": "https://www.gutenberg.org/files/1661/1661-0.txt",
+      "licence": "public domain (Project Gutenberg)",
+      "sentences_kept": 1197,
+      "chars": 574153
+    },
+    {
+      "title": "Alice's Adventures in Wonderland",
+      "author": "Lewis Carroll",
+      "url": "https://www.gutenberg.org/files/11/11-0.txt",
+      "licence": "public domain (Project Gutenberg)",
+      "sentences_kept": 68,
+      "chars": 144602
+    },
+    {
+      "title": "The Time Machine",
+      "author": "H. G. Wells",
+      "url": "https://www.gutenberg.org/files/35/35-0.txt",
+      "licence": "public domain (Project Gutenberg)",
+      "sentences_kept": 764,
+      "chars": 179705
+    },
+    {
+      "title": "Frankenstein",
+      "author": "Mary Shelley",
+      "url": "https://www.gutenberg.org/files/84/84-0.txt",
+      "licence": "public domain (Project Gutenberg)",
+      "sentences_kept": 1110,
+      "chars": 419340
+    }
+  ],
+  "licence_note": "all sources are public domain (Project Gutenberg), so sentences may be synthesised and used for training without a licence question",
+  "sentences_sample": [
+    "On the other hand, I, for my part, declare for  Pride and Prejudice  unhesitatingly.",
+    "To Sherlock Holmes she is always  the  woman.",
+    "A Caucus-Race and a Long Tale CHAPTER IV.",
+    "Introduction The Time Traveller (for so it will be convenient to speak of him) was expounding a recondite matter to us.",
+    "This breeze, which has travelled from the regions towards which I am advancing, gives me a foretaste of those icy climes."
+  ]
+}
