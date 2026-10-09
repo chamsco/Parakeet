@@ -111,6 +111,12 @@ def phase_lock(
     """
     if wav.dim() == 1:
         wav = wav.unsqueeze(0)
+    original_length = wav.shape[-1]
+    if original_length < n_fft:
+        # ``torch.stft(center=True)`` pads n_fft//2 on each side, which is invalid for signals
+        # shorter than n_fft -- and that is exactly what the final chunk of a streamed utterance
+        # looks like.  Pad to one frame, filter, then trim.
+        wav = torch.nn.functional.pad(wav, (0, n_fft - original_length))
     win_length = win_length or n_fft
     window = torch.hann_window(win_length, device=wav.device, dtype=wav.dtype)
     spec = torch.stft(
@@ -163,7 +169,7 @@ def phase_lock(
     out = torch.istft(
         new_spec, n_fft, hop_length, win_length, window, center=True, length=length or wav.shape[-1]
     )
-    return out
+    return out[..., :original_length]
 
 
 def phase_lock_with_f0(
@@ -176,3 +182,76 @@ def phase_lock_with_f0(
         wav, sample_rate, hop_length=kwargs.get("hop_length", 256), frame_length=kwargs.get("n_fft", 1024)
     )
     return phase_lock(wav, sample_rate=sample_rate, f0=f0, voiced=voiced, **kwargs)
+
+
+class StreamingPhaseLock:
+    """Chunked phase-lock filter with an ``n_fft`` look-ahead, for streaming synthesis.
+
+    Offline synthesis filters the whole utterance; a streaming pipeline cannot wait for that.  This
+    keeps one ``n_fft`` of unemitted samples as overlap, filters the buffer, and emits everything
+    except the overlap -- so every emitted sample has a full right-hand context and the interior of
+    the stream is identical to what the offline filter would produce.  Only the very first frames of
+    the stream (where the offline filter also sees centre padding) and the buffer boundaries are
+    approximate.
+    """
+
+    def __init__(
+        self,
+        sample_rate: int = 24000,
+        n_fft: int = 1024,
+        hop_length: int = 256,
+        win_length: Optional[int] = None,
+        band: Tuple[float, float] = (2000.0, 8000.0),
+        strength: float = 0.7,
+        method: str = "ramp",
+        n_tau: int = 64,
+        smooth_frames: int = 13,
+    ) -> None:
+        self.sample_rate = sample_rate
+        self.n_fft = n_fft
+        self.hop_length = hop_length
+        self.win_length = win_length or n_fft
+        self.band = band
+        self.strength = strength
+        self.method = method
+        self.n_tau = n_tau
+        self.smooth_frames = smooth_frames
+        self._pending: Optional[torch.Tensor] = None
+        self.n_emitted = 0
+
+    def _filter(self, wav: torch.Tensor) -> torch.Tensor:
+        return phase_lock(
+            wav,
+            sample_rate=self.sample_rate,
+            n_fft=self.n_fft,
+            hop_length=self.hop_length,
+            win_length=self.win_length,
+            band=self.band,
+            strength=self.strength,
+            method=self.method,
+            n_tau=self.n_tau,
+            smooth_frames=self.smooth_frames,
+        )
+
+    @torch.no_grad()
+    def push(self, chunk: torch.Tensor) -> torch.Tensor:
+        """Filter ``chunk`` and return the newly finalised samples (possibly empty)."""
+        x = chunk.reshape(1, -1) if chunk.dim() == 1 else chunk
+        buf = x if self._pending is None else torch.cat([self._pending, x], dim=-1)
+        if buf.shape[-1] <= self.n_fft:
+            self._pending = buf
+            return buf.new_zeros(buf.shape[0], 0)
+        filtered = self._filter(buf)
+        keep = buf.shape[-1] - self.n_fft
+        self._pending = buf[..., keep:]
+        out = filtered[..., :keep]
+        self.n_emitted += out.shape[-1]
+        return out
+
+    @torch.no_grad()
+    def flush(self) -> torch.Tensor:
+        if self._pending is None or self._pending.shape[-1] == 0:
+            return torch.zeros(1, 0)
+        out = self._filter(self._pending)
+        self._pending = None
+        return out

@@ -101,6 +101,14 @@ FlowBlock: causal-free ConvNeXtBlock(dim, k=7) ─► cross-attention into
 * Rectified-flow convention: `x_t = (1−t)·x₀ + t·x₁`, target `v = x₁ − x₀`, `t=0` noise, `t=1` data.
 * `null_memory` is a learned unconditional token; conditioning is dropped for 10 % of training
   items so classifier-free guidance (scale 3, as SupertonicTTS) is available at inference.
+* **Streaming sampling.** Because the temporal mixing is *finite-support* convolutions rather than
+  self-attention, the ODE can be integrated block by block: a block needs only
+  `context = 3 × depth` frames each side (18 frames ≈ 1.15 s of audio for the Small config) plus a
+  lookahead band that co-evolves and is discarded when the next block regenerates it. Conditions are
+  global and computed once, so they impose no temporal dependency. `iter_blockwise_sample` /
+  `blockwise_sample` implement this; `ParakeetFlow.synthesize_stream` decodes each block as it
+  arrives. Measured: TTFA 7.81× better at 21.9 s of audio, at 1.07–2.81× total compute depending on
+  block size (see [05-VERIFICATION.md](05-VERIFICATION.md) §6).
 * `Ke = 4` **context-sharing batch expansion**: conditioning tensors are repeated `Ke` times so
   the estimator sees 4 independent noise/time draws per unique text+speaker pair
   (`expand_for_context_sharing`, verified by a test that asserts an effective batch of 3× for Ke=3).

@@ -1,6 +1,11 @@
 """Inference and deployment: streaming synthesis, phase locking, int8 export."""
 
-from .phase_lock import phase_coherence, phase_lock, phase_lock_with_f0  # noqa: F401
+from .phase_lock import (  # noqa: F401
+    StreamingPhaseLock,
+    phase_coherence,
+    phase_lock,
+    phase_lock_with_f0,
+)
 from .quantize import (  # noqa: F401
     checkpoint_bytes,
     model_size_bytes,
@@ -18,6 +23,7 @@ __all__ = [
     "phase_lock",
     "phase_lock_with_f0",
     "phase_coherence",
+    "StreamingPhaseLock",
     "quantize_weights_",
     "quantize_dynamic_int8",
     "save_int8_state_dict",

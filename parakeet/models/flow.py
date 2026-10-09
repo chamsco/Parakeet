@@ -206,11 +206,166 @@ def consistency_sample(
     steps: int = 2,
     device=None,
     cfg_scale: float = 1.0,
+    x0: Optional[torch.Tensor] = None,
+    t_start: float = 0.0,
 ) -> torch.Tensor:
-    """Few-step sampler used after Reflow/consistency distillation (NFE == ``steps``)."""
+    """Few-step sampler used after Reflow/consistency distillation (NFE == ``steps``).
+
+    ``x0`` fixes the initial noise, which matters for A/B comparisons (blockwise vs one-shot must
+    start from the same draw).
+    """
     return euler_sample(
-        model, memory, memory_mask, shape, steps=steps, device=device, cfg_scale=cfg_scale
+        model,
+        memory,
+        memory_mask,
+        shape,
+        steps=steps,
+        device=device,
+        cfg_scale=cfg_scale,
+        x0=x0,
+        t_start=t_start,
     )
+
+
+# --------------------------------------------------------------------------------------
+# streaming sampling
+# --------------------------------------------------------------------------------------
+def vf_context_frames(model: ConvNeXtVFEstimator) -> int:
+    """Frames of temporal context the vector field reads on each side.
+
+    The estimator mixes time with *symmetric* (non-causal) depthwise convolutions, so every block
+    adds ``(k-1)//2`` frames on each side.  Because the mixing is convolutional rather than a full
+    self-attention, the needed context is finite -- which is what makes blockwise streaming
+    sampling possible at all: a transformer-based vector field would require the whole sequence.
+    """
+    total = 0
+    for blk in model.blocks:
+        conv = getattr(blk, "conv", None)
+        dw = getattr(conv, "dwconv", None)
+        inner = getattr(dw, "conv", dw)
+        if inner is None:
+            continue
+        kernel = int(inner.kernel_size[0])
+        dilation = int(inner.dilation[0])
+        total += (kernel - 1) * dilation // 2
+    return total
+
+
+@torch.no_grad()
+def iter_blockwise_sample(
+    model: ConvNeXtVFEstimator,
+    memory: Optional[torch.Tensor],
+    memory_mask: Optional[torch.Tensor],
+    shape: Tuple[int, int, int],
+    steps: int = 2,
+    block_frames: int = 16,
+    context: Optional[int] = None,
+    lookahead: Optional[int] = None,
+    context_mode: str = "interpolated",
+    cfg_scale: float = 1.0,
+    x0: Optional[torch.Tensor] = None,
+    t_start: float = 0.0,
+):
+    """Yield ``(start, end, x1_block)`` for each compressed-frame block, in order.
+
+    Streaming consumers (see :meth:`ParakeetFlow.synthesize_stream`) decode each block as it
+    arrives instead of waiting for the whole latent, which is what turns a one-shot sampler into a
+    low-time-to-first-audio one.  :func:`blockwise_sample` is a thin consumer of this generator, so
+    the measured endpoint error applies to the streaming path exactly.
+    """
+    if context_mode not in {"interpolated", "final"}:
+        raise ValueError(f"unknown context_mode {context_mode!r}")
+    b, c, tc = shape
+    if x0 is None:
+        x0 = torch.randn(shape, device=memory.device if memory is not None else None)
+    rf = vf_context_frames(model) if context is None else int(context)
+    ahead = rf if lookahead is None else int(lookahead)
+    x1 = torch.zeros_like(x0)
+    ts = torch.linspace(t_start, 1.0, steps + 1, device=x0.device)
+    was_training = model.training
+    model.eval()
+    try:
+        for start in range(0, tc, block_frames):
+            end = min(tc, start + block_frames)
+            lo = max(0, start - rf)
+            hi = min(tc, end + ahead)
+            new = end - start
+            x_ctx = x1[:, :, lo:start]
+            x_ctx0 = x0[:, :, lo:start]
+            x_new = x0[:, :, start:hi].clone()
+            for i in range(steps):
+                t = ts[i].expand(b)
+                x_in = torch.cat([x_ctx, x_new], dim=-1) if x_ctx.shape[-1] else x_new
+                v = model(x_in, t, memory, memory_mask)
+                if cfg_scale != 1.0:
+                    v_uncond = model(x_in, t, None, None)
+                    v = v_uncond + cfg_scale * (v - v_uncond)
+                v_new = v[:, :, -x_new.shape[-1] :]
+                x_new = x_new + (ts[i + 1] - ts[i]) * v_new
+                if context_mode == "interpolated" and x_ctx.shape[-1]:
+                    x_ctx = (1.0 - ts[i + 1]) * x_ctx0 + ts[i + 1] * x1[:, :, lo:start]
+            x1[:, :, start:end] = x_new[:, :, :new]
+            yield start, end, x1[:, :, start:end]
+    finally:
+        if was_training:
+            model.train()
+
+
+@torch.no_grad()
+def blockwise_sample(
+    model: ConvNeXtVFEstimator,
+    memory: Optional[torch.Tensor],
+    memory_mask: Optional[torch.Tensor],
+    shape: Tuple[int, int, int],
+    steps: int = 2,
+    block_frames: int = 16,
+    context: Optional[int] = None,
+    lookahead: Optional[int] = None,
+    context_mode: str = "interpolated",
+    cfg_scale: float = 1.0,
+    x0: Optional[torch.Tensor] = None,
+    t_start: float = 0.0,
+) -> torch.Tensor:
+    """Sample the latent ODE in blocks so audio can start before the whole utterance exists.
+
+    This is an *approximation* of :func:`euler_sample`, and the approximation is worth stating
+    precisely, because it is the whole reason it is cheap:
+
+    * the vector field is convolutional with finite context ``rf``, so a block's outputs depend
+      only on ``[block_start - rf, block_end + rf]``.  Text and speaker conditioning are global and
+      computed once, so they impose no temporal dependency;
+    * frames to the **left** are already finalised, so they are held at their generated values --
+      optionally *interpolated back* along the same rectified-flow path they travelled
+      (``context_mode="interpolated"``), which is what the full-sequence integration would have
+      shown at that timestep, given their own noise draw;
+    * frames to the **right** within ``lookahead`` are not finalised, so they are integrated
+      alongside the block (co-evolving, exactly as they do in the full run) and then discarded when
+      the next block regenerates them with proper left context.
+
+    ``context_mode="final"`` is cheaper (no interpolation bookkeeping) but presents the model with
+    out-of-distribution finalised neighbours at every timestep.  ``scripts/streaming_demo.py``
+    measures the resulting endpoint error against the full-sequence sampler.
+    """
+    b, c, tc = shape
+    out = torch.empty(
+        shape, device=memory.device if memory is not None else (x0.device if x0 is not None else None)
+    )
+    for start, end, block in iter_blockwise_sample(
+        model,
+        memory,
+        memory_mask,
+        shape,
+        steps=steps,
+        block_frames=block_frames,
+        context=context,
+        lookahead=lookahead,
+        context_mode=context_mode,
+        cfg_scale=cfg_scale,
+        x0=x0,
+        t_start=t_start,
+    ):
+        out[:, :, start:end] = block
+    return out
 
 
 def build_memory(

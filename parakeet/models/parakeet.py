@@ -33,6 +33,7 @@ from .flow import (
     build_memory,
     consistency_sample,
     fold_time,
+    iter_blockwise_sample,
     make_xt,
     sample_timesteps,
     unfold_time,
@@ -335,6 +336,83 @@ class ParakeetFlow(nn.Module):
         latent = unfold_time(x1c, self.cfg.flow.compress, t_out=n_latent_frames)
         latent = self.latent_norm.denormalize(latent)
         return self.autoencoder.decode(latent)
+
+    @torch.no_grad()
+    def synthesize_stream(
+        self,
+        ids: torch.Tensor,
+        mask: Optional[torch.Tensor] = None,
+        ref_mel: Optional[torch.Tensor] = None,
+        ref_mask: Optional[torch.Tensor] = None,
+        speaker_emb: Optional[torch.Tensor] = None,
+        voice: Optional[torch.Tensor] = None,
+        steps: Optional[int] = None,
+        cfg_scale: Optional[float] = None,
+        duration_scale: float = 1.0,
+        n_latent_frames: Optional[int] = None,
+        block_frames: int = 16,
+        context: Optional[int] = None,
+        lookahead: Optional[int] = None,
+        context_mode: str = "interpolated",
+        voice_stream_chunk: Optional[int] = None,
+    ):
+        """Yield waveform chunks as the latent is being sampled.
+
+        Time-to-first-audio becomes "one block of sampling + one block of decoding" instead of
+        "the whole latent", which matters most for long utterances: the sampling window is
+        ``context + block + lookahead`` frames regardless of utterance length, so TTFA stays
+        roughly constant while total time grows with the text.
+
+        The blockwise sampler is an approximation of the full-sequence ODE (see
+        :func:`parakeet.models.flow.blockwise_sample`); ``scripts/streaming_demo.py`` measures the
+        endpoint error against the one-shot sampler.
+        """
+        from ..inference.synthesize import StreamingVocoder
+
+        self.eval()
+        memory, memory_mask, cond = self.conditions(
+            ids, mask, ref_mel, ref_mask, speaker_emb, voice
+        )
+        text_mem = self.text(ids, mask)
+        if n_latent_frames is None:
+            n_latent_frames = int(
+                self.predict_latent_frames(text_mem, mask, cond, duration_scale).max().item()
+            )
+        tc = self.compressed_frames(n_latent_frames)
+        b = ids.shape[0]
+        shape = (b, self.cfg.flow.latent_dim * self.cfg.flow.compress, tc)
+        steps = steps or self.cfg.flow.distilled_nfe
+        cfg_scale = self.cfg.flow.cfg_scale if cfg_scale is None else cfg_scale
+
+        vocoder = StreamingVocoder(
+            self.autoencoder, chunk_frames=voice_stream_chunk or block_frames
+        )
+        remaining = int(n_latent_frames)
+        for _start, _end, block in iter_blockwise_sample(
+            self.vf,
+            memory,
+            memory_mask,
+            shape,
+            steps=steps,
+            block_frames=block_frames,
+            context=context,
+            lookahead=lookahead,
+            context_mode=context_mode,
+            cfg_scale=cfg_scale,
+        ):
+            latent = unfold_time(block, self.cfg.flow.compress)
+            if latent.shape[-1] > remaining:
+                latent = latent[..., :remaining]
+            remaining -= latent.shape[-1]
+            latent = self.latent_norm.denormalize(latent)
+            wav = vocoder.push(latent)
+            if wav.shape[-1]:
+                yield wav
+            if remaining <= 0:
+                break
+        tail = vocoder.flush()
+        if tail.shape[-1]:
+            yield tail
 
     def forward(self, ids: torch.Tensor, mask: Optional[torch.Tensor] = None, **kw):
         return self.conditions(ids, mask, **kw)

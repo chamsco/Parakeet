@@ -65,7 +65,12 @@ the engineering.
 * [x] **Export the text side too** (it is ~31 % of the budget).  Full int8 pipeline on one CPU
       thread: **5.4 ms for 0.57 s → 106× real time** (3.9× vs PyTorch), **9.9 MB** total, waveform
       cosine ≥ 0.992 against the PyTorch pipeline.  `OnnxTinyPipeline` composes both halves
-* [ ] A streaming sampler for Small (currently only decoding streams)
+* [x] **Streaming sampler for Small** (`ParakeetFlow.synthesize_stream`): blockwise ODE
+      integration over the vector field's finite 18-frame context, plus a chunked phase-lock filter.
+      Measured: TTFA 979 ms → 125 ms at 21.9 s of audio (**7.81×**, and roughly flat in length),
+      blockwise output 50–100× closer to the one-shot result than an independent draw, interior
+      streaming audio matching the offline filter at cosine 0.9994.  Cost is explicit: 2.81× total
+      compute at block 16, 1.07× at block 128
 * [ ] Attack the 13 % python/dispatch overhead measured by `scripts/profile_pipeline.py`
 * [ ] A/B the two phase-lock references (`ramp` vs `smooth`) against UTMOS and phase coherence (the
       filter is 10 % of the shipped path, so this trades quality against latency)

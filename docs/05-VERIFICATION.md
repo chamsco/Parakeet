@@ -9,16 +9,17 @@ Reproduce with:
 python scripts/smoke_test.py --steps 2 --out runs/smoke     # trains every stage, synthesises
 python scripts/learn_demo.py                                # proves the stages learn (~10 min CPU)
 python scripts/reflow_demo.py                               # validates NFE-2 sampling (~5 min CPU)
-python scripts/export_onnx.py                               # int8 ONNX + runtime benchmark
+python scripts/streaming_demo.py                            # blockwise streaming + TTFA (~7 min CPU)
+python scripts/export_onnx.py --pipeline                    # int8 ONNX + runtime benchmark
 python scripts/profile_pipeline.py                          # where does the time actually go
-python -m pytest -q                                         # 114 tests
+python -m pytest -q                                         # 125 tests
 python scripts/bench_rtf.py --config configs/parakeet_tiny.yaml
 ```
 
 ## 1. Test suite
 
 ```
-114 passed
+125 passed
 ```
 
 Coverage by area:
@@ -35,6 +36,7 @@ Coverage by area:
 | `test_curate.py` | every curation gate fires on a constructed failure (too short/long, clipped, silent, low SNR, narrowband, low MOS, ASR disagreement); **all** reasons reported, not just the first; SNR correctly reported as *unevaluable* without a noise floor; WER and punctuation-gap maths; reject records are never dropped |
 | `test_learning.py` | synthetic fixture is structurally exact (frame counts, peak, F0 declination); latent normaliser fits and inverts; token targets are exact and normalised; decoder-latent alignment; supplied-latent path leaves the encoder gradient-free; **stage freezing does not leak between stages**; and the headline: 40 CPU steps measurably improve both the representation and the distilled text side |
 | `test_onnx.py` | ONNX decoder matches PyTorch to **<1e-4**; text side matches to **<1e-4 across token lengths 5/8/17** (the legacy exporter's baked-in length would fail this); dynamic time axis across 7/23/41 frames; int8 files are smaller and run on CPU; dtypes are validated at the wrapper boundary; external weight sidecars are counted in size; full int8 pipeline tracks PyTorch (cosine >0.95) and is smaller in total (skips if `onnx`/`onnxruntime`/`onnxscript` absent) |
+| `test_streaming.py` | the reported vector-field context is confirmed **empirically** (perturb a frame, the response stops exactly at `3 × depth`); `layer_scale_init` leaves the VF per-frame at init (documented, not hidden); a single block equals the one-shot sampler exactly; multi-block stays closer to one-shot than an independent draw; blocks cover every frame in order and concatenate to the batch result; chunked phase lock matches offline (cosine >0.99) and buffers a full `n_fft`; streaming synthesis yields several chunks whose total length matches the one-shot path, with and without the filter |
 
 ## 2. Learning demo (measured)
 
@@ -174,7 +176,76 @@ round-trip error (1.669) is **21× larger** than the difference between the two 
 it cannot discriminate at this fixture quality. Both are reported as diagnostics in
 `runs/reflow_demo/report.json`, not as pass criteria.
 
-## 6. Smoke test output (measured)
+## 6. Streaming (blockwise) sampling (measured)
+
+The one-shot sampler must integrate the whole latent before any audio exists, so time-to-first-audio
+grows with the text.  Parakeet's vector field mixes time with finite-support depthwise convolutions
+rather than a transformer, so the ODE can be integrated block by block with a bounded window.
+`scripts/streaming_demo.py` (45 M model, 200 flow steps, **~7 min** CPU) checks that this is both
+faithful and faster.
+
+**Vector-field temporal context: 18 compressed frames each side (~1.15 s of audio)**, derived from
+the block structure and confirmed empirically (perturb one frame; the response reaches exactly
+`3 × depth` frames, and nothing beyond).
+
+### Agreement with the one-shot sampler (identical noise and conditioning, 200 compressed frames = 13 blocks)
+
+| variant | latent MSE | cosine vs one-shot | independent draw |
+|---|---|---|---|
+| `interpolated` (production) | **0.0006** | **0.9998** | 0.8277 |
+| `final` context | 0.0018 | 0.9994 | 0.8277 |
+| `no_lookahead` | 0.0344 | 0.9894 | 0.8277 |
+
+Audio space: mel L1 0.0016 for blockwise vs 0.0879 for an independent draw; waveform cosine 1.0000.
+So blockwise output is **~50–100× closer to the one-shot result than an independent sample from the
+same conditioning** — the approximation stays far inside the model's own sampling variability.
+
+**Positive control.** Agreement being "exact" is only meaningful if the metric could detect error.
+Opening the layer scales of a copy of the vector field (see the next bullet for why) raises the
+response beyond the perturbed frame from ~1e-6 to 0.266, and then `no_lookahead` degrades by **29×**
+(0.0577 vs 0.0020) — the measurement is sensitive, and dropping the right-hand context is the
+approximation that actually costs quality.
+
+**A finding worth recording: `layer_scale_init=1e-6` makes the vector field a per-frame function at
+initialization.** A freshly built VF has a response of ~1e-6 beyond the perturbed frame — every
+ConvNeXt branch is scaled to nothing — so early in training blockwise sampling is *exactly* the
+one-shot sampler, for a trivial reason. Temporal coupling (and therefore the block approximation
+error) only becomes measurable once the branch opens. The demo measures both states rather than
+reporting the flattering one.
+
+### Time to first audio (NFE 2, one CPU thread)
+
+| audio length | one-shot | streaming | speed-up | chunks |
+|---|---|---|---|---|
+| 1.37 s | 124 ms | 112 ms | 1.10× | 2 |
+| 5.46 s | 292 ms | 134 ms | 2.18× | 6 |
+| **21.85 s** | **979 ms** | **125 ms** | **7.81×** | 22 |
+
+TTFA is ~125 ms almost independently of length (the sampling window is
+`context + block + lookahead` frames regardless of text length) while the one-shot sampler grows
+linearly. This is the interaction claim that matters for a voice assistant.
+
+### The cost, stated plainly: streaming trades total compute for latency
+
+| block | TTFA vs one-shot | total compute vs one-shot |
+|---|---|---|
+| 16 frames | **7.28×** | 2.81× |
+| 32 | 5.96× | 1.74× |
+| 64 | 4.17× | 1.30× |
+| 128 | 2.55× | 1.07× |
+
+Each block re-integrates its context and lookahead band, so smaller blocks give lower latency at a
+higher total cost. That is a deployment knob, not a free win, and the demo prints both columns.
+
+### Chunked phase-lock filter
+
+Streaming audio still gets the same post-processing: an `n_fft` look-ahead makes the interior of the
+stream identical to the offline filter (cosine **0.9994**, max |diff| 6.7e-3, coherence 0.200 vs
+0.196). A library bug surfaced here — `torch.stft(center=True)` cannot handle signals shorter than
+`n_fft`, which is exactly what a final streamed chunk looks like — so `phase_lock` now pads, filters
+and trims.
+
+## 7. Smoke test output (measured)
 
 ```
 parakeet-tiny [tiny] sr=24000 mel=80@93.8Hz latent=24 compress=1/6 voice=constant
@@ -225,7 +296,7 @@ overhead — it is not a valid throughput measurement until the model predicts s
 learning demo (§2) trains properly but on 15 seconds of *synthetic* audio, so it demonstrates that
 the machinery learns, not that the model is good.
 
-## 7. Deliberate engineering checks worth calling out
+## 8. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
@@ -261,7 +332,7 @@ the machinery learns, not that the model is good.
   `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
   else, rather than surfacing a cryptic `torch.stft` message.
 
-## 8. Environment notes
+## 9. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).

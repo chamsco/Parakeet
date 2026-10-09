@@ -14,7 +14,7 @@ from ..config import ParakeetConfig, load_config
 from ..data.text import TextTokenizer
 from ..models import build_model
 from ..models.autoencoder import SpeechAutoencoder
-from .phase_lock import phase_lock, phase_coherence
+from .phase_lock import StreamingPhaseLock, phase_coherence, phase_lock
 from .quantize import quantize_weights_, size_report
 
 
@@ -181,6 +181,7 @@ class Synthesizer:
         speed: float = 1.0,
         voice: int = 0,
         seed: Optional[int] = None,
+        n_latent_frames: Optional[int] = None,
     ) -> torch.Tensor:
         from ..audio.mel import MelSpectrogram
 
@@ -214,6 +215,7 @@ class Synthesizer:
                 steps=steps,
                 cfg_scale=cfg_scale,
                 duration_scale=duration_scale * (1.0 / max(speed, 1e-3)),
+                n_latent_frames=n_latent_frames,
             )
         wav = wav.reshape(1, -1)
         if self.apply_phase_lock:
@@ -228,25 +230,96 @@ class Synthesizer:
         return wav
 
     # ------------------------------------------------------------------ streaming
+    def _reference_tensors(
+        self, ref_wav: Optional[torch.Tensor], ref_mel: Optional[torch.Tensor]
+    ) -> Tuple[Optional[torch.Tensor], Optional[torch.Tensor]]:
+        from ..audio.mel import MelSpectrogram
+
+        if ref_wav is not None and ref_mel is None:
+            ref_mel = MelSpectrogram(self.cfg.audio).log_mel(ref_wav.to(self.device))
+        elif ref_mel is not None:
+            ref_mel = ref_mel.to(self.device)
+        if ref_mel is None:
+            return None, None
+        return ref_mel, torch.ones(
+            ref_mel.shape[0], ref_mel.shape[-1], dtype=torch.bool, device=self.device
+        )
+
     def synthesize_stream(
         self,
         text: str,
         chunk_frames: int = 16,
+        blocks_per_chunk: int = 1,
+        context_mode: str = "interpolated",
         **kwargs,
     ) -> Iterator[np.ndarray]:
-        """Yield waveform chunks as soon as they are decodable.
+        """Yield waveform chunks as audio becomes available.
 
-        For ``tiny`` the latent is produced token-by-token, so this genuinely lowers
-        time-to-first-audio.  For ``small`` the flow sampler currently runs in one pass (the
-        streaming VF sampler is on the roadmap), so this only bounds decoder memory; TTFA is
-        still dominated by sampling.
+        * **Small** — true streaming: the latent ODE is sampled blockwise
+          (:meth:`ParakeetFlow.synthesize_stream`), so time-to-first-audio is *one block of sampling
+          plus one block of decoding* rather than the whole utterance.  The sampling window is
+          ``context + block + lookahead`` frames regardless of text length, so TTFA stays roughly
+          constant while total time grows.
+        * **Tiny** — there is no sampler (the text side predicts the latent directly), so the latent
+          arrives in one pass; decoding still streams through the causal decoder.
+
+        With ``apply_phase_lock=True`` the phase-lock filter runs chunked with an ``n_fft``
+        look-ahead, so the streamed output gets the same post-processing as the offline path.
         """
-        wav = self.synthesize(text, **kwargs)
-        sr = self.cfg.audio.sample_rate
-        chunk = max(1, int(sr * 0.25))
-        arr = wav.reshape(-1).cpu().numpy()
-        for i in range(0, arr.shape[0], chunk):
-            yield arr[i : i + chunk]
+        ids, mask, _ = self.prepare_text(text)
+        voice_t = torch.tensor([kwargs.pop("voice", 0)], device=self.device)
+        steps = kwargs.pop("steps", None)
+        cfg_scale = kwargs.pop("cfg_scale", None)
+        duration_scale = kwargs.pop("duration_scale", 1.0)
+        n_latent_frames = kwargs.pop("n_latent_frames", None)
+        ref_mel, ref_mask = self._reference_tensors(
+            kwargs.pop("ref_wav", None), kwargs.pop("ref_mel", None)
+        )
+
+        streamer = StreamingPhaseLock(
+            sample_rate=self.cfg.audio.sample_rate,
+            n_fft=self.cfg.audio.n_fft,
+            hop_length=self.cfg.audio.hop_length,
+            win_length=self.cfg.audio.win_length,
+            strength=self.phase_lock_strength,
+            method=self.phase_lock_method,
+        ) if self.apply_phase_lock else None
+
+        if self.variant == "small":
+            with torch.no_grad():
+                generator = self.model.synthesize_stream(
+                    ids,
+                    mask,
+                    ref_mel=ref_mel,
+                    ref_mask=ref_mask,
+                    voice=voice_t if self.cfg.voice_mode == "constant" else None,
+                    steps=steps,
+                    cfg_scale=cfg_scale,
+                    duration_scale=duration_scale,
+                    n_latent_frames=n_latent_frames,
+                    block_frames=chunk_frames * max(1, blocks_per_chunk),
+                    context_mode=context_mode,
+                )
+                for wav in generator:
+                    out = streamer.push(wav) if streamer is not None else wav
+                    if out.shape[-1]:
+                        yield out.reshape(-1).cpu().numpy()
+        else:
+            wav = self.synthesize(
+                text, steps=steps, cfg_scale=cfg_scale, duration_scale=duration_scale,
+                ref_mel=ref_mel, voice=int(voice_t.item()),
+            )
+            chunk = max(1, int(self.cfg.audio.sample_rate * 0.25))
+            for i in range(0, wav.shape[-1], chunk):
+                piece = wav[..., i : i + chunk]
+                out = streamer.push(piece) if streamer is not None else piece
+                if out.shape[-1]:
+                    yield out.reshape(-1).cpu().numpy()
+
+        if streamer is not None:
+            tail = streamer.flush()
+            if tail.shape[-1]:
+                yield tail.reshape(-1).cpu().numpy()
 
     @torch.no_grad()
     def synthesize_chunked(self, latent: torch.Tensor, chunk_frames: int = 16) -> torch.Tensor:

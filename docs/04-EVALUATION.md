@@ -6,6 +6,7 @@ TTS model that is not fast is not the product we are building.
 | # | Metric | Why | Tool | Implemented |
 |---|---|---|---|---|
 | 1 | **RTF on one CPU thread** | the entire premise is "lightning fast, on a laptop" | `measure_rtf` (dependency-free, pins `torch.set_num_threads(1)`) | ✅ |
+| 1b | **TTFA** (time to first audio) | for interactive use the first chunk matters more than the total | `scripts/streaming_demo.py`, `Synthesizer.synthesize_stream` | ✅ |
 | 2 | **UTMOS** (1–5 neural naturalness) | the metric Paradee's ablations are stated in | optional `utmos`/`torch.hub` | optional (declared unavailable if missing, never faked) |
 | 3 | **WER** (Whisper large-v3) | intelligibility; catches word skips/repeats | optional `faster-whisper` | optional |
 | 4 | **SECS** speaker similarity | required for the zero-shot Small model | frozen CAM++ via `funasr` | optional |
@@ -55,6 +56,7 @@ difference, and RTF at one thread. Additional CPU-verifiable harnesses:
 |---|---|
 | `scripts/learn_demo.py` | the stages actually learn (before/after metrics with pass/fail) |
 | `scripts/reflow_demo.py` | NFE-2 sampling is viable after Reflow, and reports what the experiment *cannot* conclude |
+| `scripts/streaming_demo.py` | TTFA speed-up vs total-compute cost, blockwise agreement with the one-shot sampler, and a positive control proving the metric detects error |
 | `scripts/export_onnx.py` | PyTorch vs ONNX-fp32 vs ONNX-int8 latency, size, and output deviation |
 | `scripts/profile_pipeline.py` | component-wise share of a full synthesis, so optimisation targets the right thing |
 

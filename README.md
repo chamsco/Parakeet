@@ -68,6 +68,7 @@ Two variants share every block:
 | int8 fidelity vs PyTorch | waveform cosine **0.992–0.9998**, mel L1 0.010–0.027 (untrained weights, so a lower bound) | `export_onnx.py --pipeline` |
 | Where the time goes | decoder 36 %, text side 31 %, phase lock 10 %, python 13 % — the vocoder is *not* the bottleneck | `profile_pipeline.py` |
 | Streaming decoder | **exactly equal** to offline decoding (5.6e-09) | `test_inference.py` |
+| **Time to first audio** | 21.9 s utterance: one-shot **979 ms → streaming 125 ms (7.81×)**, and ~flat in length; blockwise output 50–100× closer to one-shot than an independent draw. Cost is stated: 2.81× total compute at block 16, 1.07× at block 128 | `streaming_demo.py` |
 | Does it learn? | AE recon **36 %** better, text side **91 %**, text→audio **26 %** vs untrained, duration MAE **3 ms**, generated/target log-mel cosine **0.954** | `learn_demo.py` |
 | Is NFE 2 viable? | reflowed 2-step agrees with the NFE-32 reference **better than the teacher's own NFE-16** (1.51 vs 1.85) and 29 % better than a naive 2-step cut; **9.7× wall-clock** at NFE 2 | `reflow_demo.py` |
 | Int8 weights (simulated) | 12.0 MB Tiny / 56.3 MB Small | `smoke_test.py` |
@@ -81,8 +82,9 @@ python -m venv .venv && .venv/Scripts/pip install -e ".[dev]"     # Windows
 python scripts/smoke_test.py --steps 2          # trains every stage, synthesises, quantises
 python scripts/learn_demo.py --quick            # proves the stages learn (before/after metrics)
 python scripts/reflow_demo.py --quick           # validates NFE-2 sampling after Reflow
+python scripts/streaming_demo.py --quick        # blockwise streaming + TTFA vs one-shot
 python scripts/export_onnx.py                   # int8 ONNX vocoder + PyTorch/ONNX benchmark
-python -m pytest -q                            # 114 tests
+python -m pytest -q                            # 125 tests
 python scripts/bench_rtf.py --config configs/parakeet_tiny.yaml --steps 2
 ```
 
@@ -119,10 +121,10 @@ parakeet/
   inference/  streaming synthesizer, phase-lock filter, int8 + ONNX int8 (QDQ) export and runtime
   eval/       RTF, MCD, spectral convergence, phase coherence, optional UTMOS/WER/SECS, learning probes
 configs/      parakeet_tiny.yaml (9.6M) | parakeet_small.yaml (45M) | parakeet_small_44k.yaml
-scripts/      smoke_test.py | learn_demo.py | reflow_demo.py | export_onnx.py |
-              profile_pipeline.py | train.py | make_teacher_corpus.py | bench_rtf.py
-tests/        114 tests: config, audio DSP, models, losses, all five stages, inference,
-              data/corpus paths, curation filters, ONNX/int8 parity, and learning regressions
+scripts/      smoke_test.py | learn_demo.py | reflow_demo.py | streaming_demo.py |
+              export_onnx.py | profile_pipeline.py | train.py | make_teacher_corpus.py | bench_rtf.py
+tests/        125 tests: config, audio DSP, models, losses, all five stages, inference,
+              streaming, data/corpus paths, curation filters, ONNX/int8 parity, learning
 ```
 
 ## Honest limitations
