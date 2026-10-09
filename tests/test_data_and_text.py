@@ -73,9 +73,25 @@ def test_vocab_fits_model_capacity():
 
 
 def test_unknown_characters_become_unk():
+    """Two behaviours, checked separately.
+
+    Through the tokeniser, non-ASCII input is normalised away (`é` -> `e`, emoji and CJK dropped) rather
+    than becoming `UNK` noise, which is what an English TTS front-end should do.  The `UNK` path itself
+    is therefore exercised at the vocabulary level, where the rule lives.
+
+    The IPA inventory was widened in round 28: the hand-written list was missing `ː`, `ɡ`, `ɾ`, `ɐ`,
+    `ʔ`, `ᵻ` and a combining mark, so those are asserted to be present rather than left to chance.
+    """
     tok = TextTokenizer()
-    ids = tok.encode("héllo ☃")
-    assert tok.vocab.stoi["<unk>"] in ids
+    direct = torch.tensor(tok.vocab.encode("héllo ☃ 字"))
+    assert tok.vocab.stoi["<unk>"] in direct
+    assert tok.vocab.stoi["<unk>"] not in tok.encode("héllo ☃ 字"), (
+        "the tokeniser normalises non-ASCII instead of emitting UNK"
+    )
+    for symbol in "ːɡɾɐʔᵻ":
+        assert symbol in TextTokenizer(mode="phoneme").vocab.stoi, (
+            f"IPA symbol {symbol!r} must be in the phoneme inventory"
+        )
 
 
 # --------------------------------------------------------------------------- teachers

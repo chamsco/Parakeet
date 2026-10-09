@@ -63,6 +63,7 @@ def main() -> int:
     ap.add_argument("--manifest", default=None, help="manifest file inside --corpus (e.g. val.jsonl for a held-out split)")
     ap.add_argument("--config", default="configs/parakeet_tiny.yaml")
     ap.add_argument("--latent-rate", type=int, default=None, help="latents per text token (must match the checkpoint)")
+    ap.add_argument("--text-mode", default=None, choices=["char", "phoneme"], help="tokeniser mode; must match the checkpoint")
     ap.add_argument("--limit", type=int, default=8)
 
     ap.add_argument("--prose-only", action="store_true",
@@ -105,6 +106,8 @@ def main() -> int:
         return 2
 
     cfg = load_config(args.config)
+    if getattr(args, "text_mode", None):
+        cfg.text.mode = args.text_mode
     if getattr(args, "latent_rate", None):
         cfg.autoencoder.latent_rate = args.latent_rate
     payload = torch.load(args.checkpoint, map_location="cpu", weights_only=False)

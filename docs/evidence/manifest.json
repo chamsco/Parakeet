@@ -1,7 +1,7 @@
 {
-  "generated": "2026-10-09T22:52:47",
+  "generated": "2026-10-10T00:16:47",
   "git": {
-    "rev": "710fc2d",
+    "rev": "5bc827c",
     "dirty": true
   },
   "note": "Committed snapshots of the reports the model card cites.  Refresh with `python scripts/model_card.py --refresh-evidence` after re-running the demos; the hashes make a stale bundle visible.",
@@ -110,6 +110,13 @@
       "source": "runs/real_diagnose/report.json",
       "evidence": "docs/evidence/real_diagnosis.json",
       "sha256": "46edb94cb590ab5431f13f6b227de912fda548dd3c303642061f7693b9873f21"
+    },
+    {
+      "claim": "tokenizer_ab",
+      "status": "copied",
+      "source": "runs/tokenizer_ab.json",
+      "evidence": "docs/evidence/tokenizer_ab.json",
+      "sha256": "a6c9a995d9676125bb8962cfdd75398bb71d3aba3f57362481ace80dc5926f8e"
     },
     {
       "claim": "mixture_holdout",

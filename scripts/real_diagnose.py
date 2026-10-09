@@ -90,6 +90,7 @@ def main() -> int:
     ap.add_argument("--manifest", default=None, help="manifest file inside --corpus (e.g. val.jsonl for a held-out split)")
     ap.add_argument("--config", default="configs/parakeet_tiny.yaml")
     ap.add_argument("--latent-rate", type=int, default=None, help="latents per text token (must match the checkpoint)")
+    ap.add_argument("--text-mode", default=None, choices=["char", "phoneme"], help="tokeniser mode; must match the checkpoint")
     ap.add_argument("--limit", type=int, default=6)
     ap.add_argument("--whisper", default="base.en")
     ap.add_argument("--out", default="runs/real_diagnose")
@@ -109,6 +110,8 @@ def main() -> int:
     dataset = LatentShardDataset(args.cache)
     meta = json.loads((Path(args.cache) / "cache_meta.json").read_text(encoding="utf-8"))
     cfg = load_config(args.config)
+    if getattr(args, "text_mode", None):
+        cfg.text.mode = args.text_mode
     if getattr(args, "latent_rate", None):
         cfg.autoencoder.latent_rate = args.latent_rate
     cfg.n_voices = max(1, len(meta["voice_names"]))

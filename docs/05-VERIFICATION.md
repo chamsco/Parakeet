@@ -1420,7 +1420,75 @@ duration, text diversity, and teacher count/quality/alignment are each insuffici
 text side's inductive bias and capacity as the remaining suspects rather than the data. The capability
 to test the first of those (phoneme input) was verified in round 25.
 
-## 31. Smoke test output (measured)
+## 31. Phoneme input: the last suspect, made testable (measured)
+
+Rounds 24–27 ruled out corpus duration, text diversity, teacher count, teacher quality and real
+alignment, leaving the text side's **inductive bias**: a character model has to relearn English
+spelling-to-sound from a few hundred sentences, where the papers feed phonemes. Round 25 verified a
+local phonemiser is available; this round wires it in and makes the comparison runnable.
+
+### The vocabulary had to be derived, not written
+
+`_IPA_CHARS` was hand-written and **missing seven symbols espeak actually emits** — including the length
+mark `ː`, which appears **1865 times** in 600 corpus prompts, and the script `ɡ`. A phoneme model built
+on that list would have sent `UNK` for nearly every long vowel. The inventory is now derived from the
+phonemiser's own output over the corpus (44 symbols), and a test asserts that encoding a sample produces
+**zero** `UNK`.
+
+### What was added
+
+* `parakeet/data/g2p.py`: `text_to_phonemes()` (cached espeak-ng via `espeakng-loader` + `phonemizer`,
+  the route that actually builds here) and `phoneme_frames_from_char_frames()`, which converts the
+  teacher's **word** timings into per-phoneme frame counts while preserving each word's measured total —
+  the within-word split is a documented approximation, the word boundaries are the teacher's own.
+* `TextTokenizer(mode="phoneme")` phonemises inside `prepare()`, so the cache builder and synthesis
+  cannot disagree about what the model reads, and degrades to characters (loudly) when no phonemiser is
+  present rather than emitting `UNK`.
+* `build_latent_cache` converts the alignment to phoneme tokens and reconciles the two axes.
+
+Verified before training rather than after:
+
+| check on the phoneme cache (1169 utterances, 2 teachers) | result |
+|---|---|
+| `UNK` tokens across the whole cache | **0** |
+| items whose duration axis matches the token axis | **1169 / 1169** |
+| tokens per utterance | 28 / 67 / 132 (min / median / max) |
+| phoneme vocabulary fits the configured embedding | 106 ≤ 128 |
+
+### The A/B, and the measurement that reframed it
+
+Both arms: the same mixture cache, the same autoencoder, 1600 steps, `latent_rate` 3, evaluated on the
+same 24 utterances from 50 unseen prompts per hold-out (prose only, controls valid):
+
+| arm | hold-out | student WER | teacher WER | student DNSMOS | mel cosine |
+|---|---|---|---|---|---|
+| char | Kokoro | 1.000 | 0.096 | 1.567 | 0.9521 |
+| char | Speechify | 1.000 | 0.086 | 1.542 | 0.9203 |
+| phoneme | Kokoro | 1.000 | 0.096 | 1.448 | 0.9521 |
+| phoneme | Speechify | 1.026 | 0.086 | 1.417 | 0.9189 |
+
+Phonemes do not improve intelligibility and cost a little on the proxies, so the inductive-bias
+hypothesis is not supported either — a fourth negative result.
+
+**But the same run reported something more important.** Asked to synthesise its **own training prompts**,
+the student is still at WER 1.000 (char and phoneme alike, controls 0.082):
+
+| evaluation set | student WER | teacher WER (control) |
+|---|---|---|
+| 24 utterances from 50 **unseen** prompts | 1.000 | 0.086–0.096 |
+| 24 utterances from the **training** prompts | **1.000** | 0.082 |
+
+The model is not failing to *generalise*; it never fit the data it trained on. That reframes rounds
+24–27: they compared variants of an **undertrained** model along axes (corpus duration, text diversity,
+teacher count, tokeniser) that could not have mattered yet. The arithmetic agrees — 1600 steps at batch
+4 is 6 400 samples over 1169 utterances, about **5.5 passes** — and the audio objective is still ~1.4
+against the autoencoder's own reconstruction of ~0.46.
+
+So the project's own framing, mine included, was wrong for four rounds, and the fix is not another A/B
+but **training until the model fits before comparing anything**. A long run (6000 steps, warm-started)
+is now in flight, and the fit number is what it will be judged on first.
+
+## 32. Smoke test output (measured)
 
 ```
 parakeet-tiny [tiny] sr=24000 mel=80@93.8Hz latent=24 compress=1/6 voice=constant
@@ -1471,7 +1539,7 @@ overhead — it is not a valid throughput measurement until the model predicts s
 learning demo (§2) trains properly but on 15 seconds of *synthetic* audio, so it demonstrates that
 the machinery learns, not that the model is good.
 
-## 32. Deliberate engineering checks worth calling out
+## 33. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
@@ -1507,7 +1575,7 @@ the machinery learns, not that the model is good.
   `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
   else, rather than surfacing a cryptic `torch.stft` message.
 
-## 33. Environment notes
+## 34. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).

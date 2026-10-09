@@ -24,7 +24,11 @@ PAD, UNK, BOS, EOS = "<pad>", "<unk>", "<s>", "</s>"
 
 #: characters we keep (lower-case ASCII + common punctuation + a little IPA for phoneme mode)
 _BASE_CHARS = list(" abcdefghijklmnopqrstuvwxyz0123456789.,!?;:'\"-()[]")
-_IPA_CHARS = list("əɪʊɛæɑɔʌɜɹðθʃʒŋʤʧɚɝˈˌ")
+#: IPA symbols, **derived from the phonemiser's own output** over 600 corpus prompts rather than
+#: written by hand.  The first version was hand-written and missed seven symbols espeak really emits --
+#: including the length mark `ː` (1865 occurrences in that sample) and the script `ɡ`, so a phoneme
+#: model would have sent `UNK` for nearly every long vowel.  `test_phonemes.py` asserts coverage.
+_IPA_CHARS = list("əɪʊɛæɑɔʌɜɹðθʃʒŋʤʧɚɝˈˌɐɡɾʔː̩ᵻ")
 
 #: shared paralinguistic / emotion tag vocabulary (Orpheus tags + MiniMax emotion controls)
 TAGS: List[str] = [
@@ -148,17 +152,42 @@ class CharVocab:
 
 
 class TextTokenizer:
-    """Tokeniser used by training and inference."""
+    """Tokeniser used by training and inference.
+
+    In ``phoneme`` mode the text is passed through a local espeak-ng phonemiser (see
+    :mod:`parakeet.data.g2p`) **before** encoding, here rather than at the call sites, so the cache
+    builder and synthesis cannot disagree about what the model is reading.  If the phonemiser is not
+    available the mode degrades to characters and says so, instead of silently emitting `UNK` for every
+    symbol.
+    """
 
     def __init__(self, mode: str = "char", tags: Optional[Sequence[str]] = None) -> None:
+        self.mode = mode
+        self.phonemized = False
+        if mode == "phoneme":
+            from .g2p import phonemize_available
+
+            self.phonemized = phonemize_available()
+            if not self.phonemized:
+                print("[text] phoneme mode requested but no local phonemiser is available; "
+                      "falling back to characters")
         self.vocab = CharVocab(mode=mode, tags=list(tags) if tags else TAGS)
 
     @property
     def vocab_size(self) -> int:
         return self.vocab.vocab_size
 
+    def prepare(self, text: str) -> str:
+        """The string that is actually tokenised (IPA in phoneme mode)."""
+        clean, _tags = self.vocab.split_tags(text)
+        if self.phonemized:
+            from .g2p import text_to_phonemes
+
+            return text_to_phonemes(clean)
+        return clean
+
     def encode(self, text: str, max_len: int = 512, add_special: bool = True) -> torch.Tensor:
-        ids = self.vocab.encode(text, add_special=add_special)[:max_len]
+        ids = self.vocab.encode(self.prepare(text), add_special=add_special)[:max_len]
         return torch.tensor(ids, dtype=torch.long)
 
     def batch(

@@ -1,0 +1,75 @@
+{
+  "question": "does phoneme input fix generalisation where data could not?",
+  "setup": {
+    "corpus": "the same two-teacher mixture (1169 utterances, 109.5 min)",
+    "steps": 1600,
+    "latent_rate": 3,
+    "hold_outs": [
+      "kokoro",
+      "speechify"
+    ],
+    "note": "only the tokeniser and the aligned duration targets differ"
+  },
+  "student_wer": {
+    "char": {
+      "kokoro": 1.0,
+      "speechify": 1.0
+    },
+    "phoneme": {
+      "kokoro": 1.0,
+      "speechify": 1.0259365994236311
+    }
+  },
+  "teacher_wer": {
+    "char": {
+      "kokoro": 0.09641873278236915,
+      "speechify": 0.08645533141210375
+    },
+    "phoneme": {
+      "kokoro": 0.09641873278236915,
+      "speechify": 0.08645533141210375
+    }
+  },
+  "student_dnsmos": {
+    "char": {
+      "kokoro": 1.567112075151244,
+      "speechify": 1.542362818420209
+    },
+    "phoneme": {
+      "kokoro": 1.4480636830076035,
+      "speechify": 1.4168527839189895
+    }
+  },
+  "log_mel_cosine": {
+    "char": {
+      "kokoro": 0.9520816256602606,
+      "speechify": 0.9202760110298792
+    },
+    "phoneme": {
+      "kokoro": 0.9521473695834478,
+      "speechify": 0.918878361582756
+    }
+  },
+  "x_realtime": {
+    "char": {
+      "kokoro": 100.37666743242855,
+      "speechify": 76.28120668011205
+    },
+    "phoneme": {
+      "kokoro": 86.6217368715087,
+      "speechify": 94.13393649838571
+    }
+  },
+  "verdict": {
+    "holds_improved": [],
+    "still_at_chance": true,
+    "note": "If phonemes improve WER on unseen prompts, the inductive-bias hypothesis is supported and the next work is on capacity and data at the phoneme level.  If WER stays at chance, the tokeniser is not the constraint either and the remaining suspects are the text side's capacity and the training objective."
+  },
+  "checks": {
+    "controls_hold_for_both_arms": true,
+    "phonemes_improve_intelligibility_on_every_hold_out": false,
+    "phonemes_improve_the_mel_proxy": true,
+    "both_arms_stay_far_faster_than_real_time": true,
+    "the_outcome_is_recorded": true
+  }
+}

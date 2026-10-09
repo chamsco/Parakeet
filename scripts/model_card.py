@@ -171,6 +171,17 @@ CLAIMS: List[Dict[str, Any]] = [
         "fmt": "reference WER {value:.2f} < autoencoder round-trip {other:.2f}",
     },
     {
+        "id": "tokenizer_ab",
+        "statement": "phoneme input does **not** beat characters, and the student never fit its own "
+                     "training prompts either (WER ≥ 1.0 everywhere) — so the rounds comparing corpus "
+                     "duration, text diversity and teachers were comparing undertrained models",
+        "report": ["runs/tokenizer_ab.json"],
+        "field": "student_wer.phoneme.speechify",
+        "op": ">=",
+        "target": 1.0,
+        "fmt": "phoneme-arm WER {value:.2f} on unseen Speechify prompts",
+    },
+    {
         "id": "mixture_holdout",
         "statement": "the **two-teacher mixture** (1169 utts, 109.5 min, 74 % aligned) evaluated on unseen prompts for **both** teachers, with valid controls",
         "report": ["runs/eval_mixed_speechify/report.json"],

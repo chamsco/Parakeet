@@ -59,6 +59,8 @@ def main() -> int:
     ap.add_argument("--steps-ae", type=int, default=300)
     ap.add_argument("--steps-text", type=int, default=400)
     ap.add_argument("--batch-size", type=int, default=4)
+    ap.add_argument("--text-mode", default=None, choices=["char", "phoneme"],
+                        help="tokeniser mode; phonemes need a local phonemiser and change the cached ids")
     ap.add_argument("--manifest", default=None,
                     help="manifest inside the corpus dir, e.g. train.jsonl for a prompt-disjoint "
                          "split (default: the curated manifest)")
@@ -84,6 +86,8 @@ def main() -> int:
     ]
     voices = sorted({str(r.get("voice") or "") for r in records})
     cfg = load_config(args.config)
+    if args.text_mode:
+        cfg.text.mode = args.text_mode
     if args.latent_rate:
         cfg.autoencoder.latent_rate = args.latent_rate
     cfg.n_voices = max(1, len(voices))

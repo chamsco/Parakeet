@@ -315,6 +315,21 @@ def build_latent_cache(
         # teacher's durations anyway.  Manifests written by synthesize_corpus carry no token_frames,
         # so both settings coincide until an aligner fills them in.
         teacher_frames = rec.get("token_frames") if use_teacher_durations else None
+        if teacher_frames and getattr(tokenizer, "phonemized", False):
+            # the marks time *characters*; in phoneme mode the tokens are phonemes.  Convert while
+            # preserving each word's measured total (see g2p.phoneme_frames_from_char_frames).
+            from .g2p import phoneme_frames_from_char_frames
+
+            converted = phoneme_frames_from_char_frames(rec["text"], teacher_frames)
+            if converted:
+                teacher_frames = converted
+        if teacher_frames is not None:
+            # the token axis must match the tokeniser exactly, or every downstream target misaligns
+            needed = int(ids.numel())
+            reconciled = [int(f) for f in teacher_frames][:needed]
+            while len(reconciled) < needed:
+                reconciled.append(1)
+            teacher_frames = reconciled
         sig = extract_signals(
             wav_t, cfg, ids, durations=teacher_frames, latent_frames=latent,
             latent_rate=cfg.autoencoder.latent_rate,
