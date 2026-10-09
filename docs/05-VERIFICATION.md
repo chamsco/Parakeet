@@ -1547,7 +1547,55 @@ this repository's Small path implements and the Tiny path deliberately skipped. 
 flight tests the cheaper hypothesis (more optimisation) first; if the per-dimension correlation does not
 climb, the structural one is next.
 
-## 34. Smoke test output (measured)
+## 34. Why the latent was only ever learned in the mean: the objective, measured (round 30)
+
+The fit diagnosis said the text side predicts the teacher's *average* token latent (flattened cosine
+0.805) with a per-dimension correlation of 0.126. Reading the objective explains it arithmetically.
+`text_audio_step` computes
+
+```
+total = audio_mel * l_mel + audio_spectral * l_spec + audio_aux * aux_loss
+```
+
+with `audio_mel = 1.0`, `audio_spectral = 3.0`, `audio_aux = 0.1`, and `aux_loss` is the *sum* of the
+duration, F0, energy and latent terms. From the run's own logs (`audio_mel` 1.64, `audio_spectral`
+1.64, `aux` 1.59, `aux_latent` 0.62) the whole cached-signal bundle is **~1 % of the objective**, and
+the token-latent term inside it is **~0.7 %**. Everything else optimises the *rendered* mel and
+spectral envelope — through a frozen decoder, where matching the average latent already reproduces the
+envelope. The model learns exactly what it is paid for.
+
+So the loss gained the term that is missing, and it is deliberately **mean-invariant**:
+
+```python
+pred_c   = pred   - pred.mean(dim=1, keepdim=True)     # across tokens, per dimension
+target_c = target - target.mean(dim=1, keepdim=True)
+l_latent_contrast = per_sample_mse(pred_c, target_c, mask)
+```
+
+It is blind to the mean, so it can only be reduced by matching the *variation* the diagnosis showed was
+missing, and centring (not standardising) is deliberate: standardising by the prediction's own spread
+could be minimised by shrinking toward a constant, which is the failure being fixed. Three algebraic
+properties are pinned by `tests/test_latent_contrast.py` rather than a slow "it goes down" test:
+
+| property | result |
+|---|---|
+| perfect prediction | contrast **0** |
+| prediction shifted by a constant per dimension (i.e. any error in the mean) | contrast **0** — while the raw MSE moves by 24.5 |
+| constant prediction (collapse to the mean) | contrast **= the target's variance** (0.718 vs 0.718) |
+
+It is reachable from the command line (`--set train.loss.signal_latent_contrast=1.0`, alongside
+`--set train.loss.audio_aux=1.0`), because a weight that only a code change can reach cannot be A/B'd.
+
+### The decision to redirect the CPU, and why
+
+The 6000-step run launched in round 28 was killed ~40 minutes in, at 143 CPU-minutes. It re-optimised
+the objective whose composition is measured above — the latent term at ~0.7 % — so the most likely
+outcome was a better mel envelope and an unchanged per-dimension correlation. The same CPU now trains
+the corrected objective for 2400 steps, and it will be judged on the **fit diagnosis** (does the
+per-dimension correlation climb?) rather than on WER, because WER is far less sensitive to exactly the
+defect being fixed.
+
+## 35. Smoke test output (measured)
 
 ```
 parakeet-tiny [tiny] sr=24000 mel=80@93.8Hz latent=24 compress=1/6 voice=constant
@@ -1598,7 +1646,7 @@ overhead — it is not a valid throughput measurement until the model predicts s
 learning demo (§2) trains properly but on 15 seconds of *synthetic* audio, so it demonstrates that
 the machinery learns, not that the model is good.
 
-## 35. Deliberate engineering checks worth calling out
+## 36. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
@@ -1634,7 +1682,7 @@ the machinery learns, not that the model is good.
   `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
   else, rather than surfacing a cryptic `torch.stft` message.
 
-## 36. Environment notes
+## 37. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).

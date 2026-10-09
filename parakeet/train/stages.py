@@ -50,6 +50,7 @@ from .common import (
 )
 from .losses import (
     AdversarialVocoderLoss,
+    DistillSignalWeights,
     LogMelLoss,
     MultiResolutionSTFTLoss,
     SpectralAnnealer,
@@ -267,7 +268,14 @@ def text_audio_step(
     an audio-only loss leaves the *length* free, since rounding durations to frames is not
     differentiable, and the cached signals are the only thing that pins it.
     """
-    criterion = criterion or TextSideDistillLoss()
+    # the weights come from the config so the mean-invariant latent term can be A/B'd with `--set`
+    # instead of being a constant only a code change can reach
+    if criterion is None:
+        criterion = TextSideDistillLoss(
+            DistillSignalWeights(
+                latent_contrast=float(getattr(cfg.train.loss, "signal_latent_contrast", 0.0))
+            )
+        )
     pred = model.text_side(batch["ids"], batch.get("text_mask"), batch.get("voice"))
     durations = normalized_to_durations(pred["log_duration"])
     latent, frame_mask = model.decoder_latent_from_tokens(

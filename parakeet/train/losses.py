@@ -313,6 +313,12 @@ class DistillSignalWeights:
     f0: float = 1.0
     energy: float = 1.0
     latent: float = 1.0
+    #: weight on the **mean-invariant** latent term.  Round 30 measured the text side at a flattened
+    #: cosine of 0.805 against the teacher's token latent with a per-dimension correlation of only
+    #: **0.126**: it had learned the average latent, which is what MSE between raw values rewards, but
+    #: not which latent each token needs.  This term centres prediction and target across tokens, per
+    #: dimension, so it is blind to the mean and can only be reduced by matching the *variation*.
+    latent_contrast: float = 0.0
 
 
 class TextSideDistillLoss(nn.Module):
@@ -359,12 +365,20 @@ class TextSideDistillLoss(nn.Module):
             + self.w.energy * l_en
             + self.w.latent * l_lat
         )
-        return total, {
+        logs = {
             "duration": l_dur.detach(),
             "f0": l_f0.detach(),
             "energy": l_en.detach(),
             "latent": l_lat.detach(),
         }
+        if self.w.latent_contrast > 0:
+            l_contrast = weighted_mean(
+                per_sample_latent_contrast(pred["latent_token"], target["latent_token"], mask),
+                sample_weight,
+            )
+            total = total + self.w.latent_contrast * l_contrast
+            logs["latent_contrast"] = l_contrast.detach()
+        return total, logs
 
 
 # --------------------------------------------------------------------------------------
@@ -464,6 +478,26 @@ def per_sample_l1(
         return diff.mean(dim=dims)
     m = _masked_count(mask, diff)
     return (diff * m).sum(dim=dims) / m.sum(dim=dims).clamp_min(1.0)
+
+
+def per_sample_latent_contrast(
+    pred: torch.Tensor, target: torch.Tensor, mask: Optional[torch.Tensor] = None
+) -> torch.Tensor:
+    """MSE between **token-centred** prediction and target, per sample.
+
+    Both sides have their own mean across tokens, per dimension, removed before the comparison, so a
+    prediction that equals the target's average latent scores exactly as badly as the target's own
+    variance.  This is the term that a raw MSE cannot supply: it is the difference between "the right
+    latent on average" (round 30 measured cosine 0.805) and "the right latent per token" (per-dimension
+    correlation 0.126).
+
+    Centring rather than standardising is deliberate: standardising would rescale each dimension by the
+    *prediction's* spread and could be minimised by shrinking the prediction toward a constant, which is
+    the failure being fixed.
+    """
+    pred_c = pred - pred.mean(dim=1, keepdim=True)
+    target_c = target - target.mean(dim=1, keepdim=True)
+    return per_sample_mse(pred_c, target_c, mask)
 
 
 def per_sample_mse(

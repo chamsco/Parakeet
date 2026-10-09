@@ -170,6 +170,13 @@ class LossConfig:
     #: *length* -- rounding durations to frames is not differentiable -- so the durations/F0/energy/
     #: latent terms stay in at a small weight.
     audio_aux: float = 0.1
+    #: weight of the **mean-invariant** token-latent term (round 30).  Measured motivation: with the
+    #: default weights the whole cached-signal bundle is ~1 % of the objective, and the latent term
+    #: inside it is MSE between raw 72-dimensional vectors -- so the text side learned the *average*
+    #: latent (flattened cosine 0.805) while its per-dimension correlation stayed at 0.126, which is
+    #: exactly the "healthy mel proxy, unintelligible speech" signature.  This term centres both sides
+    #: across tokens so it can only be reduced by matching the variation.
+    signal_latent_contrast: float = 0.0
     speed_perturb: float = 0.0
 
 
