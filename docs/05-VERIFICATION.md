@@ -1488,7 +1488,35 @@ So the project's own framing, mine included, was wrong for four rounds, and the 
 but **training until the model fits before comparing anything**. A long run (6000 steps, warm-started)
 is now in flight, and the fit number is what it will be judged on first.
 
-## 32. Smoke test output (measured)
+## 32. Ingesting recordings you were handed (measured)
+
+Eight Speechify takes arrived as files rather than through the API: the same Shakespeare paragraph in
+**eight voices**, 24 kHz mono, 39–48 s each, 5.6 minutes total. Two problems, both structural:
+
+* **Every one failed curation on `max_duration_s`** (30 s). The gate *rejects* long audio; nothing in
+  the pipeline could *segment* it, so any real recording — a chapter, a podcast, a studio take — was
+  unusable. `parakeet/data/segment.py` now packs ASR word timings into utterances inside the duration
+  window, preferring the largest silences and splitting on the cap when a stretch has no usable pause,
+  without losing or duplicating a word (asserted).
+* **Recordings arrive without transcripts**, and TTS training needs (audio, text) pairs.
+  `scripts/ingest_audio.py` transcribes with `word_timestamps=True`, segments, curates, and writes the
+  manifest — recording that the text is an **ASR measurement**, not the teacher's own transcript, so a
+  later reader is not misled about which it is.
+
+| stage | result |
+|---|---|
+| ingested from 8 files | 57 segments, 5.0 min, **8 voices** |
+| after curation with the CosyVoice 5 kHz floor | 21 kept (the same borrowed threshold round 26 calibrated) |
+| after curation with the measured 4 kHz floor | **38 kept** (3.2 min, all 8 voices; the rest `narrowband`) |
+| mixture v2 (Kokoro + Speechify + ingested) | **1207 utterances, 112.7 min, 8 Speechify voices** |
+
+The lesson generalises past these files: a corpus builder that only accepts one-utterance teacher
+output cannot use a recording, and a teacher whose licence is fine may still hand you audio with no
+text. A test pins the segmenter's contract and the mixer's ability to join corpora with different
+manifest layouts (`PATH:MANIFEST`) — the generated corpora write `train.jsonl`, an ingested one writes
+`curated/kept.jsonl`.
+
+## 33. Smoke test output (measured)
 
 ```
 parakeet-tiny [tiny] sr=24000 mel=80@93.8Hz latent=24 compress=1/6 voice=constant
@@ -1539,7 +1567,7 @@ overhead — it is not a valid throughput measurement until the model predicts s
 learning demo (§2) trains properly but on 15 seconds of *synthetic* audio, so it demonstrates that
 the machinery learns, not that the model is good.
 
-## 33. Deliberate engineering checks worth calling out
+## 34. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
@@ -1575,7 +1603,7 @@ the machinery learns, not that the model is good.
   `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
   else, rather than surfacing a cryptic `torch.stft` message.
 
-## 34. Environment notes
+## 35. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).

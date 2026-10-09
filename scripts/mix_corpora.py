@@ -28,7 +28,8 @@ from typing import Dict, List
 def main() -> int:
     ap = argparse.ArgumentParser(description="Join teacher corpora into one mixture manifest")
     ap.add_argument("--corpus", action="append", required=True,
-                    help="a corpus directory (repeatable); its corpus_meta.json supplies the licences")
+                    help="a corpus directory, optionally PATH:MANIFEST (repeatable); its "
+                         "corpus_meta.json supplies the licences")
     ap.add_argument("--manifest", default="curated/kept.jsonl",
                     help="manifest inside each corpus, e.g. train.jsonl")
     ap.add_argument("--out", required=True, help="output directory for the combined corpus")
@@ -51,9 +52,18 @@ def main() -> int:
     kept_by_teacher: Dict[str, int] = {}
     seconds_by_teacher: Dict[str, float] = {}
 
-    for corpus in args.corpus:
-        root = Path(corpus)
-        manifest = root / args.manifest
+    for entry in args.corpus:
+        # `PATH:MANIFEST` lets corpora with different layouts join one mixture -- the generated ones
+        # write train.jsonl/val.jsonl while an ingested corpus writes curated/kept.jsonl.  The split is
+        # decided by *checking the filesystem* rather than by pattern-matching colons: on Windows a
+        # plain path is already `C:\...`, so looking for a colon splits the drive letter off.
+        left, separator, right = entry.rpartition(":")
+        if separator and right.strip() and Path(left).is_dir():
+            root_text, manifest_name = left, right
+        else:
+            root_text, manifest_name = entry, args.manifest
+        root = Path(root_text)
+        manifest = root / manifest_name
         if not manifest.exists():
             print(f"  !! {manifest} missing; skipping {root}")
             continue

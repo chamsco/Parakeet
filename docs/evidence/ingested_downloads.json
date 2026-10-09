@@ -1,0 +1,85 @@
+{
+  "mix": {
+    "speechify": 1.0
+  },
+  "teachers": {
+    "speechify": {
+      "name": "speechify",
+      "kind": "http_api",
+      "code_license": "proprietary service (HTTP API)",
+      "weights_license": "proprietary hosted service.  Used under permission the operator obtained in writing from the provider, stated to cover demonstration/quantization purposes for this task",
+      "allows_training": true,
+      "sample_rate": 48000,
+      "supports_tags": [],
+      "notes": "Speechify speech API (`simba-3.2`), 48 kHz WAV, and -- uniquely among the teachers wired up here -- it returns **speech marks**: per-word character offsets with millisecond timings.  That is the alignment this project has otherwise never had: every duration target so far came from the unaligned fallback, which rounds 19 and 22 measured to be a real quality limit.  LICENCE DISTINCTION, recorded rather than smoothed over: the operator's written permission is stated for *demonstration/quantization*; publishing derivative weights trained on this audio is a broader use than that wording establishes, so the model card lists it explicitly and docs/LEGAL.md should be revisited before any release.  Measured DNSMOS on one sample: 3.19 (P.835 overall) against Kokoro's 2.86 corpus mean.",
+      "restricted": false,
+      "model_id": "simba-3.2"
+    }
+  },
+  "n_utterances": 38,
+  "ingested": [
+    {
+      "file": "belinda_2026-10-09T20-58-13.wav",
+      "voice": "belinda",
+      "seconds": 42.1,
+      "asr_words": 97,
+      "segments": 7
+    },
+    {
+      "file": "benjamin_2026-10-09T20-58-35.wav",
+      "voice": "benjamin",
+      "seconds": 39.1,
+      "asr_words": 97,
+      "segments": 7
+    },
+    {
+      "file": "byronagent_2026-10-09T20-59-02.wav",
+      "voice": "byronagent",
+      "seconds": 42.9,
+      "asr_words": 97,
+      "segments": 7
+    },
+    {
+      "file": "elijah_2026-10-09T20-59-14.wav",
+      "voice": "elijah",
+      "seconds": 42.5,
+      "asr_words": 97,
+      "segments": 7
+    },
+    {
+      "file": "rob_2026-10-09T20-59-30.wav",
+      "voice": "rob",
+      "seconds": 41.9,
+      "asr_words": 97,
+      "segments": 7
+    },
+    {
+      "file": "alec_2026-10-09T20-58-28.wav",
+      "voice": "alec",
+      "seconds": 48.0,
+      "asr_words": 97,
+      "segments": 8
+    },
+    {
+      "file": "archie_2026-10-09T20-58-01.wav",
+      "voice": "archie",
+      "seconds": 41.2,
+      "asr_words": 97,
+      "segments": 7
+    },
+    {
+      "file": "beatrice_32_2026-10-09T20-57-43.wav",
+      "voice": "beatrice",
+      "seconds": 39.4,
+      "asr_words": 97,
+      "segments": 7
+    }
+  ],
+  "curation": {
+    "kept": 38,
+    "reasons": {
+      "narrowband": 19
+    }
+  },
+  "text_provenance": "text recovered by ASR from the audio (the recordings arrived without transcripts), so the pairs carry the recogniser's errors -- recorded because a teacher's own transcript would be ground truth and this is a measurement"
+}
