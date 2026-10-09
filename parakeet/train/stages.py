@@ -62,15 +62,23 @@ def autoencoder_step(
     spectral_weight: float = 3.0,
     adversarially: bool = True,
     decoder_only: bool = False,
+    latent: Optional[torch.Tensor] = None,
 ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor], torch.Tensor]:
-    """One generator step of the autoencoder / decoder-only distillation stage."""
+    """One generator step of the autoencoder / decoder-only distillation stage.
+
+    ``latent`` lets the caller supply a **pre-computed** latent -- from the shard cache, or built
+    from cached teacher signals (durations/F0/energy/latent features).  That is what the real
+    ``distill-decoder`` stage does: the teacher signals are frozen tensors, so there is no reason
+    to re-encode audio every step, and the decoder then trains on exactly the latent
+    distribution the text side will produce at synthesis time.
+    """
     ae = model.autoencoder
-    mel = losses["mel_module"].log_mel(wav)
-    latent = ae.encode(mel)
-    length = wav.shape[-1]
-    if decoder_only:
-        latent = latent.detach()
-    recon = ae.decode(latent, length=length)
+    if latent is None:
+        mel = losses["mel_module"].log_mel(wav)
+        latent = ae.encode(mel)
+        if decoder_only:
+            latent = latent.detach()
+    recon = ae.decode(latent, length=wav.shape[-1])
 
     l_mel = losses["mel"](recon, wav)
     l_spec, spec_parts = losses["spectral"](recon, wav)
@@ -248,17 +256,28 @@ def run_stage(
     out_dir = Path(out_dir or cfg.train.out_dir)
     steps = max_steps or cfg.train.max_steps
 
+    # Reset trainability for THIS stage.  A previous stage in the same process may have frozen
+    # modules (``distill-text`` freezes the whole autoencoder, ``flow`` freezes the encoders), and
+    # inheriting that silently means a stage does not train what it claims to train -- e.g.
+    # ``distill-decoder`` would leave the decoder frozen after a ``distill-text`` run.
+    for p in model.parameters():
+        p.requires_grad = True
     if stage == "distill-decoder":
-        for p in model.autoencoder.encoder.parameters():
-            p.requires_grad = False
-        for p in model.autoencoder.stem.parameters():
-            p.requires_grad = False
-        for p in model.autoencoder.to_latent.parameters():
-            p.requires_grad = False
-
-    if stage == "distill-text":
+        for module in (model.autoencoder.stem, model.autoencoder.encoder, model.autoencoder.to_latent):
+            for p in module.parameters():
+                p.requires_grad = False
+    elif stage == "distill-text":
         for p in model.autoencoder.parameters():
             p.requires_grad = False
+    elif stage in {"flow", "reflow"}:
+        # the autoencoder is a frozen representation for the generative half
+        for p in model.autoencoder.parameters():
+            p.requires_grad = False
+        if stage == "reflow":
+            # sampler distillation only adapts the vector field; everything else must hold still
+            for name, p in model.named_parameters():
+                if not name.startswith("vf."):
+                    p.requires_grad = False
 
     opt = build_optimizer(model, cfg.train.lr, cfg.train.weight_decay)
     sched = cosine_warmup_scheduler(opt, cfg.train.warmup_steps, steps)
@@ -298,6 +317,7 @@ def run_stage(
                 spectral_weight=spectral_weight,
                 adversarially=True,
                 decoder_only=(stage == "distill-decoder"),
+                latent=batch.get("latent"),
             )
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.train.grad_clip)

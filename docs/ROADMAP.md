@@ -12,19 +12,24 @@ the engineering.
 * [x] Losses: log-mel, multi-resolution STFT, MPD+MSD adversarial, phase-linearity, distillation
 * [x] Teacher backends with a licence gate; corpus builder; latent shard cache
 * [x] Streaming synthesizer, phase-lock filter (two lock references), int8 quantisation
-* [x] 79 tests + a CPU smoke test that trains **every** stage and synthesises audio
+* [x] 105 tests + a CPU smoke test that trains **every** stage and synthesises audio
+* [x] **Learning demo** (`scripts/learn_demo.py`): provably learns end to end on synthetic speech —
+      AE reconstruction 36 % better, text side 91 % better, text→audio 26 % better than an
+      untrained text side, duration MAE 3 ms, generated log-mel cosine 0.954 vs target
 * [x] Measured: Tiny RTF **0.044 on one CPU thread (22.6× real time)**, int8 12.0 MB
+* [x] Reference-free curation filters implemented and tested (`parakeet/data/curate.py`)
 
 ## P1 — Real representation (next; no teacher needed)
 
-* [ ] Curate 100–300 h of *real* speech through the PilotTTS-style pipeline
-      ([03-DATA.md](03-DATA.md)) and freeze the manifest.
+* [x] Curation pipeline code (gates, WER agreement, punctuation gaps, ratio tails, keep-rejects)
+* [ ] Run it over 100–300 h of *real* speech and freeze the manifest
+      ([03-DATA.md](03-DATA.md)); inject DNSMOS and a real ASR ensemble
 * [ ] Train the autoencoder (with the speaker encoder) on it; publish the mel-reconstruction
-      baseline and the latent statistics.
+      baseline and the latent statistics
 * [ ] Gate: `phase_coherence` of decoded real speech within noise floor of the source; latent
-      mean/var stable; no dead latent dimensions.
+      mean/var stable; no dead latent dimensions
 * [ ] **Exit criterion:** AE can reconstruct unseen real speech at a quality where a second
-      listener cannot identify the reconstruction in an ABX test — this caps everything downstream.
+      listener cannot identify the reconstruction in an ABX test — this caps everything downstream
 
 ## P2 — Tiny, fully distilled (first real checkpoint)
 

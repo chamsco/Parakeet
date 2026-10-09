@@ -28,6 +28,26 @@ Stage 4:  L = MSE(v̂, v) + λ_len·MSE(log len) + λ_style·(1 − cos(style_a,
 Stage 5:  L = MSE(v̂_student, x₁_teacher − x₀)   with x₁_teacher from the EMA model at high NFE
 ```
 
+### Target scaling is a correctness issue, not a detail
+
+The stage-2 targets are all O(1) by construction: durations in log space, **F0 normalised log-Hz in
+`[0, 1]`**, **energy normalised dBFS in `[0, 1]`**, per-token latent in normalised latent space.
+This is not cosmetic.  With raw F0 bin indices (0–256) and raw dBFS the "distillation" loss was
+**141**, of which the pitch term alone was ~110 and energy ~30 — a single-term loss wearing a
+four-term objective as a disguise, with the duration and latent heads receiving almost no gradient.
+`tests/test_learning.py` caught it; after normalising, the initial loss is ~3 and it falls by more
+than half in 40 CPU steps.  (Paradee regresses `F0/100` for the same reason.)
+
+### Stage freezing is stage-local
+
+`run_stage` **resets** trainability at the start of every stage before applying that stage's freeze
+pattern.  Previously a `distill-text` run (which freezes the whole autoencoder) left the decoder
+frozen for a subsequent `distill-decoder` run in the same process, so the decoder stage silently
+trained nothing while still reporting a finite loss.  This is now regression-tested.  Per stage:
+`distill-text` freezes the autoencoder; `distill-decoder` freezes only the encoder (`stem`,
+`encoder`, `to_latent`) and trains the decoder plus the prosody projection; `flow` and `reflow`
+freeze the autoencoder, and `reflow` freezes everything except the vector field.
+
 ### The spectral-weight schedule is the single most important hyperparameter [paper]
 
 | spectral weight | decoder UTMOS | full-student UTMOS |
@@ -53,7 +73,7 @@ replacement for it.
 
 | | Stage 1 AE | Stage 2 text side | Stage 3 decoder | Stage 4 flow | Stage 5 reflow |
 |---|---|---|---|---|---|
-| Paradeet default | bs 16, lr 2e-4, AdamW β (0.8, 0.99), clip 1.0 | bs 16, 50 k steps | annealed, 25 k steps | bs 32, Ke 4, 200 k steps | bs 32, 20 k steps |
+| Parakeet default | bs 16, lr 2e-4, AdamW β (0.8, 0.99), clip 1.0 | bs 16, 50 k steps | annealed, 25 k steps | bs 32, Ke 4, 200 k steps | bs 32, 20 k steps |
 | Paradee [paper] | — | lr 5e-4, bs 32, **8 000 steps**, 500-step warmup + cosine, clip 1.0 | bs 16, lr 2e-4, clip 5, 1.6 s / 64-frame segments, **50 000 steps**, then +5 000 @mel-weight 10, +5 000 @3 | — | — |
 | SupertonicTTS [paper] | 11 167 h corpus | — | — | 700 k iters, bs 64, Ke 4, 4× RTX 4090; CFG 3; NFE 32 | — |
 | PilotTTS [paper] | — | — | — | 200 k steps on 60 k h subset for the ablation | — |
@@ -111,5 +131,7 @@ steps/second on the target GPU and replace this table (see [ROADMAP.md](ROADMAP.
 | Word skipping / repetition | alignment instability | `Ke` expansion, CFG dropout, lower lr; inspect length-predictor error |
 | Muffled output | decoder under-trained vs critic | feature-matching weight, discriminator lr, segment length |
 | Nothing converges past a point | bad latent scale | `LatentNormalizer` statistics; re-fit on the AE's own outputs |
+| One loss term dwarfs the others | unnormalised targets (raw dB, F0 in Hz, bin indices) | before/after probe as in `tests/test_learning.py`; normalise to O(1) |
+| A stage reports a loss but changes nothing | freezing leaked in from the previous stage | `run_stage` resets trainability per stage — regression-tested |
 | Student ignores the speaker | Q-Former collapse | cross-sample paired batches, style cosine loss, freeze CAM++ |
 | Loss fine, audio noise | teacher signal cache mismatch (F0/duration off-by-one) | compare `log_mel` reconstructed from the cache against the source wav |

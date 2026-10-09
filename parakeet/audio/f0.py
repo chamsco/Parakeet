@@ -9,6 +9,7 @@ for regression targets and for the phase-locking filter.
 
 from __future__ import annotations
 
+import math
 from typing import Tuple
 
 import torch
@@ -82,6 +83,63 @@ def estimate_f0(
     voiced = (best_val > threshold) & (f0 >= fmin) & (f0 <= fmax)
     f0 = torch.where(voiced, f0, torch.zeros_like(f0))
     return f0, voiced, best_val.clamp(0.0, 1.0)
+
+
+def f0_to_normalized(
+    f0_hz: torch.Tensor,
+    voiced: torch.Tensor | None = None,
+    fmin: float = 60.0,
+    fmax: float = 500.0,
+) -> torch.Tensor:
+    """Map F0 to a continuous, *O(1)* regression target in ``[0, 1]`` (0 == unvoiced).
+
+    This is the training target for the Tiny text side.  Regressing raw Hz (or worse, quantised
+    bin *indices* that run to 256) makes one loss term dominate every other by two orders of
+    magnitude -- Paradee regresses ``F0/100`` for the same reason.  Log-spacing matches pitch
+    perception, so an L1 error means roughly the same thing across the range.
+    """
+    f0 = f0_hz.to(torch.float32)
+    if voiced is not None:
+        f0 = torch.where(voiced.to(torch.bool), f0, torch.zeros_like(f0))
+    lo = math.log2(max(fmin, 1e-6))
+    hi = math.log2(max(fmax, fmin * 1.001))
+    scaled = (torch.log2(f0.clamp_min(1e-6)) - lo) / max(hi - lo, 1e-6)
+    return torch.where(f0 > 0, scaled.clamp(0.0, 1.0), torch.zeros_like(scaled))
+
+
+def normalized_to_f0(
+    value: torch.Tensor,
+    fmin: float = 60.0,
+    fmax: float = 500.0,
+) -> torch.Tensor:
+    """Inverse of :func:`f0_to_normalized` (0 -> 0 Hz, i.e. unvoiced)."""
+    lo = math.log2(max(fmin, 1e-6))
+    hi = math.log2(max(fmax, fmin * 1.001))
+    v = value.to(torch.float32).clamp(0.0, 1.0)
+    f0 = torch.pow(2.0, lo + v * (hi - lo))
+    return torch.where(value > 0, f0, torch.zeros_like(f0))
+
+
+def energy_to_normalized(
+    energy_db: torch.Tensor, floor_db: float = -60.0, ceil_db: float = 0.0
+) -> torch.Tensor:
+    """Map frame/token energy in dBFS to an *O(1)* target in ``[0, 1]``.
+
+    Same reasoning as :func:`f0_to_normalized`: regressing raw dB puts a term of magnitude ~20-40
+    into an objective whose other terms are ~1, so the loss becomes a single-term loss in disguise
+    and the other heads stop receiving useful gradient.  (This is the failure the learning tests
+    caught: with raw targets the "distillation" loss was 141, of which pitch alone was ~110.)
+    """
+    e = energy_db.to(torch.float32)
+    return ((e - floor_db) / max(ceil_db - floor_db, 1e-6)).clamp(0.0, 1.0)
+
+
+def normalized_to_energy(
+    value: torch.Tensor, floor_db: float = -60.0, ceil_db: float = 0.0
+) -> torch.Tensor:
+    """Inverse of :func:`energy_to_normalized`, in dBFS."""
+    v = value.to(torch.float32).clamp(0.0, 1.0)
+    return floor_db + v * (ceil_db - floor_db)
 
 
 def f0_to_bins(

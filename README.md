@@ -9,8 +9,10 @@ A third, fully permissive teacher — **Kokoro-82M** (Apache-2.0) — is the saf
 whole recipe reproducible without licence risk.
 
 > **Status:** working research framework, CPU-verifiable end to end. No trained checkpoint yet —
-> the numbers below are *architecture*, not quality claims. `scripts/smoke_test.py` trains every
-> stage for a couple of steps and synthesises audio on CPU so the pipeline is provably functional.
+> the numbers below are *architecture*, not quality claims. Two artefacts carry the verification:
+> `scripts/smoke_test.py` trains every stage and synthesises audio (the pipeline **runs**), and
+> `scripts/learn_demo.py` shows the stages actually **learn and compose** on structured synthetic
+> speech, with before/after metrics and pass/fail criteria.
 
 ---
 
@@ -53,7 +55,7 @@ Two variants share every block:
 | voices | 1 (learned constant style; Paradee replaces the style input) | zero-shot cloning (CAM++ + Q-Former) |
 | inference | no sampler — the text side predicts duration/F0/energy/latent features directly | flow matching, NFE 2 with Reflow distillation |
 | int8 (weight-only + fp16 scales) | 12.0 MB | 56.3 MB |
-| measured RTF, 1 CPU thread, fp32 | **0.044 → 22.6× real time** | 1.92 on a *randomly initialised* 0.04 s output (overhead-dominated; not a valid number until trained) |
+| measured RTF, 1 CPU thread, fp32 | **0.044–0.052 → 19–23× real time** across runs | 1.92 on a *randomly initialised* 0.04 s output (overhead-dominated; not a valid number until trained) |
 | intended use | laptop / on-device | GPU server or a fast CPU with a few steps |
 
 ## Quickstart (CPU, no data, no GPU)
@@ -61,13 +63,18 @@ Two variants share every block:
 ```bash
 python -m venv .venv && .venv/Scripts/pip install -e ".[dev]"     # Windows
 python scripts/smoke_test.py --steps 2          # trains every stage, synthesises, quantises
-python -m pytest -q                            # 79 tests
+python scripts/learn_demo.py --quick            # proves the stages learn (before/after metrics)
+python -m pytest -q                            # 105 tests
 python scripts/bench_rtf.py --config configs/parakeet_tiny.yaml --steps 2
 ```
 
 `scripts/smoke_test.py` is the proof-of-life: it exercises all five training stages, the
 streaming decoder (which it checks is *numerically identical* to offline decoding), the
-phase-lock filter, int8 quantisation, and RTF. See [docs/05-VERIFICATION.md](docs/05-VERIFICATION.md).
+phase-lock filter, int8 quantisation, and RTF.  `scripts/learn_demo.py` goes further and measures
+whether the autoencoder reconstructs better, whether the distilled text side fits its cached
+teacher signals, and whether text→audio beats an untrained text side — on synthetic utterances with
+exact token boundaries, so no corpus or GPU is needed.  See
+[docs/05-VERIFICATION.md](docs/05-VERIFICATION.md).
 
 ## Documentation
 
@@ -86,15 +93,17 @@ phase-lock filter, int8 quantisation, and RTF. See [docs/05-VERIFICATION.md](doc
 
 ```
 parakeet/
-  audio/      mel filterbank, autocorrelation F0, streaming/offline OLA iSTFT (pure torch)
+  audio/      mel filterbank, autocorrelation F0 + target scaling, streaming/offline OLA iSTFT
   models/     blocks, speech autoencoder, text/duration/speaker encoders, flow-matching VF, assemblies
   train/      losses (MRSTFT, MPD/MSD, phase, distillation) + the five staged training loops
-  data/       text normalisation/tags, teacher backends + licence gate, feature cache, datasets
+  data/       text/tags, teacher backends + licence gate, curation filters, feature cache,
+              datasets, structured synthetic fixtures for CPU experiments
   inference/  streaming synthesizer, phase-lock filter, int8 quantisation
-  eval/       RTF, MCD, spectral convergence, phase coherence, optional UTMOS/WER/SECS
+  eval/       RTF, MCD, spectral convergence, phase coherence, optional UTMOS/WER/SECS, learning probes
 configs/      parakeet_tiny.yaml (9.6M) | parakeet_small.yaml (45M) | parakeet_small_44k.yaml
-scripts/      smoke_test.py | train.py | make_teacher_corpus.py | bench_rtf.py
-tests/        79 tests: config, audio DSP, models, losses, all five stages, inference, data
+scripts/      smoke_test.py | learn_demo.py | train.py | make_teacher_corpus.py | bench_rtf.py
+tests/        105 tests: config, audio DSP, models, losses, all five stages, inference,
+              data/corpus paths, curation filters, and learning regressions
 ```
 
 ## Honest limitations

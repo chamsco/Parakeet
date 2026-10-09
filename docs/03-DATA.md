@@ -13,21 +13,38 @@ Two things happen in the data layer, and they are separable:
 
 ## 1. Real-audio curation (PilotTTS-style)
 
+**Implemented and tested** in [`parakeet/data/curate.py`](../parakeet/data/curate.py) — run it over a
+manifest with `curate_manifest(records, load_wav, out_dir, asr_fn=..., mos_fn=...)`.  Every
+threshold below is tagged in `CurateConfig` as `[published]` or `[proposed]`, and two honesty rules
+are enforced in code:
+
+* **A MOS is never faked.**  DNSMOS needs a model; if you do not inject one the report records
+  `mos_source="unavailable"` and MOS is simply not gated on.
+* **A rejected item is never deleted.**  Rejects go to `rejected.jsonl` with all their reasons
+  (all reasons, not just the first), so filters can be re-tuned and audited without re-decoding.
+
 | # | Stage | Tool | Threshold / rule | Source |
 |---|---|---|---|---|
-| 1 | Decode + loudness normalise | ffmpeg/soundfile | single channel, 24 kHz target | [proposed] |
-| 2 | Voice activity + speaker change | pyannote | drop segments without speech | [published] |
-| 3 | Quality (MOS/SNR) | DNSMOS + SenseVoiceSmall | deficient if **MOS ≤ 3.5** or non-speech or insufficient SNR | [published] PilotTTS; CosyVoice uses **SNR cutoff** style gates |
-| 4 | Enhancement for low-quality | resemble-enhance | only for items failing 3 but not 2 | [published] |
-| 5 | Duration filter | — | 3–30 s; segment **< 30 s** | [published] CosyVoice 3 |
-| 6 | Loudness | — | peak-normalise to `raw/max(raw)*0.6` | [published] CosyVoice 3 |
-| 7 | ASR cross-validation | Paraformer + FireRedASR + Whisper | keep if **average pairwise WER < 15 %** | [published] CosyVoice 3 |
-| 8 | Punctuation via forced alignment | MFA / Qwen3-Force-Alignment | add comma if gap **≥ 300 ms**, remove if **≤ 50 ms** | [published] CosyVoice 3 |
-| 9 | Text/speech length-ratio tails | — | drop smallest **1 %** and largest **5 %** | [published] CosyVoice 3 |
-| 10 | Overlap/truncation/synthetic-speech detectors | pyannote OSD + classifiers | drop on positive | [published] PilotTTS |
-| 11 | Spectral rolloff check | librosa-style | drop content-less bands | [published] PilotTTS |
-| 12 | Speaker tagging + dedup | 3D-Speaker, MinHash text dedup | cluster identity; dedup near-identical text | [published] PilotTTS |
-| 13 | **Keep rejects with tags** | — | never delete: rejected items stay in the manifest with failure reasons, so filters can be re-tuned without re-crawling | [published] PilotTTS |
+| 1 | Decode + loudness normalise | ffmpeg/soundfile | single channel, 24 kHz target; peak `raw/max(raw)*0.6` | `[published]` CosyVoice 3 |
+| 2 | Voice activity + speaker change | pyannote | drop segments without speech | `[published]` |
+| 3 | Quality (MOS/SNR) | DNSMOS + SenseVoiceSmall **injected** | deficient if **MOS ≤ 3.5**; SNR estimate ≥ **15 dB** (proposed) | `[published]` MOS, `[proposed]` SNR |
+| 4 | Enhancement for low-quality | resemble-enhance | only for items failing 3 but not 2 | `[published]` |
+| 5 | Duration filter | built in | 3–30 s | `[published]` CosyVoice 3 |
+| 6 | Clipping / silence / bandwidth | built in | clipping ≤ 1 %, silence ≤ 50 %, 99 % bandwidth ≥ 5 kHz | `[proposed]` |
+| 7 | ASR cross-validation | Paraformer + FireRedASR + Whisper | keep if **average pairwise WER < 15 %** | `[published]` CosyVoice 3 |
+| 8 | Punctuation via forced alignment | MFA / Qwen3-Force-Alignment | add comma if gap **≥ 300 ms**, remove if **≤ 50 ms** | `[published]` CosyVoice 3 |
+| 9 | Text/speech length-ratio tails | built in | drop smallest **1 %** and largest **5 %** | `[published]` CosyVoice 3 |
+| 10 | Overlap/truncation/synthetic-speech detectors | pyannote OSD + classifiers | drop on positive | `[published]` PilotTTS |
+| 11 | Spectral rolloff check | built in (`spectral_stats`) | drop content-less bands | `[published]` PilotTTS |
+| 12 | Speaker tagging + dedup | 3D-Speaker, MinHash text dedup | cluster identity; dedup near-identical text | `[published]` PilotTTS |
+| 13 | **Keep rejects with tags** | built in | never delete | `[published]` PilotTTS |
+
+**A caveat we discovered while implementing it:** the percentile SNR estimate is *not measurable*
+on continuous speech with no pauses — the 10th and 90th percentiles of frame energy coincide, so
+the ratio is meaningless.  `estimate_snr_db` therefore returns `None` and the gate is skipped
+(`notes: snr_unevaluable(no_noise_floor_observed)`) rather than gating on a bogus 0 dB and
+rejecting perfectly good continuous speech.  If you need a real SNR gate, replace it with a proper
+VAD + noise-tracking estimator.
 
 The AND of all gates over PilotTTS's ~200 k-hour pool retained ~200 k h in their setup. Aim far
 lower for Parakeet: 100–1 000 h is plenty for the autoencoder, and SupertonicTTS showed 945 h is
@@ -56,9 +73,14 @@ prompts.txt ─► mixture scheduler ─► {Orpheus, Kokoro[, MiniMax]} ─► 
   `extract_signals` has an energy-envelope fallback which is **explicitly a fallback** — training
   on it long-term will produce wrong rhythm and it is marked as such in the code.
 * **Cached signals** (`LatentShardWriter`, shards of 500 like Paradee): per-utterance
-  `ids, n_frames, latent, log_mel, durations, f0(bins), energy(dB), latent_token`. The
-  `latent_token` is the mean latent over each token's span — Paradee's "phoneme feature", and the
-  target that beat end-to-end distillation (UTMOS 4.39 vs 3.78).
+  `ids, n_frames, latent, log_mel, durations, f0, energy, latent_token`.  **Target conventions**
+  (enforced by `extract_signals` / `token_targets_from_corpus`): durations in log space, F0 as
+  normalised log-Hz in `[0, 1]`, energy as normalised dBFS in `[0, 1]`, and the per-token
+  `latent_token` = mean normalised frame latent over each token's span (Paradee's "phoneme
+  feature", and the target that beat end-to-end distillation 4.39 vs 3.78 UTMOS).
+  The prosody targets are deliberately O(1): `tests/test_learning.py` caught that regressing raw
+  dB or quantised F0 bin indices made a single term dominate the objective by ~100×, which starves
+  the other heads of gradient.
 
 Why two-stage (synthesise, then cache)? Re-rendering is the expensive part; caching makes stage 2
 and 3 training pure tensor regression and lets you iterate on the student without ever re-running

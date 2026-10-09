@@ -72,9 +72,13 @@ class MelSpectrogram(nn.Module):
         return self.cfg.n_mels
 
     def stft(self, wav: torch.Tensor) -> torch.Tensor:
-        """``(B, N) -> (B, F, T)`` complex spectrogram."""
+        """``(B, N) -> (B, F, T)`` complex spectrogram.  A ``(B, 1, N)`` input is accepted too."""
         if wav.dim() == 1:
             wav = wav.unsqueeze(0)
+        elif wav.dim() == 3 and wav.shape[1] == 1:
+            wav = wav[:, 0, :]
+        if wav.dim() != 2:
+            raise ValueError(f"expected waveform of shape (B, N), got {tuple(wav.shape)}")
         return torch.stft(
             wav,
             n_fft=self.cfg.n_fft,

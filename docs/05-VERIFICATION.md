@@ -7,14 +7,15 @@ Reproduce with:
 
 ```bash
 python scripts/smoke_test.py --steps 2 --out runs/smoke     # trains every stage, synthesises
-python -m pytest -q                                         # 79 tests
+python scripts/learn_demo.py                                # proves the stages learn (~10 min CPU)
+python -m pytest -q                                         # 105 tests
 python scripts/bench_rtf.py --config configs/parakeet_tiny.yaml
 ```
 
 ## 1. Test suite
 
 ```
-79 passed
+105 passed
 ```
 
 Coverage by area:
@@ -28,8 +29,45 @@ Coverage by area:
 | `test_train_stages.py` | **all five stages** run, produce finite losses and checkpoints; `distill-decoder` freezes the encoder; `distill-text` freezes the autoencoder; 20 steps of `distill-text` measurably **reduce** loss |
 | `test_inference.py` | Tiny and Small synthesize finite audio; phase lock preserves loudness (<5 %) and spectral envelope (cosine >0.99); phase lock **increases** coherence on a randomised-phase voiced signal; **streaming decoder == offline decoder to <1e-4**; int8 shrinks the model; 4-bit without per-channel is refused; wav round-trip |
 | `test_data_and_text.py` | tag-aware normalisation (numbers→words, tags preserved), tokeniser round-trip, vocab fits embedding capacity; MiniMax is **refused by default**; corpus builder writes a manifest and interleaves both teachers; latent shard cache end-to-end + collate; synthetic batch source key sets |
+| `test_curate.py` | every curation gate fires on a constructed failure (too short/long, clipped, silent, low SNR, narrowband, low MOS, ASR disagreement); **all** reasons reported, not just the first; SNR correctly reported as *unevaluable* without a noise floor; WER and punctuation-gap maths; reject records are never dropped |
+| `test_learning.py` | synthetic fixture is structurally exact (frame counts, peak, F0 declination); latent normaliser fits and inverts; token targets are exact and normalised; decoder-latent alignment; supplied-latent path leaves the encoder gradient-free; **stage freezing does not leak between stages**; and the headline: 40 CPU steps measurably improve both the representation and the distilled text side |
 
-## 2. Smoke test output (measured)
+## 2. Learning demo (measured)
+
+`scripts/learn_demo.py` trains the real Tiny architecture (9.616 M) on 16 structured synthetic
+utterances (**15.0 s** of audio, two duration layouts, 8 character tokens each) for 250 autoencoder
+steps, 400 text-side steps and 120 decoder steps — **569 s on CPU**, no GPU, no data, no network.
+
+| Measurement | Before | After | Criteria | Result |
+|---|---|---|---|---|
+| autoencoder reconstruction (log-mel L1, independent of the training loss) | 2.5980 | **1.6637** | < 0.90 × | **PASS** (36.0 % better) |
+| Tiny text side on cached teacher signals | 5.1649 | **0.4673** | < 0.50 × | **PASS** (91.0 % better) |
+| end-to-end text → audio (log-mel L1 vs target) | 2.1526 | **1.5890** | < 0.90 × | **PASS** (26.2 % better) |
+| per-token duration MAE | — | **0.30 frames (3 ms)** | ≤ 2.0 frames | **PASS** |
+
+The end-to-end baseline uses the *same trained rendering stack* with an untrained text side, so the
+26 % improvement isolates the distilled halves rather than the autoencoder.
+
+Audio-level sanity checks on the synthesised sample (not part of the pass criteria, but the numbers
+that make the above believable):
+
+| | duration | RMS | peak | log-mel cosine vs target |
+|---|---|---|---|---|
+| target | 0.853 s | 0.0850 | 0.300 | 1.000 |
+| **generated** | 0.821 s (ratio **0.963**) | 0.0435 | 0.399 | **0.954** |
+| generated + phase lock | 0.821 s | 0.0435 | 0.400 | — |
+| untrained text-side baseline | **0.064 s** | 0.0817 | 0.445 | — |
+
+Two things worth reading from this table: the generated audio has a **0.954 spectral cosine** with
+the target and a duration within 4 %, while the untrained baseline collapses to 0.064 s of nonsense
+— i.e. the duration and content behaviour is genuinely learned, not an artefact of the decoder.  The
+phase lock leaves RMS and peak untouched (as designed: it is a phase-only, magnitude-preserving
+filter) and raises 2–8 kHz phase coherence from 0.136 to 0.178.
+
+Listen to `runs/learn_demo/{target,generated,generated_phase_locked,baseline_untrained_text}.wav`.
+Full numbers: `runs/learn_demo/report.json`.
+
+## 3. Smoke test output (measured)
 
 ```
 parakeet-tiny [tiny] sr=24000 mel=80@93.8Hz latent=24 compress=1/6 voice=constant
@@ -68,16 +106,19 @@ SMOKE TEST PASSED
 
 **Do mean:** the architecture is the size we claim, every training objective is numerically
 well-behaved and differentiable, the streaming path is exact, int8 saves ~3×, and the Tiny
-architecture generates 0.565 s of audio in 25 ms of single-thread CPU time **in fp32** — 22.6× real
-time, which is Paradee's reported ballpark (25.0× for a trained 8.07 M model, 17.8× via ONNX).
-Loss weights of 3.0 and 45.0 in the log are the spectral anneal working as designed.
+architecture generates 0.565 s of audio in 25–30 ms of single-thread CPU time **in fp32** —
+0.044–0.052 RTF, i.e. **19–23× real time** across runs on a busy desktop CPU, which is Paradee's
+reported ballpark (25.0× for a trained 8.07 M model, 17.8× via ONNX). Loss weights of 3.0 and 45.0
+in the log are the spectral anneal working as designed.
 
 **Do not mean:** any quality claim. The models are **randomly initialised**; the loss values are
 one-step values on random data and will be different (and meaningful) once trained. Small's RTF
 number is not reported above because its output was 0.04 s long and therefore dominated by fixed
-overhead — it is not a valid throughput measurement until the model predicts sane durations.
+overhead — it is not a valid throughput measurement until the model predicts sane durations.  The
+learning demo (§2) trains properly but on 15 seconds of *synthetic* audio, so it demonstrates that
+the machinery learns, not that the model is good.
 
-## 3. Deliberate engineering checks worth calling out
+## 4. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
@@ -95,8 +136,25 @@ overhead — it is not a valid throughput measurement until the model predicts s
   wrong and was replaced.
 * **Licence gating is tested, not just documented.** `test_minimax_is_refused_by_default` fails if
   someone removes the gate.
+* **A stage was silently training nothing (found by designing the learning test).** `run_stage`
+  applied each stage's freeze pattern *on top of* whatever the previous stage left frozen. Since
+  `distill-text` freezes the whole autoencoder, a following `distill-decoder` run — the stage whose
+  entire job is training the decoder — inherited a frozen decoder and reported a finite loss while
+  changing no weights. `run_stage` now resets trainability per stage, and
+  `test_stage_freezing_does_not_leak_between_stages` asserts the decoder weights actually change.
+* **A "four-term" loss was really a one-term loss (found by the learning test).** Regressing F0 as
+  quantised bin indices (0–256) and energy in raw dBFS made those two terms ~140 of the 141 total,
+  so the duration and latent heads got almost no gradient. Both prosody targets are now normalised
+  to `[0, 1]` (`f0_to_normalized`, `energy_to_normalized`), the loss starts at ~3 and falls by more
+  than half in 40 CPU steps. Paradee regresses `F0/100` for the same reason.
+* **SNR is reported as unevaluable when it is.** The percentile SNR estimate is meaningless on
+  continuous speech with no pauses; `estimate_snr_db` returns `None` and the gate is skipped rather
+  than rejecting good continuous speech on a bogus 0 dB reading.
+* **A `(B, 1, N)` waveform is accepted everywhere.** Two callers produced that shape in one round;
+  `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
+  else, rather than surfacing a cryptic `torch.stft` message.
 
-## 4. Environment notes
+## 5. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).

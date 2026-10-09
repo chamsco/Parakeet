@@ -130,6 +130,25 @@ class ParakeetTiny(nn.Module):
         latent = frames.transpose(1, 2)
         return latent, frame_mask
 
+    def decoder_latent_from_tokens(
+        self,
+        latent_tok: torch.Tensor,
+        durations: torch.Tensor,
+        f0: Optional[torch.Tensor] = None,
+        energy: Optional[torch.Tensor] = None,
+        max_frames: Optional[int] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Build the **decoder-input** latent from (predicted or teacher) token signals.
+
+        The text side predicts *normalised* per-token latents (that is what ``latent_norm`` is
+        for), while the autoencoder decoder was trained on raw encoder output -- so this is the
+        one place where the de-normalisation happens.  Both inference and the
+        ``distill-decoder`` stage go through here, which guarantees the decoder is trained on
+        exactly the distribution it will see at synthesis time.
+        """
+        latent, frame_mask = self.latent_from_tokens(latent_tok, durations, f0, energy, max_frames)
+        return self.latent_norm.denormalize(latent), frame_mask
+
     # ------------------------------------------------------------------ inference
     @torch.no_grad()
     def synthesize(
@@ -143,10 +162,9 @@ class ParakeetTiny(nn.Module):
         self.eval()
         side = self.text_side(ids, mask, voice)
         durations = (side["log_duration"].exp() * duration_scale).round().clamp_min(1).long()
-        latent, _ = self.latent_from_tokens(
+        latent, _ = self.decoder_latent_from_tokens(
             side["latent_token"], durations, side["f0"], side["energy"], max_frames
         )
-        latent = self.latent_norm.denormalize(latent)
         return self.autoencoder.decode(latent)
 
     def forward(self, ids: torch.Tensor, mask: Optional[torch.Tensor] = None, **kw) -> Dict[str, torch.Tensor]:

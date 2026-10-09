@@ -320,6 +320,12 @@ class TextSideDistillLoss(nn.Module):
     This is the Paradee trick that removes alignment learning entirely: because the targets
     are fixed tensors saved at corpus-build time, the small text side is a plain regression
     problem and needs no teacher at training time (the teacher is frozen and offline).
+
+    Target conventions matter here and are enforced by the pipeline: durations in log space,
+    **F0 as normalised log-Hz in [0, 1]**, **energy as normalised dBFS in [0, 1]**, and the
+    per-token latent feature in the autoencoder's (normalised) latent space.  Regressing raw dB or
+    quantised F0 bin *indices* makes one term dominate by two orders of magnitude -- caught by
+    ``tests/test_learning.py``, which is why both prosody targets are O(1).
     """
 
     def __init__(self, weights: Optional[DistillSignalWeights] = None) -> None:
