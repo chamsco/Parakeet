@@ -1,7 +1,7 @@
 {
-  "generated": "2026-10-09T21:33:10",
+  "generated": "2026-10-09T22:52:47",
   "git": {
-    "rev": "983f14a",
+    "rev": "710fc2d",
     "dirty": true
   },
   "note": "Committed snapshots of the reports the model card cites.  Refresh with `python scripts/model_card.py --refresh-evidence` after re-running the demos; the hashes make a stale bundle visible.",
@@ -110,6 +110,20 @@
       "source": "runs/real_diagnose/report.json",
       "evidence": "docs/evidence/real_diagnosis.json",
       "sha256": "46edb94cb590ab5431f13f6b227de912fda548dd3c303642061f7693b9873f21"
+    },
+    {
+      "claim": "mixture_holdout",
+      "status": "copied",
+      "source": "runs/eval_mixed_speechify/report.json",
+      "evidence": "docs/evidence/mixture_holdout.json",
+      "sha256": "1e61d79b1288a1608b3ca32ee6a67a8f932b2bbcb82af5fc28351ae608bde37f"
+    },
+    {
+      "claim": "alignment_value",
+      "status": "copied",
+      "source": "runs/alignment_value.json",
+      "evidence": "docs/evidence/alignment_value.json",
+      "sha256": "3c58906c1d8c8a67954377253a4cd7f925f0f93d38356d2a9c0396ab0d659019"
     },
     {
       "claim": "speechify_alignment",

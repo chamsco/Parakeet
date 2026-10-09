@@ -49,6 +49,30 @@ _NUM_WORDS = {
 }
 
 
+def is_prose_like(text: str) -> bool:
+    """Does this text look like a sentence rather than a heading, title or fragment?
+
+    Round 27: a WER **control** failed on a hold-out because the prompt list had picked up chapter
+    headings from the source books -- ``"A Caucus-Race and a Long Tale CHAPTER IV."`` is read as
+    "...chapter four", so the recogniser's normalised output can never match the reference and *every*
+    WER computed over that split is inflated.  Filtering here keeps the measurement about the audio.
+    """
+    words = [w for w in re.split(r"\s+", text.strip()) if w]
+    if len(words) < 5:
+        return False
+    if any(w.isupper() and len(w) > 1 and w != "I" for w in words):
+        return False
+    if words[0].upper() in {"CHAPTER", "PART", "BOOK", "ACT", "SCENE", "PREFACE", "CONTENTS"}:
+        return False
+    roman = {"I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"}
+    if words[-1].strip(".,;:!?").upper() in roman:
+        return False
+    if sum(1 for w in words if w[0].isupper()) / len(words) > 0.5:
+        # a title-like line capitalises most words; ordinary prose does not
+        return False
+    return True
+
+
 def normalize_text(text: str, keep_tags: bool = True) -> str:
     """Light, deterministic normalisation.  Deliberately conservative: heavier normalisation
     (dates, currencies, ordinals) belongs in the data pipeline where it can be validated.

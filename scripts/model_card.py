@@ -171,6 +171,22 @@ CLAIMS: List[Dict[str, Any]] = [
         "fmt": "reference WER {value:.2f} < autoencoder round-trip {other:.2f}",
     },
     {
+        "id": "mixture_holdout",
+        "statement": "the **two-teacher mixture** (1169 utts, 109.5 min, 74 % aligned) evaluated on unseen prompts for **both** teachers, with valid controls",
+        "report": ["runs/eval_mixed_speechify/report.json"],
+        "field": "checks",
+        "op": "all_true",
+        "fmt": "{passed}/{total} checks",
+    },
+    {
+        "id": "alignment_value",
+        "statement": "the teacher's alignment puts duration on **different tokens** than the fallback (median correlation 0.15) while matching the total length",
+        "report": ["runs/alignment_value.json"],
+        "field": "checks",
+        "op": "all_true",
+        "fmt": "{passed}/{total} checks",
+    },
+    {
         "id": "speechify_alignment",
         "statement": "the **first real alignment**: Speechify word timings reproduce the audio duration (median error 0.8 % over 964 utterances)",
         "report": ["runs/alignment_evidence.json"],

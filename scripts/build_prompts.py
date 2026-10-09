@@ -59,6 +59,27 @@ START_MARKER = "*** START OF THE PROJECT GUTENBERG"
 END_MARKER = "*** END OF THE PROJECT GUTENBERG"
 SENTENCE_RE = re.compile(r"(?<=[.!?])\s+")
 ALLOWED_RE = re.compile(r"^[A-Za-z][A-Za-z ,;:'\-()]*[.!?]$")
+#: headings and titles are read aloud differently from how they are written ("CHAPTER IV" is spoken
+#: "chapter four"), so a WER computed against the written form can never be low.  Round 27 had a
+#: recogniser *control* fail on a hold-out for exactly this reason, which inflated every WER over the
+#: split until the headings were filtered out of the prompt list.
+ROMAN_RE = re.compile(r"\b(I|II|III|IV|V|VI|VII|VIII|IX|X|XI|XII)\b\.?$")
+HEADING_HEADS = {"CHAPTER", "PART", "BOOK", "ACT", "SCENE", "PREFACE", "CONTENTS", "ADVENTURE"}
+
+
+def is_usable_prompt(line: str, min_words: int, max_words: int) -> bool:
+    words = line.split()
+    if not (min_words <= len(words) <= max_words):
+        return False
+    if any(w.isupper() and len(w) > 1 and w != "I" for w in words):
+        return False
+    if words[0].strip(".,;:!?").upper() in HEADING_HEADS:
+        return False
+    if ROMAN_RE.search(line):
+        return False
+    if sum(1 for w in words if w[:1].isupper()) / len(words) > 0.5:
+        return False
+    return True
 
 
 def strip_gutenberg(text: str) -> str:
@@ -84,6 +105,8 @@ def sentences(text: str, min_words: int, max_words: int) -> List[str]:
         if not (min_words <= len(words) <= max_words):
             continue
         if any(len(w) > 16 for w in words):  # proper nouns and archaisms synth poorly
+            continue
+        if not is_usable_prompt(line, min_words, max_words):
             continue
         out.append(line)
     return out

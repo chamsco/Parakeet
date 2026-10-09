@@ -1,0 +1,54 @@
+{
+  "corpus": "data/speechify_corpus/corpus",
+  "manifest": "train.jsonl",
+  "utterances": 16,
+  "correlation_aligned_vs_fallback": {
+    "median": 0.1483721360564232,
+    "min": -0.09394723922014236,
+    "max": 0.4071832299232483
+  },
+  "length_error_vs_audio": {
+    "aligned_median": 0.00830679787517892,
+    "fallback_median": 0.0006612304580088466
+  },
+  "examples": [
+    {
+      "utt_id": "speechify_0000346",
+      "tokens": 115,
+      "correlation": 0.27364519238471985,
+      "aligned_total": 774.0,
+      "fallback_total": 781.0,
+      "audio_frames": 780.8125
+    },
+    {
+      "utt_id": "speechify_0000347",
+      "tokens": 115,
+      "correlation": -0.09394723922014236,
+      "aligned_total": 847.0,
+      "fallback_total": 856.0,
+      "audio_frames": 855.9375000000001
+    },
+    {
+      "utt_id": "speechify_0000240",
+      "tokens": 45,
+      "correlation": 0.4071832299232483,
+      "aligned_total": 300.0,
+      "fallback_total": 297.0,
+      "audio_frames": 296.25
+    },
+    {
+      "utt_id": "speechify_0000241",
+      "tokens": 45,
+      "correlation": 0.3429597020149231,
+      "aligned_total": 323.0,
+      "fallback_total": 321.0,
+      "audio_frames": 320.8125
+    }
+  ],
+  "checks": {
+    "the_alignment_changes_the_per_token_structure": true,
+    "both_targets_cover_the_audio": true,
+    "the_two_agree_on_the_total_length": true
+  },
+  "note": "The fallback's total length is exact by construction -- it splits the frames the audio has -- so the informative measurement is the correlation: a low one means the teacher puts the duration on different tokens than an even/energy-weighted split does, which is what the duration head is supposed to learn.  A high correlation would mean the fallback already carries the same information and a training A/B would be hard to justify."
+}

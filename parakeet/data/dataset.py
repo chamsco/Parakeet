@@ -299,6 +299,7 @@ class WaveformCorpusSource:
         seed: int = 0,
         limit: Optional[int] = None,
         shuffle: bool = True,
+        sample_rate: Optional[int] = None,
     ) -> None:
         import soundfile as sf  # noqa: F401  (imported for its side effect on error messages)
 
@@ -315,6 +316,10 @@ class WaveformCorpusSource:
             raise ValueError(f"no records in {self.manifest}")
         self.batch_size = batch_size
         self.max_seconds = max_seconds
+        #: resample to this rate (the *student's*).  Without it a 48 kHz teacher is fed to a model whose
+        #: mel filterbank assumes 24 kHz: the audio is read at half speed and the autoencoder learns a
+        #: different voice.  `build_latent_cache` always resampled; this path did not.
+        self.sample_rate = sample_rate
         self.generator = torch.Generator().manual_seed(seed)
         self.shuffle = shuffle
         self.order: List[int] = []
@@ -329,6 +334,12 @@ class WaveformCorpusSource:
         record = self.records[index]
         wav, sample_rate = sf.read(str(self.corpus_dir / record["wav_path"]), dtype="float32")
         tensor = torch.from_numpy(wav).reshape(-1)
+        if self.sample_rate is not None and sample_rate != self.sample_rate:
+            target = int(tensor.numel() * self.sample_rate / sample_rate)
+            tensor = torch.nn.functional.interpolate(
+                tensor.reshape(1, 1, -1), size=target, mode="linear", align_corners=False
+            ).reshape(-1)
+            sample_rate = self.sample_rate
         if self.max_seconds is not None:
             tensor = tensor[: int(self.max_seconds * sample_rate)]
         return tensor

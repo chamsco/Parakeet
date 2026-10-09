@@ -64,6 +64,12 @@ def main() -> int:
     ap.add_argument("--config", default="configs/parakeet_tiny.yaml")
     ap.add_argument("--latent-rate", type=int, default=None, help="latents per text token (must match the checkpoint)")
     ap.add_argument("--limit", type=int, default=8)
+
+    ap.add_argument("--prose-only", action="store_true",
+
+                        help="drop heading/title records: their reference text cannot normalise to spoken "
+
+                             "words ('CHAPTER IV' is read as 'chapter four'), which inflates every WER")
     ap.add_argument("--whisper", default="base.en", help="faster-whisper model size")
     ap.add_argument("--out", default="runs/real_eval")
     args = ap.parse_args()
@@ -80,7 +86,20 @@ def main() -> int:
             manifest = corpus / "manifest.jsonl"
     records = [
         json.loads(l) for l in manifest.read_text(encoding="utf-8").splitlines() if l.strip()
-    ][: args.limit]
+    ]
+
+    if getattr(args, "prose_only", False):
+
+        from parakeet.data.text import is_prose_like
+
+
+        before = len(records)
+
+        records = [r for r in records if is_prose_like(r["text"])]
+
+        print(f"prose filter: {len(records)}/{before} records kept (headings removed)")
+
+    records = records[: args.limit]
     if not records:
         print(f"no records in {manifest}")
         return 2
@@ -133,8 +152,16 @@ def main() -> int:
         t0 = time.perf_counter()
         wav = synth.synthesize(record["text"], seed=0)
         synth_seconds += time.perf_counter() - t0
-        reference, _sr = sf.read(str(corpus / record["wav_path"]), dtype="float32")
+        reference, ref_rate = sf.read(str(corpus / record["wav_path"]), dtype="float32")
         ref_t = torch.from_numpy(reference).reshape(-1)
+        if ref_rate != cfg.audio.sample_rate:
+            # the control is the teacher's own audio, and a 48 kHz teacher is not 24 kHz.  Declaring
+            # the wrong rate to whisper_wer time-stretches the control by the ratio, which made a
+            # perfectly readable teacher score a WER of 0.925 and "fail its own control".
+            target = int(ref_t.numel() * cfg.audio.sample_rate / ref_rate)
+            ref_t = torch.nn.functional.interpolate(
+                ref_t.reshape(1, 1, -1), size=target, mode="linear", align_corners=False
+            ).reshape(-1)
         generated.append(wav.reshape(-1))
         references.append(ref_t)
         texts.append(record["text"])

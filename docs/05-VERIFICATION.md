@@ -12,14 +12,14 @@ python scripts/reflow_demo.py                               # validates NFE-2 sa
 python scripts/streaming_demo.py                            # blockwise streaming + TTFA (~7 min CPU)
 python scripts/export_onnx.py --pipeline                    # int8 ONNX + runtime benchmark
 python scripts/profile_pipeline.py                          # where does the time actually go
-python -m pytest -q                                         # 270 tests
+python -m pytest -q                                         # 272 tests
 python scripts/bench_rtf.py --config configs/parakeet_tiny.yaml
 ```
 
 ## 1. Test suite
 
 ```
-270 passed
+272 passed
 ```
 
 Coverage by area:
@@ -1356,7 +1356,71 @@ prompts*) was **re-checked under the fixed metric rather than assumed**, and it 
 number was measured with a 1.5× speed-up fed to the recogniser; the ones that were fine were fine by
 luck of the robustness range, which is a reason to fix the metric and re-run rather than to trust it.
 
-## 29. Smoke test output (measured)
+## 29. The two-teacher mixture, and what the alignment actually adds (measured)
+
+Round 26 wired in a second real teacher and verified its word timings against the audio. Round 27
+trains on the mixture and asks the second question: **does the alignment change what the duration head
+is taught?**
+
+### What the alignment adds
+
+`scripts/alignment_value.py` compares, on the same utterances, the teacher's aligned per-character
+frame counts against the energy-weighted fallback that `extract_signals` produces without an alignment:
+
+| | |
+|---|---|
+| median correlation between aligned and fallback per-token durations | **0.148** |
+| length error vs the audio, aligned | 0.83 % |
+| length error vs the audio, fallback | 0.07 % |
+
+The fallback's *total* is exact **by construction** — it splits the frames the audio actually has — so
+"which is closer in length" is not the question. The informative number is the correlation: **0.148**
+means the teacher puts duration on *different tokens* than a smooth split does, which is exactly the
+phonetic structure a duration head should learn. That justifies an A/B rather than assuming one.
+
+Two of my own measurement bugs had to be fixed to get there, and both were caught because round 26
+independently verified the alignment at 0.8 % while this script first reported 50 %, then 100 %:
+`token_frames` are computed at the **student's** 24 kHz, so comparing them against 48 kHz frames made
+the alignment look half-length; and `extract_signals` was being run on the 48 kHz waveform, so *its*
+fallback looked twice as long as the 24 kHz reference. The pipeline resamples before extracting
+anything, and the script now does too. Cross-checking against an independent measurement is what found
+both.
+
+## 30. The two-teacher mixture: what it changed, and what it did not (measured)
+
+The mixture trained for 1600 steps with **zero divergent steps**: 1169 utterances, 109.5 minutes, two
+teachers at 0.5/0.5 (Kokoro 304 + Speechify 865), 74 % of them carrying the teacher's own alignment, and
+a voice table spanning two genders and three locales.
+
+Getting a *valid* number out of it took three more fixes, each found by a control or a cross-check
+rather than by inspection:
+
+* **the recogniser control failed at 0.510** on the mixed hold-out, and the first suspect was wrong: the
+  prompt list had picked up **chapter headings** from the source novels ("A Caucus-Race and a Long Tale
+  CHAPTER IV." is spoken "…chapter four"), whose written form can never match a transcript. Hence
+  `is_prose_like()` plus a `--prose-only` evaluation flag, and a filter in `build_prompts.py` so future
+  corpora never contain them.
+* **the control still failed at 0.925 on Speechify** once headings were filtered: `real_eval.py`
+  declared the *config* rate (24 kHz) for a 48 kHz teacher's reference audio, so the control was
+  time-stretched 2×. Resampling the reference took the control to **0.086**.
+* **`WaveformCorpusSource` had the same mis-rating in the training path**: it fed raw 48 kHz teacher
+  audio to an autoencoder whose mel filterbank assumes 24 kHz. `build_latent_cache` always resampled;
+  that path did not. It now takes a `sample_rate`, and `ae_train.py` passes the student's.
+
+With valid controls, on unseen prompts (prose only, 24 utterances each):
+
+| hold-out | student WER | teacher WER (control) | student DNSMOS | mel cosine | speed |
+|---|---|---|---|---|---|
+| Kokoro, 50 unseen prompts | **1.000** | 0.096 | 1.567 | 0.9521 | 100× |
+| Speechify, 50 unseen prompts | **1.000** | 0.086 | 1.542 | 0.9203 | 76× |
+
+**A second real teacher, its own alignment, five times the audio and two genders do not move
+intelligibility on unseen text.** With rounds 24 and 25 this is a three-part negative result — corpus
+duration, text diversity, and teacher count/quality/alignment are each insufficient — which leaves the
+text side's inductive bias and capacity as the remaining suspects rather than the data. The capability
+to test the first of those (phoneme input) was verified in round 25.
+
+## 31. Smoke test output (measured)
 
 ```
 parakeet-tiny [tiny] sr=24000 mel=80@93.8Hz latent=24 compress=1/6 voice=constant
@@ -1407,7 +1471,7 @@ overhead — it is not a valid throughput measurement until the model predicts s
 learning demo (§2) trains properly but on 15 seconds of *synthetic* audio, so it demonstrates that
 the machinery learns, not that the model is good.
 
-## 30. Deliberate engineering checks worth calling out
+## 32. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
@@ -1443,7 +1507,7 @@ the machinery learns, not that the model is good.
   `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
   else, rather than surfacing a cryptic `torch.stft` message.
 
-## 31. Environment notes
+## 33. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).

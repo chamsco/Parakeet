@@ -141,6 +141,8 @@ def main() -> int:
     source = WaveformCorpusSource(
         manifest, batch_size=args.batch_size, corpus_dir=corpus, seed=cfg.train.seed,
         max_seconds=args.max_seconds,
+        # the student's rate: a 48 kHz teacher would otherwise be read at half speed
+        sample_rate=cfg.audio.sample_rate,
     )
     print(f"corpus {len(records)} utterances | {count_parameters(model)/1e6:.3f} M params | "
           f"{args.recon_steps} recon steps + {args.adv_steps} adversarial steps "
