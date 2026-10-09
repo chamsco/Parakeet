@@ -73,6 +73,41 @@ def test_decoder_stage_consumes_the_token_expanded_distribution(fast_cfg, tmp_pa
     assert "decoder_input" not in logs_off, "with the flag off the cached frame latent is used"
 
 
+def test_distill_audio_trains_the_text_side_through_the_decoder(fast_cfg, tmp_path):
+    """The whole point of the stage: audio-space gradients must reach the text side.
+
+    Round 22 measured that the latent-space L1 lets the text side fit its objective while rendering
+    unintelligible audio, so this stage decodes the predicted tokens and compares waveforms.  The
+    contract is precise: the text side and the prosody projection learn, and the autoencoder -- the
+    frozen renderer -- does not.
+    """
+    cfg = copy.deepcopy(fast_cfg)
+    cfg.train.max_steps = 3
+    cfg.train.log_every = 1
+    model = build_model(cfg)
+    source = SyntheticBatchSource(cfg, "distill-audio", batch_size=2, n_frames=16, n_tokens=6)
+    # `text_side` is a method, so the text side is probed through its heads
+    probes = {
+        "latent_head": [p.detach().clone() for p in model.latent_head.parameters()],
+        "prosody_proj": [p.detach().clone() for p in model.prosody_proj.parameters()],
+        "autoencoder": [p.detach().clone() for p in model.autoencoder.parameters()],
+    }
+    logs = run_stage("distill-audio", cfg, model=model, batches=source, max_steps=3,
+                     out_dir=str(tmp_path))
+    assert logs["loss"] == logs["loss"], "the loss must be finite"
+    assert logs["audio_mel"] == logs["audio_mel"], "the audio objective must be in the logs"
+    assert "aux" in logs, "the cached-signal auxiliary objective must be in the logs"
+
+    def moved(module) -> bool:
+        return any(
+            not torch.equal(a, b) for a, b in zip(probes[module], getattr(model, module).parameters())
+        )
+
+    assert moved("latent_head"), "the text side must receive gradient through the decoder"
+    assert moved("prosody_proj"), "prosody_proj runs inside the trained path and must learn"
+    assert not moved("autoencoder"), "the autoencoder is the frozen renderer"
+
+
 def test_reconstruction_only_phase_skips_the_discriminator(fast_cfg, tmp_path):
     """A reconstruction-only phase is 24x cheaper per step on this CPU (round 20), so it must be a
     first-class option: with the adversarial weight at zero the discriminator is never stepped and
@@ -147,6 +182,7 @@ def test_stage_registry_covers_every_stage():
         "autoencoder",
         "distill-decoder",
         "distill-text",
+        "distill-audio",
         "flow",
         "reflow",
     }

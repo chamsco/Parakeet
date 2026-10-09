@@ -80,19 +80,30 @@ def main() -> int:
         print(f"no records in {manifest}")
         return 2
 
-    cache_meta = Path(args.checkpoint).parent / "latent_cache" / "cache_meta.json"
-    voices = json.loads(cache_meta.read_text(encoding="utf-8"))["voice_names"] if cache_meta.exists() else [""]
     cfg = load_config(args.config)
     if getattr(args, "latent_rate", None):
         cfg.autoencoder.latent_rate = args.latent_rate
-    cfg.n_voices = max(1, len(voices))
-    model = build_model(cfg)
     payload = torch.load(args.checkpoint, map_location="cpu", weights_only=False)
     state = payload.get("ema", {}).get("shadow", payload["model"])
+    # the checkpoint knows its own widths; inferring them from a neighbouring cache directory failed
+    # for any run whose cache lived elsewhere (`size mismatch for voice_embed.weight`)
+    cached_meta = Path(args.checkpoint).parent / "latent_cache" / "cache_meta.json"
+    if cached_meta.exists():
+        cfg.n_voices = max(1, len(json.loads(cached_meta.read_text(encoding="utf-8"))["voice_names"]))
+    if "voice_embed.weight" in state:
+        cfg.n_voices = max(1, int(state["voice_embed.weight"].shape[0]))
+    for key, field, dim in (
+        ("latent_head.2.weight", "latent_rate", None),
+    ):
+        if key in state and dim is None:
+            width = int(state[key].shape[0])
+            cfg.autoencoder.latent_rate = max(1, width // int(cfg.autoencoder.latent_dim))
+    model = build_model(cfg)
     model.load_state_dict(state, strict=False)
     model.eval()
     print(f"loaded {args.checkpoint} (step {payload.get('step')}, "
-          f"{'EMA' if 'ema' in payload else 'raw'} weights) | n_voices={cfg.n_voices}")
+          f"{'EMA' if 'ema' in payload else 'raw'} weights) | n_voices={cfg.n_voices} "
+          f"| latent_rate={cfg.autoencoder.latent_rate}")
 
     import soundfile as sf
 

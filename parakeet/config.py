@@ -159,6 +159,17 @@ class LossConfig:
     #: same-speaker style sets together invites identity to leak into the style channel
     style_consistency_pair: float = 0.0
     phase_lock: float = 0.05
+    #: `distill-audio`: the mel weight of the **audio** comparison (text side trained through the
+    #: decoder, round 23).  A latent-space L1 let the text side fit its objective while rendering
+    #: unintelligible audio, so this stage optimises the rendered waveform instead.
+    audio_mel: float = 1.0
+    #: and its spectral weight.  Kept near the autoencoder's 3.0: small, because the balance between
+    #: the terms matters more than their size (Paradee).
+    audio_spectral: float = 3.0
+    #: weight of the auxiliary cached-signal objective.  An audio-only loss cannot pin the utterance
+    #: *length* -- rounding durations to frames is not differentiable -- so the durations/F0/energy/
+    #: latent terms stay in at a small weight.
+    audio_aux: float = 0.1
     speed_perturb: float = 0.0
 
 

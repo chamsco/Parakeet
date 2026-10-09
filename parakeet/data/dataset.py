@@ -404,6 +404,9 @@ class SyntheticBatchSource:
     def __call__(self) -> Dict[str, torch.Tensor]:
         b = self.batch_size
         audio = self.cfg.audio
+        token_width = self.cfg.autoencoder.latent_dim * max(
+            1, int(self.cfg.autoencoder.latent_rate)
+        )
         if self.stage == "autoencoder":
             n = self.n_frames * audio.hop_length
             return {"wav": 0.1 * self.rand(b, n)}
@@ -416,10 +419,24 @@ class SyntheticBatchSource:
                 "wav": 0.1 * self.rand(b, 2 * self.n_tokens * audio.hop_length),
                 "ids": torch.randint(1, self.vocab_size, (b, self.n_tokens), generator=self.generator),
                 "latent": self.rand(b, self.cfg.autoencoder.latent_dim, 2 * self.n_tokens),
-                "latent_token": self.rand(b, self.n_tokens, self.cfg.autoencoder.latent_dim),
+                "latent_token": self.rand(b, self.n_tokens, token_width),
                 "durations": durations,
                 "f0": self.rand(b, self.n_tokens),
                 "energy": self.rand(b, self.n_tokens),
+            }
+        if self.stage == "distill-audio":
+            # the text side trained through the decoder: it needs the target audio, the token signals
+            # (the auxiliary objective) and the text
+            return {
+                "wav": 0.1 * self.rand(b, 2 * self.n_tokens * audio.hop_length),
+                "ids": torch.randint(1, self.vocab_size, (b, self.n_tokens), generator=self.generator),
+                "text_mask": torch.ones(b, self.n_tokens, dtype=torch.bool),
+                "voice": torch.zeros(b, dtype=torch.long),
+                "teacher_weight": torch.ones(b),
+                "durations": torch.full((b, self.n_tokens), 2, dtype=torch.long),
+                "f0": self.rand(b, self.n_tokens),
+                "energy": self.rand(b, self.n_tokens),
+                "latent_token": self.rand(b, self.n_tokens, token_width),
             }
         ids = torch.randint(1, self.vocab_size, (b, self.n_tokens), generator=self.generator)
         text_mask = torch.ones(b, self.n_tokens, dtype=torch.bool)
@@ -441,7 +458,7 @@ class SyntheticBatchSource:
                 "durations": torch.randint(2, 8, (b, self.n_tokens), generator=self.generator),
                 "f0": self.rand(b, self.n_tokens),
                 "energy": self.rand(b, self.n_tokens),
-                "latent_token": self.rand(b, self.n_tokens, self.cfg.autoencoder.latent_dim),
+                "latent_token": self.rand(b, self.n_tokens, token_width),
             }
         raise ValueError(f"unknown stage {self.stage!r}")
 

@@ -12,14 +12,14 @@ python scripts/reflow_demo.py                               # validates NFE-2 sa
 python scripts/streaming_demo.py                            # blockwise streaming + TTFA (~7 min CPU)
 python scripts/export_onnx.py --pipeline                    # int8 ONNX + runtime benchmark
 python scripts/profile_pipeline.py                          # where does the time actually go
-python -m pytest -q                                         # 252 tests
+python -m pytest -q                                         # 254 tests
 python scripts/bench_rtf.py --config configs/parakeet_tiny.yaml
 ```
 
 ## 1. Test suite
 
 ```
-252 passed
+254 passed
 ```
 
 Coverage by area:
@@ -36,12 +36,16 @@ Coverage by area:
 | `test_curate.py` | every curation gate fires on a constructed failure (too short/long, clipped, silent, low SNR, narrowband, low MOS, ASR disagreement); **all** reasons reported, not just the first; SNR correctly reported as *unevaluable* without a noise floor; WER and punctuation-gap maths; reject records are never dropped |
 | `test_learning.py` | synthetic fixture is structurally exact (frame counts, peak, F0 declination); latent normaliser fits and inverts; token targets are exact and normalised; decoder-latent alignment; supplied-latent path leaves the encoder gradient-free; **stage freezing does not leak between stages**; and the headline: 40 CPU steps measurably improve both the representation and the distilled text side |
 | `test_onnx.py` | ONNX decoder matches PyTorch to **<1e-4**; text side matches to **<1e-4 across token lengths 5/8/17** (the legacy exporter's baked-in length would fail this); dynamic time axis across 7/23/41 frames; int8 files are smaller and run on CPU; dtypes are validated at the wrapper boundary; external weight sidecars are counted in size; full int8 pipeline tracks PyTorch (cosine >0.95) and is smaller in total (skips if `onnx`/`onnxruntime`/`onnxscript` absent) |
+| `test_train_stages.py` (extended once more) | `distill-audio` really trains **through** the decoder: the text-side heads and `prosody_proj` move, the autoencoder does not, and the logs carry the audio objective and the auxiliary term |
+| `test_train_stages.py` (extended once more) | `distill-audio` really trains **through** the decoder: the text-side heads and `prosody_proj` move, the autoencoder does not, and the logs carry the audio objective and the auxiliary term |
 | `test_train_stages.py` (extended, again) | the decoder stage really consumes the **token-expanded** distribution when the flag is on (and the log records which was used, so a silent revert is visible); and `--set`/warm-start/frame-latent paths still behave |
 | `test_train_stages.py` (extended) | a reconstruction-only phase really is reconstruction-only (`adversarial` weight 0 ⇒ no `disc` loss and no discriminator step, while the generator still trains) — that option is 24× cheaper per step and is what fixed the autoencoder; and a non-finite loss is **skipped, counted, reported with its first step, written to `divergence.json`, and leaves the parameters finite**, so divergence is a finding instead of an all-NaN report |
 | `test_duration_scale.py` (extended) | the sub-token geometry is **shared**: a sub-vector index must land in the frame span its target was averaged over, so targets and expansion cannot drift apart; degenerate tokens (fewer frames than the rate) stay in bounds; and `latent_rate` widens the head without changing the frame count |
 | `test_duration_scale.py` (extended) | the sub-token geometry is **shared**: a sub-vector index must land in the frame span its target was averaged over, so targets and expansion cannot drift apart; degenerate tokens (fewer frames than the rate) stay in bounds; and `latent_rate` widens the head without changing the frame count |
 | `test_duration_scale.py` | durations round-trip through their normalisation exactly; zero on the normalised scale means the measured corpus mean (6 frames), not 1; a one-standard-deviation head output stretches the sequence by ~1.48× — not the ~2.7× that `log_duration.exp()` would give, so the trap is caught even though both produce audio; the loss term is ~zero against the normalised target and >0.5 against a raw-log one; and the diagnosis evidence carries its validity checks and a named bottleneck |
 | `test_real_audio.py` | the voicing threshold admits more frames as it rises **while the pitch estimate stays put** (the real-speech signature of a threshold that was too strict); an unvoiced token inherits the nearest voiced pitch instead of 0 Hz; the unaligned split neither collapses nor ignores the energy; the Kokoro runtime dispatch lands on an importable backend and rejects an unknown voice with the available list; the DNSMOS wrapper reads `ovrl_mos` rather than defaulting to 0.0 (the bug the teacher control caught); the real-audio, real-training and real-evaluation evidence all record their provenance, their controls and their caveats |
+| `test_train_stages.py` (extended once more) | `distill-audio` really trains **through** the decoder: the text-side heads and `prosody_proj` move, the autoencoder does not, and the logs carry the audio objective and the auxiliary term |
+| `test_train_stages.py` (extended once more) | `distill-audio` really trains **through** the decoder: the text-side heads and `prosody_proj` move, the autoencoder does not, and the logs carry the audio objective and the auxiliary term |
 | `test_train_stages.py` (extended, again) | the decoder stage really consumes the **token-expanded** distribution when the flag is on (and the log records which was used, so a silent revert is visible); and `--set`/warm-start/frame-latent paths still behave |
 | `test_train_stages.py` (extended) | a reconstruction-only phase really is reconstruction-only (`adversarial` weight 0 ⇒ no `disc` loss and no discriminator step, while the generator still trains) — that option is 24× cheaper per step and is what fixed the autoencoder; and a non-finite loss is **skipped, counted, reported with its first step, written to `divergence.json`, and leaves the parameters finite**, so divergence is a finding instead of an all-NaN report |
 | `test_duration_scale.py` (extended) | the sub-token geometry is **shared**: a sub-vector index must land in the frame span its target was averaged over, so targets and expansion cannot drift apart; degenerate tokens (fewer frames than the rate) stay in bounds; and `latent_rate` widens the head without changing the frame count |
@@ -1095,7 +1099,47 @@ is latent prediction, not the seam and not the autoencoder.** The text side fits
 track what the decoder needs. The next change is therefore to the **objective**, not the architecture:
 train the text side through the decoder with a mel/audio loss instead of an L1 on cached latents.
 
-## 25. Smoke test output (measured)
+## 25. Changing the objective: train the text side *through* the decoder (measured)
+
+Round 22 localised what was left: the text side fitted its latent L1 well (0.655) while the audio it
+rendered was unintelligible, and the oracle token path was fine — so the objective, not the
+architecture, was wrong. A small error in latent space is not a small error in the decoder's output,
+and nothing in the loss ever looked at the decoder's output.
+
+`distill-audio` is a new stage that closes the loop: predict the token signals, build the decoder input
+with the **same call synthesis makes**, decode, and compare the resulting audio to the teacher's with
+the mel + multi-resolution STFT losses. The autoencoder stays frozen as the fixed renderer, so the
+gradients reach the text side, the duration head, and `prosody_proj` — for the first time in a path
+that is trained rather than merely executed. A test pins that contract (heads move, autoencoder does
+not). The cached-signal objective stays as a small auxiliary term (`audio_aux` 0.1), because rounding
+durations to frames is not differentiable and something has to pin the utterance length; the logs
+record it (`rendered_frames` 415 vs `target_frames` 405, so it works).
+
+Three arms, same autoencoder, same corpus, `latent_rate` 3 throughout:
+
+| arm | student WER | student DNSMOS | log-mel cosine | speed |
+|---|---|---|---|---|
+| latent L1 (`distill-text`, 800 steps) | 1.648 | 1.633 | 0.9427 | 116× |
+| through the decoder, 600 steps | 1.000 | 1.586 | 0.9447 | 115× |
+| **through the decoder, 2400 steps** | **0.667** | 1.583 | **0.9486** | 120× |
+| teacher (controls) | 0.000 | 2.613 | 1.000 | — |
+
+The objective change works and **the gain keeps coming with steps** (2.5× lower WER than the latent L1
+at 2400 steps, with a better mel proxy and no speed cost). The naturalness metric is the honest
+exception: it does not move (1.633 → 1.583), which the A/B records as a check
+(`naturalness_trade_off_is_recorded`) rather than leaving out.
+
+Not yet a usable model: WER 0.667 still means the recogniser misses about as many words as it finds.
+What changed is that the loss now measures what the decoder produces — the prerequisite for every later
+gain — and the pipeline finally has a stage that optimises the thing the project is judged on.
+
+Two bugs surfaced on the way, both in code added this round: `latent_from_tokens` summed durations over
+the whole *batch* instead of per item (5200 frames against the prosody path's 351 — a single-item test
+with equal durations could not catch it, so the test now uses a batch with uneven durations), and
+`real_eval.py` inferred `n_voices` from a neighbouring cache directory, which failed for any run whose
+cache lived elsewhere; it now reads the width from the checkpoint itself.
+
+## 26. Smoke test output (measured)
 
 ```
 parakeet-tiny [tiny] sr=24000 mel=80@93.8Hz latent=24 compress=1/6 voice=constant
@@ -1146,7 +1190,7 @@ overhead — it is not a valid throughput measurement until the model predicts s
 learning demo (§2) trains properly but on 15 seconds of *synthetic* audio, so it demonstrates that
 the machinery learns, not that the model is good.
 
-## 26. Deliberate engineering checks worth calling out
+## 27. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
@@ -1182,7 +1226,7 @@ the machinery learns, not that the model is good.
   `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
   else, rather than surfacing a cryptic `torch.stft` message.
 
-## 27. Environment notes
+## 28. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).

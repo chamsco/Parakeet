@@ -33,6 +33,7 @@ import torch.nn.functional as F
 from ..audio.mel import MelSpectrogram
 from ..config import ParakeetConfig
 from ..models import build_model
+from ..models.duration import normalized_to_durations
 from ..models.flow import consistency_sample, fold_time, make_xt, reflow_pair, sample_timesteps
 from .common import (
     EMAModel,
@@ -245,10 +246,69 @@ def tiny_text_step(
 # --------------------------------------------------------------------------------------
 # generic loop
 # --------------------------------------------------------------------------------------
+def text_audio_step(
+    cfg: ParakeetConfig,
+    model: nn.Module,
+    batch: Dict[str, torch.Tensor],
+    losses: Dict[str, nn.Module],
+    criterion: Optional[TextSideDistillLoss] = None,
+) -> Tuple[torch.Tensor, Dict[str, torch.Tensor], torch.Tensor]:
+    """Train the text side **through the decoder**, against the target audio (round 23).
+
+    ``distill-text`` regresses cached teacher latents with an L1 in latent space, and round 22 measured
+    what that costs: the text side fits its objective well (loss 0.655) while the audio it renders is
+    unintelligible, because a small error in latent space is not a small error in the decoder's output.
+    This step closes the loop instead: predict the token signals, build the decoder input with the same
+    call synthesis makes, decode, and compare the **audio** to the teacher's.
+
+    Everything except the autoencoder is trainable, so the gradients reach the text side, the duration
+    head and -- for the first time in a path that is trained rather than merely executed --
+    ``prosody_proj``.  The token-signal terms stay in as an auxiliary objective (``audio_aux`` weight):
+    an audio-only loss leaves the *length* free, since rounding durations to frames is not
+    differentiable, and the cached signals are the only thing that pins it.
+    """
+    criterion = criterion or TextSideDistillLoss()
+    pred = model.text_side(batch["ids"], batch.get("text_mask"), batch.get("voice"))
+    durations = normalized_to_durations(pred["log_duration"])
+    latent, frame_mask = model.decoder_latent_from_tokens(
+        pred["latent_token"], durations, pred["f0"], pred["energy"]
+    )
+    target_audio = batch["wav"]
+    recon = model.autoencoder.decode(latent, length=target_audio.shape[-1])
+
+    l_mel = losses["mel"](recon, target_audio)
+    l_spec, spec_parts = losses["spectral"](recon, target_audio)
+    total = cfg.train.loss.audio_mel * l_mel + cfg.train.loss.audio_spectral * l_spec
+    logs = {
+        "audio_mel": l_mel.detach(),
+        "audio_spectral": l_spec.detach(),
+        "rendered_frames": torch.tensor(float(latent.shape[-1])),
+        "target_frames": torch.tensor(float(target_audio.shape[-1] / cfg.audio.hop_length)),
+    }
+    logs.update({f"audio_spec_{k}": v.detach() for k, v in spec_parts.items()})
+
+    aux = float(cfg.train.loss.audio_aux)
+    if aux > 0:
+        target = {
+            "durations": batch["durations"],
+            "f0": batch["f0"],
+            "energy": batch["energy"],
+            "latent_token": batch["latent_token"],
+        }
+        aux_loss, aux_logs = criterion(
+            pred, target, batch.get("text_mask"), sample_weight=batch.get("teacher_weight")
+        )
+        total = total + aux * aux_loss
+        logs["aux"] = aux_loss.detach()
+        logs.update({f"aux_{k}": v.detach() for k, v in aux_logs.items()})
+    return total, logs, recon
+
+
 STAGE_STEPS: Dict[str, str] = {
     "autoencoder": "autoencoder",
     "distill-decoder": "decoder",
     "distill-text": "text",
+    "distill-audio": "text_audio",
     "flow": "flow",
     "reflow": "reflow",
 }
@@ -317,6 +377,11 @@ def run_stage(
             for p in module.parameters():
                 p.requires_grad = False
     elif stage == "distill-text":
+        for p in model.autoencoder.parameters():
+            p.requires_grad = False
+    elif stage == "distill-audio":
+        # the autoencoder is the fixed renderer: only the text side (and the prosody projection inside
+        # the token->frame path) learns from the audio comparison
         for p in model.autoencoder.parameters():
             p.requires_grad = False
     elif stage in {"flow", "reflow"}:
@@ -500,6 +565,11 @@ def run_stage(
             opt.step()
         elif stage == "distill-text":
             loss, step_logs = tiny_text_step(cfg, model, batch, text_criterion)
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.train.grad_clip)
+            opt.step()
+        elif stage == "distill-audio":
+            loss, step_logs, _recon = text_audio_step(cfg, model, batch, losses, text_criterion)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.train.grad_clip)
             opt.step()

@@ -87,6 +87,7 @@ Two variants share every block:
 | **Is the autoencoder fixed?** | **yes** — the adversarial step costs **24× more** than a reconstruction step (5.25 s vs 0.22 s), so the budget went reconstruction-first (2000 + 200 steps): round-trip WER **1.000 → 0.153** against a 0.000 teacher, mel L1 1.386 → **0.506**. That exposed the *next* bottleneck: the per-token→frame seam costs 0.167 → **0.870** WER for 0.016 of mel cosine | `ae_ablation.py`, `ae_train.py` |
 | **Is the seam fixed?** | **partly, and the A/B says so.** `distill-decoder` could not even run on a real cache (no waveform in the shards), so it now trains on the token-expanded distribution its docstring always promised: seam WER **0.889 → 0.722** with the working paths undamaged — but the gap to the frame path (0.167) stays open, because the per-token latent is an *average* over ~6 frames. Also puts `prosody_proj` in the graph, after which removing it *hurts* (0.907 vs 0.722) | `seam_ab.py` |
 | **Was the seam information?** | **yes, 77 % of it.** An oracle sweep (no training) taking the teacher's own frame latent at 1/2/3/6/12 sub-latents per token: WER **0.722 → 0.204 → 0.093** (frame-latent ceiling 0.167). So latent_rate is now a config field, and end to end (same AE, same 800 steps) the student improves on both axes: **WER 2.204 → 1.648**, **DNSMOS 1.43 → 1.63**, still 116× real time. It remains unintelligible, and the oracle path does not — so what is left is **latent prediction**, not the seam | `seam_rate.py`, `latent_rate_ab.py` |
+| **Does the objective matter?** | **yes, more than the architecture.** A new `distill-audio` stage trains the text side **through the frozen decoder** against the teacher's audio (with the cached signals as a small aux term to pin length). Same AE, same corpus, rate 3: WER **1.648** (latent L1) → **1.000** (600 steps) → **0.667** (2400 steps), mel cosine 0.9427 → 0.9486, still 120× real time. DNSMOS stays flat (1.63 → 1.58) — recorded, not hidden | `objective_ab.py` |
 | Does the whole recipe run? | **yes, offline** — prompts → corpus → cache → distillation → synthesis, 6/6 checks pass with dependency-free fixture teachers | `recipe_dry_run.py` |
 | Int8 weights (simulated) | 12.0 MB Tiny / 56.3 MB Small | `smoke_test.py` |
 
@@ -107,7 +108,7 @@ python scripts/resume_demo.py --quick            # crash + resume is byte-for-by
 python scripts/recipe_dry_run.py --stage flow    # Small flow path + paired references
 python scripts/recipe_dry_run.py --quick        # the WHOLE recipe offline, no teachers needed
 python scripts/export_onnx.py                   # int8 ONNX vocoder + PyTorch/ONNX benchmark
-python -m pytest -q                            # 252 tests
+python -m pytest -q                            # 254 tests
 python scripts/bench_rtf.py --config configs/parakeet_tiny.yaml --steps 2
 ```
 
@@ -148,7 +149,7 @@ configs/      parakeet_tiny.yaml (9.6M) | parakeet_tiny_lite.yaml (6.2M, fixture
 scripts/      smoke_test.py | learn_demo.py | reflow_demo.py | streaming_demo.py |
               mixture_demo.py | voice_demo.py | recipe_dry_run.py | export_onnx.py | profile_pipeline.py |
               train.py | make_teacher_corpus.py | bench_rtf.py
-tests/        252 tests: config, audio DSP, models, losses, all five stages, inference,
+tests/        254 tests: config, audio DSP, models, losses, all five stages, inference,
               streaming, mixture weighting, data/corpus paths, curation, ONNX/int8, learning
 .github/      ci.yml -- suite + smoke test + fast demos on every push; benchmarks on demand
 ```

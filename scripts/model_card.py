@@ -171,6 +171,14 @@ CLAIMS: List[Dict[str, Any]] = [
         "fmt": "reference WER {value:.2f} < autoencoder round-trip {other:.2f}",
     },
     {
+        "id": "objective_ab",
+        "statement": "training **through the decoder** beats a latent L1 (WER 1.648 → 0.667)",
+        "report": ["runs/objective_ab.json"],
+        "field": "checks",
+        "op": "all_true",
+        "fmt": "{passed}/{total} checks",
+    },
+    {
         "id": "latent_rate_ab",
         "statement": "predicting **sub-token latents** improves the student end to end (rate 1 vs 3)",
         "report": ["runs/latent_rate_ab.json"],

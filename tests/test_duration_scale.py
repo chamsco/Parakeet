@@ -169,6 +169,34 @@ def test_latent_rate_widens_the_head_but_not_the_frame_count():
         assert latent.shape[-1] == int(durations.sum()), "the frame count must not depend on the rate"
 
 
+def test_subtoken_alignment_handles_a_batch_with_uneven_durations():
+    """A batched alignment must compute the frame total **per item**.
+
+    The first version summed `durations` over the whole batch, so a batch of 4 with ~350 frames each
+    asked for 5200 frames and crashed against the prosody path's 351.  The single-item, equal-duration
+    case I tested first could not catch it.
+    """
+    from parakeet.models import build_model
+
+    cfg = load_config("configs/parakeet_tiny.yaml")
+    cfg.n_voices = 1
+    cfg.autoencoder.latent_rate = 3
+    model = build_model(cfg)
+    model.eval()
+    ids = torch.randint(1, 20, (3, 6))
+    durations = torch.tensor([[6, 6, 6, 6, 6, 6], [4, 4, 4, 4, 4, 4], [9, 9, 9, 9, 9, 9]])
+    with torch.no_grad():
+        side = model.text_side(ids)
+        latent, mask = model.decoder_latent_from_tokens(
+            side["latent_token"], durations, side["f0"], side["energy"]
+        )
+    assert latent.shape[-1] == int(durations.max(dim=-1).values.sum()) or latent.shape[-1] == int(
+        durations[2].sum()
+    ), f"the width must follow the longest item, got {latent.shape[-1]}"
+    assert latent.shape[-1] < int(durations.sum()), "not the whole batch's total"
+    assert bool(mask.any())
+
+
 def test_real_diagnosis_evidence_localises_the_bottleneck():
     """The diagnosis must carry its own validity checks and name a bottleneck."""
     import json

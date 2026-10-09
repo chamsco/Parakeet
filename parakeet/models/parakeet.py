@@ -141,8 +141,10 @@ class ParakeetTiny(nn.Module):
         latent_dim = int(self.cfg.autoencoder.latent_dim)
         if rate > 1 and latent_tok.shape[-1] == rate * latent_dim:
             subtokens = latent_tok.reshape(*latent_tok.shape[:-1], rate, latent_dim)
-            total = int(durations.sum().item()) if max_frames is None else max_frames
-            frames, frame_mask = align_subtokens_to_frames(subtokens, durations, total)
+            # `max_frames` is a *width*, not a total: passing `durations.sum()` here summed over the
+            # whole batch and produced 5200 frames against the prosody path's 351.  `n_frames=None`
+            # makes the helper compute a per-item total, which is what a batched alignment needs.
+            frames, frame_mask = align_subtokens_to_frames(subtokens, durations, max_frames)
         else:
             frames, frame_mask = align_tokens_to_frames(latent_tok, durations)
         if max_frames is not None:

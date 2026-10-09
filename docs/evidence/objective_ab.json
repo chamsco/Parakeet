@@ -1,0 +1,52 @@
+{
+  "question": "does optimising the rendered audio beat regressing cached latents?",
+  "arms": {
+    "latent_l1": "L1 on cached latents (distill-text), rate 3: 800 steps",
+    "through_decoder_600": "audio mel+spectral through the frozen decoder (distill-audio), rate 3: 600 steps",
+    "through_decoder_2400": "the same objective, 2400 steps (does the gain keep coming?)"
+  },
+  "best_audio_arm": "through_decoder_2400",
+  "student": {
+    "wer": {
+      "latent_l1": 1.6481481481481481,
+      "through_decoder_600": 1.0,
+      "through_decoder_2400": 0.6666666666666666
+    },
+    "dnsmos": {
+      "latent_l1": 1.6334609129813167,
+      "through_decoder_600": 1.5856230136533573,
+      "through_decoder_2400": 1.5830882257845973
+    },
+    "log_mel_cosine": {
+      "latent_l1": 0.9426545401414236,
+      "through_decoder_600": 0.9446950356165568,
+      "through_decoder_2400": 0.9485634664694468
+    },
+    "x_realtime": {
+      "latent_l1": 116.52609527696939,
+      "through_decoder_600": 115.10155629544983,
+      "through_decoder_2400": 120.10681187365437
+    }
+  },
+  "controls": {
+    "teacher_wer": {
+      "latent_l1": 0.0,
+      "through_decoder_600": 0.0,
+      "through_decoder_2400": 0.0
+    },
+    "teacher_dnsmos": {
+      "latent_l1": 2.6128619289535666,
+      "through_decoder_600": 2.6128619289535666,
+      "through_decoder_2400": 2.6128619289535666
+    }
+  },
+  "conclusion": "Training through the decoder lowers WER from 1.648 to 0.667 (the same objective, 2400 steps (does the gain keep coming?) steps) -- the latent L1 really was the wrong objective -- while the naturalness metric moves slightly the other way (1.633 -> 1.583) and the mel proxy improves (0.9427 -> 0.9486).  WER near 1.0 still means the recogniser misses about as many words as it finds, so the model is not yet usable; what changed is that the objective now measures what the decoder produces, which is the prerequisite for every later gain.",
+  "checks": {
+    "both_arms_have_a_valid_recogniser_control": true,
+    "both_arms_have_a_valid_naturalness_control": true,
+    "the_audio_objective_improves_intelligibility": true,
+    "the_audio_objective_keeps_the_mel_proxy": true,
+    "both_arms_stay_far_faster_than_real_time": true,
+    "naturalness_trade_off_is_recorded": true
+  }
+}
