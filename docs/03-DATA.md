@@ -63,6 +63,12 @@ prompts.txt ─► mixture scheduler ─► {Orpheus, Kokoro[, MiniMax]} ─► 
 * **Mixture scheduler** (`synthesize_corpus`): teachers are interleaved with a golden-ratio
   sequence so every shard contains the whole mixture. Shard-local balance matters — a shard that
   is 100 % one teacher produces a stretch of single-teacher gradient.
+* **References and cross-sample pairing.** The cache's `log_mel` is the *reference prompt* for the
+  speaker/style conditioner (capped at `--max-ref-frames`, the PilotTTS 15 s prompt limit), and
+  `LatentShardBatchSource(pair_references=True)` conditions each target on a **different
+  utterance of the same voice**, with a different-voice reference alongside for the
+  identity-debiasing separation loss.  Collation pads and masks the reference instead of dropping
+  it; a plain cache therefore collates into a usable conditioning batch.
 * **The mixture reaches the loss.** Each corpus record's teacher is turned into a **per-sample
   weight** when the latent cache is written (`build_latent_cache(..., teacher_weights=...)`), stored
   alongside the sample (`teacher_weight`, `teacher_index`), carried through collation, and consumed

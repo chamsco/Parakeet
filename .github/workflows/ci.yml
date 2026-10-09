@@ -50,8 +50,11 @@ jobs:
       - name: mixture demo -- the mixture reaches the gradient
         run: python scripts/mixture_demo.py --quick --out runs/ci_mixture
 
-      - name: recipe dry run -- the whole pipeline end to end, offline
+      - name: recipe dry run -- the whole pipeline end to end, offline (Tiny)
         run: python scripts/recipe_dry_run.py --quick --out runs/ci_recipe
+
+      - name: recipe dry run -- Small flow stage with paired references, offline
+        run: python scripts/recipe_dry_run.py --stage flow --quick --out runs/ci_recipe_flow
 
       - name: upload reports
         if: always()

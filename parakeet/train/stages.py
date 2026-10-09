@@ -137,14 +137,29 @@ def flow_step(
     l_len = F.mse_loss(pred_frames, target_frames)
     total = loss + cfg.train.loss.duration * l_len
     logs = {"flow": loss.detach(), "length": l_len.detach()}
-    if batch.get("style_tokens") is not None and batch.get("style_tokens_alt") is not None:
-        from ..models.speaker import SpeakerConditioner
 
-        l_style = SpeakerConditioner.cosine_style_loss(
-            batch["style_tokens"], batch["style_tokens_alt"]
-        )
-        total = total + cfg.train.loss.style_consistency * l_style
-        logs["style"] = l_style.detach()
+    # Style-token objectives.  The tokens are derived here rather than by the loader because they
+    # are a *model* product (Q-Former over the mel memory encoder), and because collation must stay
+    # tensor-only.  Two mutually exclusive terms, both driven by the paired references:
+    #   * a different-speaker reference -> push style away from speaker identity (default), and
+    #   * a same-speaker reference pair  -> the optional consistency regulariser.
+    style_same = batch.get("style_tokens")
+    style_alt = batch.get("style_tokens_alt")
+    if style_same is None and batch.get("ref_mel") is not None:
+        style_same = model.speaker.encode_style(batch["ref_mel"], batch.get("ref_mask"))
+    if style_alt is None and batch.get("ref_mel_neg") is not None:
+        style_alt = model.speaker.encode_style(batch["ref_mel_neg"], batch.get("ref_mask_neg"))
+
+    from ..models.speaker import SpeakerConditioner
+
+    if style_same is not None and style_alt is not None and batch.get("ref_mel_neg") is not None:
+        l_style = SpeakerConditioner.style_separation_loss(style_same, style_alt)
+        total = total + cfg.train.loss.style_separation * l_style
+        logs["style_separation"] = l_style.detach()
+    elif style_same is not None and style_alt is not None:
+        l_style = SpeakerConditioner.cosine_style_loss(style_same, style_alt)
+        total = total + cfg.train.loss.style_consistency_pair * l_style
+        logs["style_consistency"] = l_style.detach()
     return total, logs
 
 

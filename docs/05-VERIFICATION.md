@@ -12,14 +12,14 @@ python scripts/reflow_demo.py                               # validates NFE-2 sa
 python scripts/streaming_demo.py                            # blockwise streaming + TTFA (~7 min CPU)
 python scripts/export_onnx.py --pipeline                    # int8 ONNX + runtime benchmark
 python scripts/profile_pipeline.py                          # where does the time actually go
-python -m pytest -q                                         # 150 tests
+python -m pytest -q                                         # 158 tests
 python scripts/bench_rtf.py --config configs/parakeet_tiny.yaml
 ```
 
 ## 1. Test suite
 
 ```
-150 passed
+158 passed
 ```
 
 Coverage by area:
@@ -36,6 +36,7 @@ Coverage by area:
 | `test_curate.py` | every curation gate fires on a constructed failure (too short/long, clipped, silent, low SNR, narrowband, low MOS, ASR disagreement); **all** reasons reported, not just the first; SNR correctly reported as *unevaluable* without a noise floor; WER and punctuation-gap maths; reject records are never dropped |
 | `test_learning.py` | synthetic fixture is structurally exact (frame counts, peak, F0 declination); latent normaliser fits and inverts; token targets are exact and normalised; decoder-latent alignment; supplied-latent path leaves the encoder gradient-free; **stage freezing does not leak between stages**; and the headline: 40 CPU steps measurably improve both the representation and the distilled text side |
 | `test_onnx.py` | ONNX decoder matches PyTorch to **<1e-4**; text side matches to **<1e-4 across token lengths 5/8/17** (the legacy exporter's baked-in length would fail this); dynamic time axis across 7/23/41 frames; int8 files are smaller and run on CPU; dtypes are validated at the wrapper boundary; external weight sidecars are counted in size; full int8 pipeline tracks PyTorch (cosine >0.95) and is smaller in total (skips if `onnx`/`onnxruntime`/`onnxscript` absent) |
+| `test_conditioning.py` | the cache batch carries a padded, masked reference (and legacy caches without `log_mel` still collate); pairing never uses the target utterance and takes the positive from the same voice and the negative from a different one; `max_ref_frames` truncates like PilotTTS's 15 s cap; **with no reference the identity/style encoders receive exactly zero gradient** (the control for the pre-fix cached path) while with one they receive gradient and the separation term is active; the separation loss pushes different speakers apart and the consistency term is off by default |
 | `test_voice.py` | the fixture voices really are multi-voice (measured monotone pitch); the voice embedding conditions **every** head (duration/F0/energy/latent — the first version only modulated the latent); the default voice is index 0; the cache records per-voice indices and rejects a corpus with more voices than the model has; **cached F0 targets follow the voice pitch** (fails if the unbounded fixture sweep, the formant-biased estimator, or the unvoiced-zero averaging regresses); YIN is the default and is accurate; per-token aggregation ignores unvoiced zeros |
 | `test_streaming.py` | the reported vector-field context is confirmed **empirically** (perturb a frame, the response stops exactly at `3 × depth`); `layer_scale_init` leaves the VF per-frame at init (documented, not hidden); a single block equals the one-shot sampler exactly; multi-block stays closer to one-shot than an independent draw; blocks cover every frame in order and concatenate to the batch result; chunked phase lock matches offline (cosine >0.99) and buffers a full `n_fft`; streaming synthesis yields several chunks whose total length matches the one-shot path, with and without the filter |
 
@@ -370,7 +371,50 @@ increase with the voice's pitch multiplier — it fails if any of the three regr
 `test_yin_is_used_by_default_and_is_no_worse_than_autocorrelation`, and
 `test_aggregate_to_tokens_ignores_unvoiced_zeros`.
 
-## 10. Smoke test output (measured)
+## 10. Speaker/style conditioning from a latent cache (measured)
+
+The third instance of the same class of bug, this time in the **flagship** path. `collate` dropped
+`log_mel` entirely, so the Small/flow model trained from a latent cache received `ref_mel=None`:
+a frozen zero speaker embedding, no style tokens, and therefore **no way to learn identity or
+style** — the zero-shot capability the whole Small design exists for. Every demo that exercised
+conditioning built its own `ref_mel` by hand, so nothing noticed. Two related gaps:
+
+* **Cross-sample pairing was never implemented.** PilotTTS conditions on a *different* utterance of
+  the same speaker; training on the target's own mel teaches the conditioner to copy the answer.
+  `LatentShardBatchSource(pair_references=True)` now picks a positive reference from the same voice
+  group and a negative reference from a different voice group, never the target itself.
+* **The style objective had the wrong sign.** The only implemented term was a same-speaker
+  *consistency* loss, which pulls two same-speaker style sets together and so invites speaker
+  identity to leak into the style channel — the opposite of what pairing is for. The default is now
+  a **separation** term against a different speaker's style; the consistency term is kept but off
+  (`style_consistency_pair: 0.0`).
+
+`tests/test_conditioning.py` pins each link and, importantly, a **control**: with the pre-fix
+behaviour (no reference) the three modules that can only learn identity/style *from a reference*
+(the ECAPA speaker encoder, the mel memory encoder, the Q-Former) receive **exactly zero gradient**,
+while with references they receive non-zero gradient and the separation term is active.
+
+`scripts/recipe_dry_run.py --stage flow` runs the Small path end to end, offline:
+
+| check | outcome |
+|---|---|
+| corpus uses both fixture teachers | PASS |
+| autoencoder improved | PASS |
+| cache records the mixture | PASS |
+| teacher weights reach the batch | PASS |
+| **references reach the flow stage** | PASS (`ref_mel` padded and masked; negative reference present) |
+| student improved | PASS (flow loss 39.76 → 39.03) |
+| **style separation is active** | PASS (0.9827) |
+| synthesis produces audio | PASS (3.34 s) |
+| **reference changes the conditioning** | PASS (conditioning differs by 0.2254 between two references, 1.74 against the null fallback) |
+
+The acoustic comparison is deliberately **not** the control, and the dry run prints why: the flow
+estimator's residual branches start at `layer_scale_init = 1e-6`, so an untrained model's output is
+dominated by `x0` and two different references give near-identical audio (cosine 0.999980). That is
+the same degeneracy found in round 5; measuring it would have been a fake control, so the structural
+measurement is the meaningful one at this stage.
+
+## 11. Smoke test output (measured)
 
 ```
 parakeet-tiny [tiny] sr=24000 mel=80@93.8Hz latent=24 compress=1/6 voice=constant
@@ -421,7 +465,7 @@ overhead — it is not a valid throughput measurement until the model predicts s
 learning demo (§2) trains properly but on 15 seconds of *synthetic* audio, so it demonstrates that
 the machinery learns, not that the model is good.
 
-## 11. Deliberate engineering checks worth calling out
+## 12. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
@@ -457,7 +501,7 @@ the machinery learns, not that the model is good.
   `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
   else, rather than surfacing a cryptic `torch.stft` message.
 
-## 12. Environment notes
+## 13. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).

@@ -138,7 +138,11 @@ class LossConfig:
     f0: float = 1.0
     energy: float = 1.0
     latent_feature: float = 1.0
-    style_consistency: float = 0.1
+    #: push style tokens away from a *different* speaker's (identity debiasing; needs paired refs)
+    style_separation: float = 0.1
+    #: the same-speaker consistency regulariser (PilotTTS §3.2).  0 by default: pulling two
+    #: same-speaker style sets together invites identity to leak into the style channel
+    style_consistency_pair: float = 0.0
     phase_lock: float = 0.05
     speed_perturb: float = 0.0
 

@@ -188,12 +188,39 @@ class SpeakerConditioner(nn.Module):
         style = style + self.type_embed[1][None, None, :]
         return torch.cat([id_token, style], dim=1)
 
+    def encode_style(
+        self, mel: torch.Tensor, mask: Optional[torch.Tensor] = None
+    ) -> torch.Tensor:
+        """Style tokens for a reference mel (Q-Former over the mel memory encoder)."""
+        return self.qformer(self.mem_encoder(mel), mask)
+
     @staticmethod
     def cosine_style_loss(style_a: torch.Tensor, style_b: torch.Tensor) -> torch.Tensor:
-        """Cross-sample paired-training regulariser (PilotTTS §3.2)."""
+        """Same-speaker consistency between two style-token sets (PilotTTS §3.2 pairing).
+
+        Off by default in the recipe: pushing two *same-speaker* style sets together encourages the
+        style tokens to encode speaker identity, which is the opposite of the identity/style
+        decoupling cross-sample pairing is for.  Kept for callers who want to stabilise style
+        tokens early in training; the default term is :meth:`style_separation_loss`.
+        """
         a = F.normalize(style_a.reshape(style_a.shape[0], -1), dim=-1)
         b = F.normalize(style_b.reshape(style_b.shape[0], -1), dim=-1)
         return (1.0 - (a * b).sum(dim=-1)).mean()
+
+    @staticmethod
+    def style_separation_loss(
+        style_same: torch.Tensor, style_other: torch.Tensor, margin: float = 0.0
+    ) -> torch.Tensor:
+        """Push a speaker's style tokens away from *another speaker's* (identity debiasing).
+
+        With cross-sample pairing the positive reference is a different utterance of the same
+        speaker, so any style similarity across *different* speakers is identity leaking into the
+        style channel.  A hinge on the cosine similarity removes it without constraining the style
+        tokens' own structure.
+        """
+        a = F.normalize(style_same.reshape(style_same.shape[0], -1), dim=-1)
+        b = F.normalize(style_other.reshape(style_other.shape[0], -1), dim=-1)
+        return F.relu((a * b).sum(dim=-1) - margin).mean()
 
 
 def speaker_embedding_from_audio(

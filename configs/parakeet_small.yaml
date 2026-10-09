@@ -77,5 +77,6 @@ train:
     spectral: 3.0
     adversarial: 1.0
     feature_match: 2.0
-    style_consistency: 0.1
+    style_separation: 0.1        # push style tokens away from a different speaker's
+    style_consistency_pair: 0.0  # same-speaker consistency; off (leaks identity into style)
     phase_lock: 0.05

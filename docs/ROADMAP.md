@@ -91,7 +91,15 @@ the engineering.
       voice-blind control.  The work also fixed three bugs in the F0 **target** pipeline: an
       unbounded fixture pitch sweep, a formant-biased default estimator (autocorrelation reported
       168 Hz for an 81 Hz voice), and per-token aggregation that averaged in unvoiced zeros
-* [ ] Multilingual text (the char-level encoder makes this an alphabet problem, not a G2P problem)
+* [x] **Speaker/style conditioning from the cache**: `collate` was dropping `log_mel`, so the Small
+      model trained from a cache with `ref_mel=None` — zero speaker embedding, no style tokens, and
+      no way to learn identity or style. Now the reference is padded/masked into the batch,
+      `pair_references=True` implements PilotTTS cross-sample pairing (a *different* utterance of the
+      same voice, plus a different-voice negative), and the style term is a **separation** loss
+      rather than a same-speaker consistency loss that leaked identity into the style channel.
+      Verified with a control (the identity/style encoders get exactly zero gradient without a
+      reference) and by `recipe_dry_run.py --stage flow`.
+* [ ] Per-voice constant styles for Tiny 2.0; speaker-encoder fine-tuning on real data
 * [ ] Consistency distillation as an alternative to Reflow; compare NFE 1 feasibility
 * [ ] Soft/distributional teacher targets to counteract the synthetic-data failure mode.
 * [ ] Prosody transfer experiments (swap style tokens between speakers of the same language).

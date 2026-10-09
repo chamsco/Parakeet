@@ -24,7 +24,7 @@ trained. That is the entire cost argument for the Tiny variant.
 Stage 1/3 (generator): L = λ_mel·L_mel + λ_spec·L_MRSTFT + λ_adv·L_adv + λ_fm·L_featmatch + λ_pl·L_phase
 Stage 1/3 (discriminator): hinge loss, MPD(2,3,5,7,11) + MSD(3 scales)
 Stage 2:  L = Σ_i w_i · [λ_dur·|log d̂ − log d| + λ_f0·|F̂0 − F0| + λ_en·|Ê − E| + λ_lat·MSE(latent)]
-Stage 4:  L = Σ_i w_i · MSE(v̂, v) + λ_len·MSE(log len) + λ_style·(1 − cos(style_a, style_b))
+Stage 4:  L = Σ_i w_i · MSE(v̂, v) + λ_len·MSE(log len) + λ_sep·relu(cos(style_same, style_other))
 Stage 5:  L = MSE(v̂_student, x₁_teacher − x₀)   with x₁_teacher from the EMA model at high NFE
 ```
 

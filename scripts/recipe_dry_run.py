@@ -44,7 +44,7 @@ from parakeet.data.text import TextTokenizer  # noqa: E402
 from parakeet.eval import ae_reconstruction_l1, teacher_signal_loss  # noqa: E402
 from parakeet.inference import Synthesizer, phase_coherence, write_wav  # noqa: E402
 from parakeet.models import build_model  # noqa: E402
-from parakeet.train.stages import run_stage  # noqa: E402
+from parakeet.train.stages import flow_step, run_stage  # noqa: E402
 
 PROMPTS = [
     "the quick brown fox jumps over the lazy dog",
@@ -63,18 +63,58 @@ def _banner(text: str) -> None:
 def main() -> int:
     ap = argparse.ArgumentParser(description="Run the whole Parakeet recipe offline")
     ap.add_argument("--config", default="configs/parakeet_tiny.yaml")
+    ap.add_argument("--stage", default="distill-text", choices=["distill-text", "flow"],
+                    help="which student stage to exercise: Tiny's distillation or Small's flow")
     ap.add_argument("--teachers", default="stub_low=0.6,stub_high=0.4")
     ap.add_argument("--prompts", type=int, default=len(PROMPTS))
     ap.add_argument("--steps-ae", type=int, default=120)
-    ap.add_argument("--steps-text", type=int, default=250)
-    ap.add_argument("--batch-size", type=int, default=4)
+    ap.add_argument("--steps-student", type=int, default=None,
+                    help="steps for --stage (defaults to 250, or 120 for flow)")
+    ap.add_argument("--batch-size", type=int, default=None)
+    ap.add_argument("--max-ref-frames", type=int, default=1500,
+                    help="cap the conditioning reference (PilotTTS truncates the prompt at 15 s)")
     ap.add_argument("--out", default="runs/recipe_dry_run")
     ap.add_argument("--quick", action="store_true")
     args = ap.parse_args()
     if args.quick:
-        args.steps_ae, args.steps_text, args.prompts = 25, 60, 4
+        args.steps_ae = 25
+        args.prompts = 4
+    if args.steps_student is None:
+        args.steps_student = 120 if args.stage == "flow" else 250
+        if args.quick:
+            args.steps_student = 40 if args.stage == "flow" else 60
+    if args.batch_size is None:
+        args.batch_size = 4
+    if args.stage == "flow":
+        # the shipped Small config (45 M) is far too slow for a dry run: shrink the dims that matter
+        # for *shape*, keep the architecture, and make sure the flow model exists
+        args.config = args.config if args.config != "configs/parakeet_tiny.yaml" else "configs/parakeet_small.yaml"
 
     cfg = load_config(args.config)
+    if args.stage == "flow":
+        from dataclasses import replace as _replace
+
+        cfg.variant = "small"
+        cfg.voice_mode = "reference"
+        cfg.n_voices = 3  # overridden below by the number of voices actually in the corpus
+        cfg.autoencoder.encoder_dims = [32, 48, 64]
+        cfg.autoencoder.encoder_blocks = [1, 2, 2]
+        cfg.autoencoder.decoder_dim = 64
+        cfg.autoencoder.decoder_blocks = 2
+        cfg.text.dim = 64
+        cfg.text.n_layers = 2
+        cfg.text.n_heads = 4
+        cfg.flow.dim = 64
+        cfg.flow.depth = 2
+        cfg.flow.n_heads = 4
+        cfg.flow.text_dim = 64
+        cfg.flow.cond_dim = 64
+        cfg.speaker.channels = [16, 24]
+        cfg.speaker.emb_dim = 32
+        cfg.speaker.style_dim = 32
+        cfg.speaker.n_query = 4
+        cfg.duration.hidden = 64
+        cfg = cfg.validate()
     cfg.train.save_every = 0
     cfg.train.log_every = max(1, args.steps_ae)
     out = Path(args.out)
@@ -92,7 +132,14 @@ def main() -> int:
     for name, backend in backends.items():
         print(f"  {name}: {backend.spec.kind} | {backend.spec.notes.splitlines()[0][:70]}")
     manifest = synthesize_corpus(
-        prompts, out / "corpus", mix=mix, backends=backends, max_utts=len(prompts)
+        prompts,
+        out / "corpus",
+        mix=mix,
+        backends=backends,
+        max_utts=len(prompts),
+        # multiple voices per teacher: cross-sample pairing needs a *different* utterance of the
+        # same voice, and the style-separation term needs a different voice
+        voices={name: ["v0", "v1"] for name in mix},
     )
     records = [json.loads(l) for l in manifest.read_text(encoding="utf-8").splitlines() if l.strip()]
     corpus_meta = json.loads((out / "corpus" / "corpus_meta.json").read_text(encoding="utf-8"))
@@ -100,6 +147,13 @@ def main() -> int:
     print(f"  -> {len(records)} utterances, {hours * 3600:.1f}s audio, "
           f"{len({r['teacher'] for r in records})} teachers in the manifest")
     strict["corpus_uses_both_teachers"] = len({r["teacher"] for r in records}) == len(mix)
+
+    # the corpus decides how many voices the student needs; build_latent_cache refuses a mismatch
+    # rather than letting the voice embedding index out of range mid-training
+    corpus_voices = sorted({str(r.get("voice") or "") for r in records})
+    cfg.n_voices = max(1, len(corpus_voices))
+    cfg = cfg.validate()
+    print(f"  -> voices present: {corpus_voices} (n_voices={cfg.n_voices})")
 
     # ---------------- 2. autoencoder on the corpus ----------------
     _banner(f"2/6 autoencoder | {args.steps_ae} steps on the corpus audio")
@@ -149,29 +203,64 @@ def main() -> int:
     strict["cache_records_mixture"] = cache_meta["teacher_weights"] == mix
 
     dataset = LatentShardDataset(cache_dir)
-    loader = LatentShardBatchSource(dataset, batch_size=args.batch_size, shuffle=False, seed=0)
+    # pair_references: PilotTTS cross-sample paired training -- the speaker/style reference is a
+    # *different* utterance of the same voice, never the target itself
+    loader = LatentShardBatchSource(
+        dataset,
+        batch_size=args.batch_size,
+        shuffle=args.stage != "flow",
+        seed=0,
+        pair_references=args.stage == "flow",
+        max_ref_frames=args.max_ref_frames,
+    )
     batch = loader()
     weights = batch.get("teacher_weight")
     print(f"  -> dataset {len(dataset)} items | batch teacher_weight "
           f"{[round(float(w), 3) for w in weights] if weights is not None else None}")
     strict["weights_reach_the_batch"] = weights is not None and len(set(weights.tolist())) > 1
+    if args.stage == "flow":
+        print(f"  -> references: ref_mel {tuple(batch['ref_mel'].shape)} "
+              f"({int(batch['ref_mask'][0].sum())} frames valid), "
+              f"negative reference {'present' if 'ref_mel_neg' in batch else 'MISSING'}")
+        strict["references_reach_the_flow_stage"] = (
+            "ref_mel" in batch and "ref_mel_neg" in batch and bool(batch["ref_mask"].any())
+        )
 
-    # ---------------- 4. distillation with the mixture ----------------
-    _banner(f"4/6 distill-text | {args.steps_text} steps on cached teacher signals")
-    text_before = teacher_signal_loss(model, [dataset[i] for i in range(len(dataset))], cfg)
-    logs = run_stage(
-        "distill-text", cfg, model=model, batches=loader, max_steps=args.steps_text, out_dir=str(out)
-    )
-    text_after = teacher_signal_loss(model, [dataset[i] for i in range(len(dataset))], cfg)
-    print(f"  -> teacher-signal loss {text_before:.4f} -> {text_after:.4f} | "
-          f"final stage loss {float(logs.get('loss', float('nan'))):.4f}")
-    strict["distillation_improved"] = text_after < text_before
+    # ---------------- 4. the student stage ----------------
+    if args.stage == "flow":
+        _banner(f"4/6 flow | {args.steps_student} steps with paired references")
+        fixed = loader()
+        torch.manual_seed(0)
+        before, _ = flow_step(cfg, model, fixed)
+        logs = run_stage("flow", cfg, model=model, batches=loader,
+                         max_steps=args.steps_student, out_dir=str(out))
+        torch.manual_seed(0)
+        after, after_logs = flow_step(cfg, model, fixed)
+        print(f"  -> flow loss {float(before):.4f} -> {float(after):.4f} | "
+              f"style separation {float(after_logs.get('style_separation', float('nan'))):.4f}")
+        strict["student_improved"] = float(after) < float(before)
+        strict["style_separation_is_active"] = "style_separation" in after_logs
+    else:
+        _banner(f"4/6 distill-text | {args.steps_student} steps on cached teacher signals")
+        text_before = teacher_signal_loss(model, [dataset[i] for i in range(len(dataset))], cfg)
+        logs = run_stage("distill-text", cfg, model=model, batches=loader,
+                         max_steps=args.steps_student, out_dir=str(out))
+        text_after = teacher_signal_loss(model, [dataset[i] for i in range(len(dataset))], cfg)
+        print(f"  -> teacher-signal loss {text_before:.4f} -> {text_after:.4f} | "
+              f"final stage loss {float(logs.get('loss', float('nan'))):.4f}")
+        strict["student_improved"] = text_after < text_before
 
     # ---------------- 5. synthesis ----------------
     _banner("5/6 synthesis from text")
     synth = Synthesizer(model, cfg, device="cpu", apply_phase_lock=True)
     text = prompts[0]
-    wav = synth.synthesize(text, seed=0)
+    flow_mode = args.stage == "flow"
+    # an untrained length predictor picks an arbitrary (often 1-frame) duration, so pin the length
+    # when exercising the flow path; the Tiny path derives it from predicted durations
+    n_latent = int(dataset[0]["latent"].shape[-1]) if flow_mode else None
+    wav = synth.synthesize(
+        text, seed=0, ref_wav=wavs[0] if flow_mode else None, n_latent_frames=n_latent
+    )
     write_wav(out / "synthesized.wav", wav, cfg.audio.sample_rate)
     reference = wavs[0]
     mel = MelSpectrogram(cfg.audio)
@@ -186,19 +275,52 @@ def main() -> int:
           f"{mel_l1:.4f} | phase coherence 2-8k {coherence:.4f}")
     strict["synthesis_produces_audio"] = wav.shape[-1] > 0 and torch.isfinite(wav).all().item()
 
+    # Conditioning sensitivity, measured where it is actually observable on an untrained model.
+    # The acoustic comparison is useless here and we say so: the flow estimator's residual branches
+    # start at layer_scale 1e-6, so its output is dominated by x0 and two different references give
+    # near-identical audio (~1e-6 relative).  The structural measurement -- does the reference change
+    # the conditioning the sampler consumes? -- is the meaningful one at this stage.
+    if flow_mode and len(wavs) > 1:
+        other = synth.synthesize(text, seed=0, ref_wav=wavs[-1], n_latent_frames=n_latent)
+        m = min(wav.shape[-1], other.shape[-1])
+        cosine = float(
+            torch.nn.functional.cosine_similarity(
+                wav[..., :m].flatten(), other[..., :m].flatten(), dim=0
+            )
+        )
+        mask_ids = torch.ones(1, len(tokenizer.encode(text, add_special=False)), dtype=torch.bool)
+        ids_t = tokenizer.encode(text, add_special=False)[None]
+        ref_a, mask_a = synth._reference_tensors(wavs[0], None)
+        ref_b, mask_b = synth._reference_tensors(wavs[-1], None)
+        with torch.no_grad():
+            _m1, _k1, cond_a = model.conditions(ids_t, mask_ids, ref_a, mask_a)
+            _m2, _k2, cond_b = model.conditions(ids_t, mask_ids, ref_b, mask_b)
+            _m3, _k3, cond_none = model.conditions(ids_t, mask_ids, None, None)
+        cond_delta = float((cond_a - cond_b).abs().max())
+        cond_vs_null = float((cond_a - cond_none).abs().max())
+        print(f"  -> reference sensitivity: conditioning differs by {cond_delta:.4f} between two "
+              f"references, {cond_vs_null:.4f} against the null fallback")
+        print(f"  -> (acoustic cosine {cosine:.6f} is uninformative here: an untrained flow "
+              f"estimator is dominated by x0 -- layer_scale_init 1e-6)")
+        strict["reference_changes_the_conditioning"] = cond_delta > 1e-3 and cond_vs_null > 1e-3
+
     # ---------------- 6. report ----------------
     _banner("6/6 summary")
+    student_before, student_after = (
+        (float(before), float(after)) if flow_mode else (text_before, text_after)
+    )
     report = {
         "config": args.config,
+        "stage": args.stage,
         "mixture": mix,
         "prompts": len(prompts),
         "corpus": {"utterances": len(records), "audio_seconds": hours * 3600,
                    "teachers": sorted({r["teacher"] for r in records})},
-        "steps": {"autoencoder": args.steps_ae, "distill_text": args.steps_text},
+        "steps": {"autoencoder": args.steps_ae, args.stage: args.steps_student},
         "ae_recon_before": ae_before,
         "ae_recon_after": ae_after,
-        "teacher_signal_loss_before": text_before,
-        "teacher_signal_loss_after": text_after,
+        "student_loss_before": student_before,
+        "student_loss_after": student_after,
         "batch_teacher_weights": [float(w) for w in weights] if weights is not None else None,
         "synthesis": {"mel_l1_vs_corpus": mel_l1, "phase_coherence": coherence,
                       "seconds": wav.shape[-1] / cfg.audio.sample_rate},

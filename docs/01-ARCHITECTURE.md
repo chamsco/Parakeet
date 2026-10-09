@@ -80,6 +80,15 @@ voice-blind and made multi-voice training unable to separate voices at all. A si
 learned constant `voice_embed.weight[0]` (Paradee replaces the style input with a learned constant).
 The per-sample voice index is stored in the latent cache next to the teacher weight.
 
+**Speaker/style conditioning (Small).** The conditioner consumes a *reference prompt*: a mel of a
+**different utterance of the same speaker** at training time (PilotTTS cross-sample pairing) and of
+the target speaker at inference. `collate` pads and masks that reference into the batch, and
+`LatentShardBatchSource(pair_references=True)` picks the partner from the same voice group, plus a
+different-voice reference used by an identity-debiasing **separation** loss
+(`relu(cos(style_same, style_other))`). The optional same-speaker consistency term exists but
+defaults to zero weight: pulling two same-speaker style sets together invites identity to leak into
+the style channel, which is what pairing is meant to prevent.
+
 **Pitch targets.** `extract_signals` uses **YIN** (`estimate_f0_yin`: difference function, cumulative
 mean normalisation, absolute threshold on the first *local* minimum, parabolic refinement on the
 difference function) rather than autocorrelation, which is formant-biased — on a fixture utterance it
@@ -95,7 +104,8 @@ conditioning memory = [id token ; style tokens]  (9 tokens, 256-dim)
 ```
 
 * Identity and style are separate pathways; **cross-sample paired training** (style from a
-  *different* utterance of the same speaker) plus `cosine_style_loss` is what decouples them.
+  *different* utterance of the same speaker, plus a different-speaker reference for the separation
+  loss) is what decouples them.  See the note at the end of §4.
 * `voice_mode="constant"` replaces the style input with a learned constant (Tiny / single voice),
   exactly as Paradee does for a single-voice student.
 * The shipped `EcapaTdnnLite` is a randomly-initialised stand-in for tests; production must load
