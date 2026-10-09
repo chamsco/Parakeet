@@ -35,6 +35,15 @@ def collate(
     """
     out: Dict[str, torch.Tensor] = {}
     b = len(items)
+    if any("wav" in it for it in items):
+        # the target waveform, needed by the decoder stage (mel / multi-resolution STFT losses compare
+        # against audio).  `distill-decoder` could only ever run under --dry-run without it.
+        max_wav = max(int(it["wav"].numel()) for it in items)
+        wav = torch.zeros(b, max_wav)
+        for i, it in enumerate(items):
+            if "wav" in it:
+                wav[i, : it["wav"].numel()] = it["wav"]
+        out["wav"] = wav
     max_tok = max(int(it["ids"].numel()) for it in items)
     max_frame = max(int(it["latent"].shape[-1]) for it in items)
     ids = torch.zeros(b, max_tok, dtype=torch.long)
@@ -395,9 +404,23 @@ class SyntheticBatchSource:
     def __call__(self) -> Dict[str, torch.Tensor]:
         b = self.batch_size
         audio = self.cfg.audio
-        if self.stage in {"autoencoder", "distill-decoder"}:
+        if self.stage == "autoencoder":
             n = self.n_frames * audio.hop_length
             return {"wav": 0.1 * self.rand(b, n)}
+        if self.stage == "distill-decoder":
+            # a dry run must exercise what a real run does.  This used to return *only* a waveform, so
+            # the stage never took its documented token-expanded path under --dry-run -- which is part
+            # of why the mismatch between that path and the cached frame latent went unnoticed.
+            durations = torch.full((b, self.n_tokens), 2, dtype=torch.long)
+            return {
+                "wav": 0.1 * self.rand(b, 2 * self.n_tokens * audio.hop_length),
+                "ids": torch.randint(1, self.vocab_size, (b, self.n_tokens), generator=self.generator),
+                "latent": self.rand(b, self.cfg.autoencoder.latent_dim, 2 * self.n_tokens),
+                "latent_token": self.rand(b, self.n_tokens, self.cfg.autoencoder.latent_dim),
+                "durations": durations,
+                "f0": self.rand(b, self.n_tokens),
+                "energy": self.rand(b, self.n_tokens),
+            }
         ids = torch.randint(1, self.vocab_size, (b, self.n_tokens), generator=self.generator)
         text_mask = torch.ones(b, self.n_tokens, dtype=torch.bool)
         if self.stage in {"flow", "reflow"}:

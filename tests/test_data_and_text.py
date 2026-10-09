@@ -257,9 +257,16 @@ def test_build_latent_cache_end_to_end(fast_cfg, tmp_path):
 
 
 def test_synthetic_batch_source_keys(fast_cfg):
-    for stage in ("autoencoder", "distill-decoder"):
-        b = SyntheticBatchSource(fast_cfg, stage)()
-        assert set(b) == {"wav"}
+    """A dry run must exercise what a real run does.
+
+    `distill-decoder` used to return a waveform and nothing else, so under `--dry-run` it never took
+    its documented token-expanded path -- which is part of why the mismatch between that path and the
+    cached frame latent went unnoticed for so long.  It now carries the token signals too.
+    """
+    b = SyntheticBatchSource(fast_cfg, "autoencoder")()
+    assert set(b) == {"wav"}
+    b = SyntheticBatchSource(fast_cfg, "distill-decoder")()
+    assert {"wav", "latent_token", "durations", "f0", "energy"} <= set(b)
     b = SyntheticBatchSource(fast_cfg, "flow")()
     assert {"ids", "text_mask", "latent", "ref_mel", "ref_mask"} <= set(b)
     b = SyntheticBatchSource(fast_cfg, "distill-text")()

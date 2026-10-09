@@ -255,6 +255,27 @@ def file_fingerprint(path: str | Path) -> Optional[str]:
         return None
 
 
+def derive_n_voices_from_cache(cache_dir: Optional[str | Path]) -> Optional[int]:
+    """How many voices the cache actually holds, or None if it cannot be determined.
+
+    The corpus decides ``n_voices``: the latent cache builder refuses a corpus with more voices than
+    the config, and a model built with the wrong width cannot load a checkpoint trained with the right
+    one (``strict=False`` does not tolerate a *shape* mismatch).  Every demo derived this by hand and
+    the training CLI did not derive it at all, which is how ``--resume`` on a 3-voice checkpoint failed
+    against a config saying ``n_voices: 1``.
+    """
+    if not cache_dir:
+        return None
+    meta_path = Path(cache_dir) / "cache_meta.json"
+    if not meta_path.exists():
+        return None
+    try:
+        voices = json.loads(meta_path.read_text(encoding="utf-8")).get("voice_names") or []
+    except (json.JSONDecodeError, OSError):
+        return None
+    return max(1, len(voices)) if voices else None
+
+
 def write_run_metadata(
     out_dir: str | Path,
     cfg: ParakeetConfig,

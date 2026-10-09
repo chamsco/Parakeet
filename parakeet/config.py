@@ -53,6 +53,14 @@ class AutoencoderConfig:
     #: decoder is causal (streaming capable)
     causal_decoder: bool = True
     spec_head: str = "magphase"  # magphase | complex
+    #: ``distill-decoder`` builds its input with :meth:`ParakeetTiny.decoder_latent_from_tokens`
+    #: (per-token latents expanded exactly as inference does) instead of consuming the cached
+    #: *frame-level* latent.  The stage's docstring always promised this -- "the decoder then trains
+    #: on exactly the latent distribution the text side will produce at synthesis time" -- but the
+    #: implementation passed the clean frame latent, and round 20 measured what that costs: the
+    #: token-expanded path scores WER 0.870 where the frame path scores 0.167, for 0.016 of mel
+    #: cosine.  Kept as a flag so the comparison stays reproducible.
+    decoder_uses_token_latents: bool = True
 
 
 @dataclass

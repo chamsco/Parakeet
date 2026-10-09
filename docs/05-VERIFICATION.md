@@ -12,14 +12,14 @@ python scripts/reflow_demo.py                               # validates NFE-2 sa
 python scripts/streaming_demo.py                            # blockwise streaming + TTFA (~7 min CPU)
 python scripts/export_onnx.py --pipeline                    # int8 ONNX + runtime benchmark
 python scripts/profile_pipeline.py                          # where does the time actually go
-python -m pytest -q                                         # 243 tests
+python -m pytest -q                                         # 248 tests
 python scripts/bench_rtf.py --config configs/parakeet_tiny.yaml
 ```
 
 ## 1. Test suite
 
 ```
-243 passed
+248 passed
 ```
 
 Coverage by area:
@@ -36,9 +36,11 @@ Coverage by area:
 | `test_curate.py` | every curation gate fires on a constructed failure (too short/long, clipped, silent, low SNR, narrowband, low MOS, ASR disagreement); **all** reasons reported, not just the first; SNR correctly reported as *unevaluable* without a noise floor; WER and punctuation-gap maths; reject records are never dropped |
 | `test_learning.py` | synthetic fixture is structurally exact (frame counts, peak, F0 declination); latent normaliser fits and inverts; token targets are exact and normalised; decoder-latent alignment; supplied-latent path leaves the encoder gradient-free; **stage freezing does not leak between stages**; and the headline: 40 CPU steps measurably improve both the representation and the distilled text side |
 | `test_onnx.py` | ONNX decoder matches PyTorch to **<1e-4**; text side matches to **<1e-4 across token lengths 5/8/17** (the legacy exporter's baked-in length would fail this); dynamic time axis across 7/23/41 frames; int8 files are smaller and run on CPU; dtypes are validated at the wrapper boundary; external weight sidecars are counted in size; full int8 pipeline tracks PyTorch (cosine >0.95) and is smaller in total (skips if `onnx`/`onnxruntime`/`onnxscript` absent) |
+| `test_train_stages.py` (extended, again) | the decoder stage really consumes the **token-expanded** distribution when the flag is on (and the log records which was used, so a silent revert is visible); and `--set`/warm-start/frame-latent paths still behave |
 | `test_train_stages.py` (extended) | a reconstruction-only phase really is reconstruction-only (`adversarial` weight 0 ⇒ no `disc` loss and no discriminator step, while the generator still trains) — that option is 24× cheaper per step and is what fixed the autoencoder; and a non-finite loss is **skipped, counted, reported with its first step, written to `divergence.json`, and leaves the parameters finite**, so divergence is a finding instead of an all-NaN report |
 | `test_duration_scale.py` | durations round-trip through their normalisation exactly; zero on the normalised scale means the measured corpus mean (6 frames), not 1; a one-standard-deviation head output stretches the sequence by ~1.48× — not the ~2.7× that `log_duration.exp()` would give, so the trap is caught even though both produce audio; the loss term is ~zero against the normalised target and >0.5 against a raw-log one; and the diagnosis evidence carries its validity checks and a named bottleneck |
 | `test_real_audio.py` | the voicing threshold admits more frames as it rises **while the pitch estimate stays put** (the real-speech signature of a threshold that was too strict); an unvoiced token inherits the nearest voiced pitch instead of 0 Hz; the unaligned split neither collapses nor ignores the energy; the Kokoro runtime dispatch lands on an importable backend and rejects an unknown voice with the available list; the DNSMOS wrapper reads `ovrl_mos` rather than defaulting to 0.0 (the bug the teacher control caught); the real-audio, real-training and real-evaluation evidence all record their provenance, their controls and their caveats |
+| `test_train_stages.py` (extended, again) | the decoder stage really consumes the **token-expanded** distribution when the flag is on (and the log records which was used, so a silent revert is visible); and `--set`/warm-start/frame-latent paths still behave |
 | `test_train_stages.py` (extended) | a reconstruction-only phase really is reconstruction-only (`adversarial` weight 0 ⇒ no `disc` loss and no discriminator step, while the generator still trains) — that option is 24× cheaper per step and is what fixed the autoencoder; and a non-finite loss is **skipped, counted, reported with its first step, written to `divergence.json`, and leaves the parameters finite**, so divergence is a finding instead of an all-NaN report |
 | `test_duration_scale.py` | durations round-trip through their normalisation exactly; zero on the normalised scale means the measured corpus mean (6 frames), not 1; a one-standard-deviation head output stretches the sequence by ~1.48× — not the ~2.7× that `log_duration.exp()` would give, so the trap is caught even though both produce audio; the loss term is ~zero against the normalised target and >0.5 against a raw-log one; and the diagnosis evidence carries its validity checks and a named bottleneck |
 | `test_real_audio.py` | the voicing threshold admits more frames as it rises **while the pitch estimate stays put** (the real-speech signature of a threshold that was too strict); an unvoiced token inherits the nearest voiced pitch instead of 0 Hz; the unaligned split neither collapses nor ignores the energy; the Kokoro runtime dispatch lands on an importable backend and rejects an unknown voice with the available list; the real-audio evidence records its provenance and its duration caveat |
@@ -987,7 +989,54 @@ A measurement note: the student's WER ranges from 1.04 to 1.72 across otherwise 
 every working path is stable to the digit. That is not pipeline nondeterminism — it is what WER looks
 like when the audio is near-random and the recogniser is guessing.
 
-## 23. Smoke test output (measured)
+## 23. The token → frame seam: what the fix achieved, and what it did not (measured)
+
+Round 20 left the seam as the bottleneck: expanding per-token latents as inference does scored WER
+0.870 where the frame-level latent scored 0.167. `distill-decoder` exists for exactly this, and its
+docstring promised it — "the decoder then trains on exactly the latent distribution the text side will
+produce at synthesis time" — but the stage consumed the cached *frame* latent **and could not run on a
+real cache at all**: the shards stored features but no waveform, so `autoencoder_step` raised
+`KeyError: 'wav'` and the stage had only ever executed under `--dry-run`. Three things had to be fixed
+before the A/B was even expressible:
+
+* **the cache now stores the target waveform** (aligned to the latent frames, ~4 bytes/sample), and an
+  old cache fails with an actionable message instead of a bare `KeyError`;
+* **`train.py` derives `n_voices` from the cache** — a mismatch cannot be loaded even with
+  `strict=False`, and `--resume` on a 3-voice checkpoint against `n_voices: 1` failed for this reason;
+* **`--warm-start` was added**: `--resume` restores the previous stage's optimizer state, which does
+  not match a different stage, so "fine-tune a new stage from existing weights" needed its own flag.
+  Also `--set key.path=value`, so an A/B is a run-time switch instead of two configs that drift apart.
+
+`scripts/seam_ab.py` then runs both arms from one warm start, same cache, same 300 steps (the
+discriminator held at zero: it is orthogonal to *which distribution* the decoder sees and costs 24×
+per step):
+
+| path | frame latent (flag off) | token-expanded (flag on) |
+|---|---|---|
+| 1. autoencoder round-trip | 0.167 | **0.167** (undamaged) |
+| 2. teacher frame latent | 0.167 | 0.167 |
+| 3. teacher token expanded | **0.889** | **0.722** |
+| 3b. token expanded, no `prosody_proj` | 0.796 | 0.907 |
+| 4. student (text in) | 2.796 | 1.037 |
+
+**The documented mechanism works and is not sufficient.** Training the decoder on the distribution it
+actually meets improves the seam by 19 % relative (0.889 → 0.722) without touching the paths that
+already worked — and the student improves with it — but it does not close the gap to the frame path
+(0.167). The A/B report records that as a check
+(`gap_to_the_frame_path_remains_and_is_recorded`) so the headline cannot quietly become "seam fixed".
+
+A side-effect worth naming, because it confirms the round-20 reading: with the flag on, the decoder's
+input is built by `decoder_latent_from_tokens`, which puts **`prosody_proj` in the graph** — and once
+trained it *helps*: removing it now costs 0.907 versus 0.722, the reverse of the untrained case. The
+projection was not the seam's cause, but it was a real defect, and this stage now trains it.
+
+The residual is structural: the cached per-token latent is an **average** over that token's ~6 frames,
+so no decoder can recover within-token detail that averaging removed. Two candidate fixes, recorded for
+the next round: raise the effective token rate (predict sub-token latents rather than one average per
+text token), or add a refinement stage that consumes token latents and predicts frame latents — the
+role the flow/consistency sampler plays in the Small model.
+
+## 24. Smoke test output (measured)
 
 ```
 parakeet-tiny [tiny] sr=24000 mel=80@93.8Hz latent=24 compress=1/6 voice=constant
@@ -1038,7 +1087,7 @@ overhead — it is not a valid throughput measurement until the model predicts s
 learning demo (§2) trains properly but on 15 seconds of *synthetic* audio, so it demonstrates that
 the machinery learns, not that the model is good.
 
-## 24. Deliberate engineering checks worth calling out
+## 25. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
@@ -1074,7 +1123,7 @@ the machinery learns, not that the model is good.
   `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
   else, rather than surfacing a cryptic `torch.stft` message.
 
-## 25. Environment notes
+## 26. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).

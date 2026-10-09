@@ -1,0 +1,57 @@
+{
+  "question": "does training the decoder on the token-expanded latent (the distribution inference builds) close the seam, or is the loss structural?",
+  "setup": {
+    "arms": {
+      "off": "decoder consumed the cached frame latent",
+      "on": "decoder built its input with decoder_latent_from_tokens"
+    },
+    "steps": 300,
+    "warm_start": "runs/real_train/distill-text_last.pt",
+    "cache": "runs/real_train/latent_cache",
+    "adversarial_weight": 0.0,
+    "note": "same warm start, same cache, same steps; only the decoder input distribution differs"
+  },
+  "wer": {
+    "ae_roundtrip": {
+      "off": 0.16666666666666666,
+      "on": 0.16666666666666666
+    },
+    "teacher_frame_latent": {
+      "off": 0.16666666666666666,
+      "on": 0.16666666666666666
+    },
+    "teacher_token_expanded": {
+      "off": 0.8888888888888888,
+      "on": 0.7222222222222222
+    },
+    "token_expanded_without_prosody": {
+      "off": 0.7962962962962963,
+      "on": 0.9074074074074074
+    },
+    "student": {
+      "off": 2.7962962962962963,
+      "on": 1.037037037037037
+    }
+  },
+  "mel_cosine": {
+    "teacher_frame_latent": {
+      "off": 0.9937949478626251,
+      "on": 0.993907243013382
+    },
+    "teacher_token_expanded": {
+      "off": 0.9773328999678293,
+      "on": 0.9783052901426951
+    }
+  },
+  "conclusion": "The documented mechanism helps (token-path WER 0.889 -> 0.722) and it also puts `prosody_proj` in the graph, after which removing it hurts (0.907 vs 0.722) instead of helping -- so the untrained projection was a real defect that this stage now fixes.  But the gap to the frame path (0.167) is not closed: the residual is structural, because the cached per-token latent is an *average* over the ~6 frames of that token, so no decoder can recover the within-token detail that averaging removed.",
+  "next": [
+    "raise the effective token rate for the latent path (predict sub-token latents) rather than one average per text token",
+    "or add a refinement stage that consumes token latents and predicts frame latents -- the role the flow/consistency sampler plays in the Paper's Small model"
+  ],
+  "checks": {
+    "token_path_improved_when_trained_on_its_own_distribution": true,
+    "autoencoder_roundtrip_unchanged": true,
+    "prosody_projection_helps_once_trained": true,
+    "gap_to_the_frame_path_remains_and_is_recorded": true
+  }
+}

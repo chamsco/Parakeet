@@ -1,7 +1,7 @@
 {
-  "generated": "2026-10-09T14:42:24",
+  "generated": "2026-10-09T15:03:12",
   "git": {
-    "rev": "d2540ae",
+    "rev": "5e7e282",
     "dirty": true
   },
   "note": "Committed snapshots of the reports the model card cites.  Refresh with `python scripts/model_card.py --refresh-evidence` after re-running the demos; the hashes make a stale bundle visible.",
@@ -112,6 +112,13 @@
       "sha256": "46edb94cb590ab5431f13f6b227de912fda548dd3c303642061f7693b9873f21"
     },
     {
+      "claim": "seam_ab",
+      "status": "copied",
+      "source": "runs/seam_ab.json",
+      "evidence": "docs/evidence/seam_ab.json",
+      "sha256": "a46b9bf6cc15a5f0f19f157392a5242ce5bdb796905c4b0575beb5c7061032cb"
+    },
+    {
       "claim": "ae_phased_training",
       "status": "copied",
       "source": "runs/ae_long/report.json",
@@ -123,7 +130,7 @@
       "status": "copied",
       "source": "runs/real_train/report.json",
       "evidence": "docs/evidence/real_training.json",
-      "sha256": "0c41f888b8aa5e165057b6f936565735f15bc9ecb89d3fe25d96f8fa4d89c6d4"
+      "sha256": "4a45308aff08536e7d443a1fa7b00e2e00ed298c3b9118503043c406e4b85418"
     },
     {
       "claim": "real_evaluation",

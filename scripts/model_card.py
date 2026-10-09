@@ -171,6 +171,14 @@ CLAIMS: List[Dict[str, Any]] = [
         "fmt": "reference WER {value:.2f} < autoencoder round-trip {other:.2f}",
     },
     {
+        "id": "seam_ab",
+        "statement": "the token→frame seam A/B is recorded **including the part that did not work**",
+        "report": ["runs/seam_ab.json"],
+        "field": "checks",
+        "op": "all_true",
+        "fmt": "{passed}/{total} checks",
+    },
+    {
         "id": "ae_phased_training",
         "statement": "the autoencoder bottleneck is **fixed** by spending the budget reconstruction-first",
         "report": ["runs/ae_long/report.json"],

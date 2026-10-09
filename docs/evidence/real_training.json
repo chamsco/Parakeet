@@ -16,21 +16,21 @@
   },
   "params": 9616429,
   "autoencoder": {
-    "recon_before": 2.013908000219436,
+    "recon_before": 2.0037800470987954,
     "recon_after": 0.49873222481636775,
-    "improvement_pct": 75.23560039673978,
+    "improvement_pct": 75.11043063142259,
     "seconds": 0.0
   },
   "text_side": {
-    "loss_before": 2.4064445609138128,
-    "loss_after": 0.5146638935520536,
-    "improvement_pct": 78.61309992711332,
-    "seconds": 34.803247000003466
+    "loss_before": 3.0469296319144115,
+    "loss_after": 0.5167061331726256,
+    "improvement_pct": 83.04174380135012,
+    "seconds": 33.142841599998064
   },
   "text_to_audio": {
     "n_utterances": 21,
-    "log_mel_cosine": 0.9376419981320699,
-    "log_mel_l1": 1.8170789991106306
+    "log_mel_cosine": 0.9417249617122468,
+    "log_mel_l1": 1.868998578616551
   },
   "caveats": [
     "small corpus and a short CPU budget: this is not a converged model",
@@ -46,5 +46,5 @@
     "text_side_learned_real_signals": true,
     "synthesis_produces_audio": true
   },
-  "seconds_total": 39.76464100001613
+  "seconds_total": 35.54960610001581
 }

@@ -423,6 +423,34 @@ def run_stage(
 
         if stage in {"autoencoder", "distill-decoder"}:
             spectral_weight = anneal(step) if stage == "distill-decoder" else cfg.train.loss.spectral
+            # `distill-decoder` exists to train the decoder on the distribution *inference* produces.
+            # It used to consume the cached frame-level latent (`batch["latent"]`), which is clean --
+            # and round 20 measured the consequence: the token-expanded path that synthesis actually
+            # builds scored WER 0.870 against 0.167 for the frame latent.  Building the input through
+            # `decoder_latent_from_tokens` also puts `prosody_proj` in the graph, so it finally
+            # receives gradients instead of staying a randomly initialised module applied at
+            # inference only.
+            stage_latent = batch.get("latent")
+            if stage == "distill-decoder" and batch.get("wav") is None:
+                raise ValueError(
+                    "the `distill-decoder` stage needs the target waveform in its batch, which the "
+                    "latent cache only started storing in round 21; rebuild the cache with "
+                    "`cache_teacher_corpus` (its shards now carry `wav`).  Before that this stage "
+                    "could only run under --dry-run"
+                )
+            if (
+                stage == "distill-decoder"
+                and cfg.autoencoder.decoder_uses_token_latents
+                and batch.get("latent_token") is not None
+            ):
+                stage_latent, _ = model.decoder_latent_from_tokens(
+                    batch["latent_token"],
+                    batch["durations"],
+                    batch.get("f0"),
+                    batch.get("energy"),
+                )
+                stage_latent = stage_latent.detach()
+                extra_logs["decoder_input"] = 1.0  # 1 == token-expanded, 0 == cached frame latent
             loss, step_logs, fake = autoencoder_step(
                 cfg,
                 model,
@@ -431,7 +459,7 @@ def run_stage(
                 spectral_weight=spectral_weight,
                 adversarially=bool(cfg.train.loss.adversarial > 0.0),
                 decoder_only=(stage == "distill-decoder"),
-                latent=batch.get("latent"),
+                latent=stage_latent,
             )
             if not torch.isfinite(loss):
                 # Divergence is a *finding*, not something to discover from NaNs in a final report.

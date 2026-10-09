@@ -22,6 +22,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from parakeet.config import load_config  # noqa: E402
+from parakeet.train.common import derive_n_voices_from_cache  # noqa: E402
 from parakeet.data.dataset import make_batch_source  # noqa: E402
 from parakeet.models import build_model, count_parameters  # noqa: E402
 from parakeet.train.stages import STAGE_STEPS, run_stage  # noqa: E402
@@ -67,14 +68,46 @@ def main() -> int:
     ap.add_argument("--device", default=None)
     ap.add_argument("--dry-run", action="store_true", help="use synthetic batches (no data needed)")
     ap.add_argument("--resume", default=None)
+    ap.add_argument("--set", action="append", metavar="KEY.PATH=VALUE",
+                    help="override a config field, e.g. autoencoder.decoder_uses_token_latents=false "
+                         "(repeatable)")
     ap.add_argument("--no-pair-references", action="store_true",
                     help="condition the flow stage on each utterance's own mel instead of a "
                          "different utterance of the same voice (PilotTTS pairing is the default)")
     ap.add_argument("--max-ref-frames", type=int, default=None,
                     help="cap the reference prompt length (default: train.max_ref_frames)")
+    ap.add_argument("--warm-start", default=None, metavar="CKPT",
+                    help="load *weights only* from a checkpoint, with this stage's optimizer and "
+                         "schedule starting fresh.  Use --resume to continue the same run; use this "
+                         "to fine-tune a new stage from an existing one, which --resume cannot "
+                         "express because it restores the previous stage's optimizer state")
     args = ap.parse_args()
 
     cfg = load_config(args.config)
+    for override in args.set or []:
+        # `--set autoencoder.decoder_uses_token_latents=false` -- a run-time switch keeps an A/B an
+        # A/B, instead of two config files that drift apart
+        target, _, raw = override.partition("=")
+        if not raw:
+            raise SystemExit(f"--set expects key.path=value, got {override!r}")
+        parts = target.strip().split(".")
+        obj = cfg
+        for part in parts[:-1]:
+            obj = getattr(obj, part)
+        field = parts[-1]
+        if not hasattr(obj, field):
+            raise SystemExit(f"--set {target}: no such config field")
+        current = getattr(obj, field)
+        if isinstance(current, bool):
+            value = raw.strip().lower() in {"1", "true", "yes", "on"}
+        elif isinstance(current, int):
+            value = int(raw)
+        elif isinstance(current, float):
+            value = float(raw)
+        else:
+            value = raw
+        setattr(obj, field, value)
+        print(f"[train] override {target} = {value!r}")
     if args.batch_size:
         cfg.train.batch_size = args.batch_size
     if args.steps:
@@ -84,7 +117,22 @@ def main() -> int:
     if args.max_ref_frames:
         cfg.train.max_ref_frames = args.max_ref_frames
 
+    # the corpus decides how wide the voice table must be -- and a mismatch cannot be loaded even with
+    # strict=False, so this has to happen before build_model / resume
+    derived_voices = derive_n_voices_from_cache(args.cache)
+    if derived_voices is not None and derived_voices != cfg.n_voices:
+        print(f"[train] n_voices {cfg.n_voices} -> {derived_voices} (from the cache's voice names)")
+        cfg.n_voices = derived_voices
+
     model = build_model(cfg)
+    if args.warm_start:
+        payload = torch.load(args.warm_start, map_location="cpu", weights_only=False)
+        ema_shadow = (payload.get("ema") or {}).get("shadow")
+        state = ema_shadow or payload["model"]
+        info = model.load_state_dict(state, strict=False)
+        print(f"[train] warm start from {args.warm_start} at step {payload.get('step')} "
+              f"({'EMA' if ema_shadow else 'raw'} weights, {len(info.missing_keys)} missing / "
+              f"{len(info.unexpected_keys)} unexpected keys); optimizer and schedule start fresh")
     if args.resume:
         # NOTE: the model is *not* loaded here.  run_stage does the full restore -- optimizer, EMA,
         # discriminator, LR schedule position, RNG and batch order -- so that resuming continues the

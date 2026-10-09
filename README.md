@@ -85,6 +85,7 @@ Two variants share every block:
 | **Trained on real speech?** | **yes** — 21 curated Kokoro utterances (74.7 s): autoencoder reconstruction **−31.1 %**, text side **−79.8 %**, text→audio log-mel cosine **0.940** vs the real reference. Baseline metrics with controls: **DNSMOS 1.77 vs the teacher's 2.61**, **WER 1.00 vs the teacher's 0.00** (recogniser ase.en) — the student is **not yet intelligible**, and now we can say so with numbers | `real_train_demo.py`, `real_eval.py` |
 | **Why is it unintelligible?** | localised: the **autoencoder** is the bottleneck, not the text side. Its round-trip on real audio is **uncorrelated with its input** (waveform cosine +0.000, SNR −0.10 dB) while the mel proxy looked merely poor — and the per-token→frame seam costs only 0.005 mel cosine. One real defect found en route: durations were the last prosody target still in raw log space, collapsing to **0.29×**; normalised, they predict **0.94×** | `real_diagnose.py` |
 | **Is the autoencoder fixed?** | **yes** — the adversarial step costs **24× more** than a reconstruction step (5.25 s vs 0.22 s), so the budget went reconstruction-first (2000 + 200 steps): round-trip WER **1.000 → 0.153** against a 0.000 teacher, mel L1 1.386 → **0.506**. That exposed the *next* bottleneck: the per-token→frame seam costs 0.167 → **0.870** WER for 0.016 of mel cosine | `ae_ablation.py`, `ae_train.py` |
+| **Is the seam fixed?** | **partly, and the A/B says so.** `distill-decoder` could not even run on a real cache (no waveform in the shards), so it now trains on the token-expanded distribution its docstring always promised: seam WER **0.889 → 0.722** with the working paths undamaged — but the gap to the frame path (0.167) stays open, because the per-token latent is an *average* over ~6 frames. Also puts `prosody_proj` in the graph, after which removing it *hurts* (0.907 vs 0.722) | `seam_ab.py` |
 | Does the whole recipe run? | **yes, offline** — prompts → corpus → cache → distillation → synthesis, 6/6 checks pass with dependency-free fixture teachers | `recipe_dry_run.py` |
 | Int8 weights (simulated) | 12.0 MB Tiny / 56.3 MB Small | `smoke_test.py` |
 
@@ -105,7 +106,7 @@ python scripts/resume_demo.py --quick            # crash + resume is byte-for-by
 python scripts/recipe_dry_run.py --stage flow    # Small flow path + paired references
 python scripts/recipe_dry_run.py --quick        # the WHOLE recipe offline, no teachers needed
 python scripts/export_onnx.py                   # int8 ONNX vocoder + PyTorch/ONNX benchmark
-python -m pytest -q                            # 243 tests
+python -m pytest -q                            # 248 tests
 python scripts/bench_rtf.py --config configs/parakeet_tiny.yaml --steps 2
 ```
 
@@ -146,7 +147,7 @@ configs/      parakeet_tiny.yaml (9.6M) | parakeet_tiny_lite.yaml (6.2M, fixture
 scripts/      smoke_test.py | learn_demo.py | reflow_demo.py | streaming_demo.py |
               mixture_demo.py | voice_demo.py | recipe_dry_run.py | export_onnx.py | profile_pipeline.py |
               train.py | make_teacher_corpus.py | bench_rtf.py
-tests/        243 tests: config, audio DSP, models, losses, all five stages, inference,
+tests/        248 tests: config, audio DSP, models, losses, all five stages, inference,
               streaming, mixture weighting, data/corpus paths, curation, ONNX/int8, learning
 .github/      ci.yml -- suite + smoke test + fast demos on every push; benchmarks on demand
 ```

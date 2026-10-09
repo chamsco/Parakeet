@@ -326,6 +326,12 @@ def build_latent_cache(
                 "f0": torch.tensor(f0_tokens, dtype=torch.float32),
                 "energy": torch.tensor(energy_tokens, dtype=torch.float32),
                 "latent_token": torch.tensor(sig.latent_token or [[0.0] * latent.shape[1]] * n_tokens),
+                # the target waveform.  `distill-decoder` needs it (the mel and multi-resolution STFT
+                # losses compare against audio, not features), and without it the stage could only run
+                # under `--dry-run` -- its promised "train on the latent distribution inference
+                # produces" path was unreachable on real data.  Storing audio costs ~4 bytes/sample and
+                # removes the dependency on the corpus being present at training time.
+                "wav": wav_t[0, : n_frames * cfg.audio.hop_length],
                 "teacher_weight": weight,
                 "teacher_index": torch.tensor(teacher_names.index(teacher)),
                 # the voice embedding index the text side conditions on

@@ -53,6 +53,26 @@ def test_tiny_stage_runs(fast_cfg, stage, tmp_path):
     assert (tmp_path / f"{stage}_last.pt").exists()
 
 
+def test_decoder_stage_consumes_the_token_expanded_distribution(fast_cfg, tmp_path):
+    """With the flag on, the decoder's input comes from `decoder_latent_from_tokens` -- the same call
+    synthesis makes -- which is what puts `prosody_proj` in the graph and lets it learn.  The log key
+    records which distribution was used, so a silent revert is visible."""
+    cfg = copy.deepcopy(fast_cfg)
+    cfg.train.max_steps = 1
+    model = build_model(cfg)
+    source = SyntheticBatchSource(cfg, "distill-decoder", batch_size=2, n_frames=16, n_tokens=6)
+
+    cfg.autoencoder.decoder_uses_token_latents = True
+    logs_on = run_stage("distill-decoder", cfg, model=model, batches=source, max_steps=1,
+                        out_dir=str(tmp_path / "on"))
+    assert logs_on.get("decoder_input") == 1.0, "the token-expanded path must be the one used"
+
+    cfg.autoencoder.decoder_uses_token_latents = False
+    logs_off = run_stage("distill-decoder", cfg, model=model, batches=source, max_steps=1,
+                         out_dir=str(tmp_path / "off"))
+    assert "decoder_input" not in logs_off, "with the flag off the cached frame latent is used"
+
+
 def test_reconstruction_only_phase_skips_the_discriminator(fast_cfg, tmp_path):
     """A reconstruction-only phase is 24x cheaper per step on this CPU (round 20), so it must be a
     first-class option: with the adversarial weight at zero the discriminator is never stepped and

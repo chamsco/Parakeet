@@ -92,6 +92,94 @@ def test_make_batch_source_honours_max_ref_frames(fast_cfg, tmp_path):
     assert batch["ref_mask"].all(), "a truncated reference is fully valid, just shorter"
 
 
+def test_cache_stores_the_target_waveform_and_collate_pads_it(fast_cfg, tmp_path):
+    """`distill-decoder` trains the decoder on what inference feeds it, and that needs the audio.
+
+    The cache stored features only, so the stage raised `KeyError: 'wav'` on every real cache and had
+    only ever run under `--dry-run` -- its promised "train on the distribution inference produces"
+    path was unreachable.  The shards carry the target waveform now.
+    """
+    from test_mixture import _corpus_with_two_teachers
+
+    cfg = copy.deepcopy(fast_cfg)
+    cfg.n_voices = 1
+    manifest = _corpus_with_two_teachers(cfg, tmp_path, per_teacher=2)
+    model = build_model(cfg)
+    cache = build_latent_cache(
+        manifest, tmp_path / "cache", cfg, model.autoencoder,
+        tokenizer=TextTokenizer(mode=cfg.text.mode),
+    )
+    dataset = LatentShardDataset(cache)
+    item = dataset[0]
+    assert "wav" in item, "the decoder stage cannot run without the target waveform"
+    assert item["wav"].ndim == 1 and item["wav"].numel() > 0
+    expected = int(item["n_frames"]) * cfg.audio.hop_length
+    assert item["wav"].numel() <= expected, "the waveform is aligned to the latent frames"
+
+    from parakeet.data.dataset import collate
+
+    batch = collate([dataset[0], dataset[1]])
+    assert "wav" in batch
+    assert batch["wav"].shape[0] == 2
+    assert batch["wav"].shape[1] == max(dataset[0]["wav"].numel(), dataset[1]["wav"].numel()), (
+        "shorter waveforms are zero-padded"
+    )
+    if dataset[0]["wav"].numel() != dataset[1]["wav"].numel():
+        shorter = 0 if dataset[0]["wav"].numel() < dataset[1]["wav"].numel() else 1
+        assert float(batch["wav"][shorter, dataset[shorter]["wav"].numel() :].abs().max()) == 0.0
+
+
+def test_decoder_stage_refuses_a_cache_without_the_waveform(fast_cfg, tmp_path):
+    """An old cache must fail with something actionable rather than `KeyError: 'wav'`."""
+    from parakeet.train.stages import run_stage
+
+    cfg = copy.deepcopy(fast_cfg)
+    cfg.train.max_steps = 1
+
+    class NoAudioCache:
+        """A batch source shaped like a pre-round-21 cache: features but no waveform."""
+
+        def __call__(self):
+            return {
+                "ids": torch.randint(1, 20, (2, 6)),
+                "text_mask": torch.ones(2, 6, dtype=torch.bool),
+                "latent": torch.randn(2, cfg.autoencoder.latent_dim, 16),
+                "latent_token": torch.randn(2, 6, cfg.autoencoder.latent_dim),
+                "durations": torch.full((2, 6), 2, dtype=torch.long),
+                "f0": torch.zeros(2, 6),
+                "energy": torch.zeros(2, 6),
+            }
+
+    model = build_model(cfg)
+    with pytest.raises(ValueError, match="waveform"):
+        run_stage("distill-decoder", cfg, model=model, batches=NoAudioCache(), max_steps=1,
+                  out_dir=str(tmp_path))
+
+
+def test_n_voices_is_derived_from_the_cache(tmp_path):
+    """The CLI did not derive this, so `--resume` on a 3-voice checkpoint failed against n_voices: 1."""
+    from parakeet.train.common import derive_n_voices_from_cache
+
+    assert derive_n_voices_from_cache(None) is None
+    assert derive_n_voices_from_cache(tmp_path) is None
+    (tmp_path / "cache_meta.json").write_text(
+        json.dumps({"voice_names": ["af_heart", "af_bella", "af_sky"]}), encoding="utf-8"
+    )
+    assert derive_n_voices_from_cache(tmp_path) == 3
+    (tmp_path / "cache_meta.json").write_text(json.dumps({"voice_names": []}), encoding="utf-8")
+    assert derive_n_voices_from_cache(tmp_path) is None
+
+
+def test_decoder_input_distribution_is_a_config_choice():
+    """The stage's documented behaviour is the default, and the A/B switch is explicit."""
+    from parakeet.config import load_config
+
+    cfg = load_config("configs/parakeet_tiny.yaml")
+    assert cfg.autoencoder.decoder_uses_token_latents is True, (
+        "the docstring's promise (train on the distribution inference produces) is the default"
+    )
+
+
 def test_make_batch_source_falls_back_to_synthetic_batches(fast_cfg):
     # no cache -> a dry run must still work (this is what `train.py --dry-run` does)
     batch = make_batch_source(fast_cfg, "distill-text", None, batch_size=2)()
