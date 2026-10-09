@@ -59,6 +59,9 @@ def main() -> int:
     ap.add_argument("--steps-ae", type=int, default=300)
     ap.add_argument("--steps-text", type=int, default=400)
     ap.add_argument("--batch-size", type=int, default=4)
+    ap.add_argument("--manifest", default=None,
+                    help="manifest inside the corpus dir, e.g. train.jsonl for a prompt-disjoint "
+                         "split (default: the curated manifest)")
     ap.add_argument("--latent-rate", type=int, default=None,
                     help="latents per text token (config default 1).  Round 22 measured that rate 2-3 "
                          "recovers most of the token->frame seam with oracle sub-latents; this is the "
@@ -148,9 +151,12 @@ def main() -> int:
     # via the library helper, not build_latent_cache directly: it resolves record paths against the
     # corpus root (the curated manifest sits in a subdirectory), picks the curated manifest and
     # carries the mixture.  Calling the lower-level function here reproduced the round-10 path bug.
+    # `--manifest` selects a split: with a held-out set, caching the default curated manifest would
+    # train on the validation utterances and make every later number a memory test.
     cache = cache_teacher_corpus(
         corpus, out / "latent_cache", cfg, model.autoencoder,
         teacher_latent_norm=model.latent_norm,
+        manifest_name=args.manifest,
     )
     dataset = LatentShardDataset(cache)
     meta = json.loads((cache / "cache_meta.json").read_text(encoding="utf-8"))

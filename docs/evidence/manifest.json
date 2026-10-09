@@ -1,7 +1,7 @@
 {
-  "generated": "2026-10-09T16:24:10",
+  "generated": "2026-10-09T18:27:46",
   "git": {
-    "rev": "12f7c23",
+    "rev": "e61458a",
     "dirty": true
   },
   "note": "Committed snapshots of the reports the model card cites.  Refresh with `python scripts/model_card.py --refresh-evidence` after re-running the demos; the hashes make a stale bundle visible.",
@@ -110,6 +110,20 @@
       "source": "runs/real_diagnose/report.json",
       "evidence": "docs/evidence/real_diagnosis.json",
       "sha256": "46edb94cb590ab5431f13f6b227de912fda548dd3c303642061f7693b9873f21"
+    },
+    {
+      "claim": "data_scale_ab",
+      "status": "copied",
+      "source": "runs/data_scale_ab.json",
+      "evidence": "docs/evidence/data_scale_ab.json",
+      "sha256": "7dd78c188a7d62e4d0f65a7cbc5fb9af285fd8a0dbb704ffa9e5ca50ac685fc8"
+    },
+    {
+      "claim": "scaled_corpus",
+      "status": "copied",
+      "source": "runs/ae_scaled/report.json",
+      "evidence": "docs/evidence/scaled_corpus.json",
+      "sha256": "9ba048e65b416cea13613bd36c088c7358b397be3f71c22d0963b4015003a25e"
     },
     {
       "claim": "objective_ab",

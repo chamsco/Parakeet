@@ -117,15 +117,30 @@ def test_all_reasons_reported_not_just_the_first():
     assert len(q.reasons) >= 2
 
 
-def test_mos_gate_uses_injected_predictor_only():
+def test_mos_gate_uses_injected_predictor_and_a_calibrated_threshold(monkeypatch):
+    """The threshold must come from a measured distribution, not a borrowed constant.
+
+    Round 24: the published PilotTTS value (3.5) keeps **1 of 160** curated Kokoro utterances -- the
+    `speechmos` P.835 overall score for that corpus is mean 2.86 / median 3.21, while its P.808
+    sub-score is 3.83-4.04, so the borrowed number is on a different scale.  The default is now 2.0,
+    calibrated to drop the worst 14 %.
+    """
     cfg = CurateConfig()
+    assert cfg.min_dnsmos == 2.0, "the calibrated default, not the borrowed 3.5"
     q = apply_gates(analyze_audio(_speechlike(), SR, mos_fn=lambda w, s: 4.2), cfg)
     assert q.keep and q.mos_source == "injected"
 
-    q_bad = apply_gates(analyze_audio(_speechlike(), SR, mos_fn=lambda w, s: 2.0), cfg)
+    q_bad = apply_gates(analyze_audio(_speechlike(), SR, mos_fn=lambda w, s: 1.5), cfg)
     assert not q_bad.keep
     assert any(r.startswith("low_mos") for r in q_bad.reasons)
 
+    # a value just above the threshold survives: 2.0 is a *floor*, not a target
+    q_edge = apply_gates(analyze_audio(_speechlike(), SR, mos_fn=lambda w, s: 2.05), cfg)
+    assert q_edge.keep
+
+    # and with no predictor injected, DNSMOS is the default when it is installed (it was silently
+    # skipped on every real corpus before), otherwise the stage records itself as unavailable
+    monkeypatch.setattr("parakeet.data.curate._dnsmos_available", lambda: False)
     q_none = analyze_audio(_speechlike(), SR)
     assert q_none.mos is None and q_none.mos_source == "unavailable"
 

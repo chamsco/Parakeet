@@ -98,10 +98,14 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Phased autoencoder training on real speech")
     ap.add_argument("--config", default="configs/parakeet_tiny.yaml")
     ap.add_argument("--corpus", default="data/real_corpus/corpus")
+    ap.add_argument("--manifest", default=None, help="manifest file inside --corpus (e.g. val.jsonl for a held-out split)")
     ap.add_argument("--recon-steps", type=int, default=2000)
     ap.add_argument("--adv-steps", type=int, default=200)
     ap.add_argument("--batch-size", type=int, default=4)
     ap.add_argument("--eval-utterances", type=int, default=8)
+    ap.add_argument("--max-seconds", type=float, default=None,
+                        help="cap the audio length per item.  Long clips make a padded batch heterogeneous "
+                             "and were the likely trigger for the round-24 divergence on the scaled corpus")
     ap.add_argument("--whisper", default="base.en")
     ap.add_argument("--out", default="runs/ae_long")
     args = ap.parse_args()
@@ -109,9 +113,13 @@ def main() -> int:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     corpus = Path(args.corpus)
-    manifest = corpus / "curated" / "kept.jsonl"
-    if not manifest.exists():
-        manifest = corpus / "manifest.jsonl"
+    manifest_name = getattr(args, "manifest", None)
+    if manifest_name:
+        manifest = Path(manifest_name) if Path(manifest_name).is_absolute() else corpus / manifest_name
+    else:
+        manifest = corpus / "curated" / "kept.jsonl"
+        if not manifest.exists():
+            manifest = corpus / "manifest.jsonl"
     cfg = load_config(args.config)
     cfg.train.batch_size = args.batch_size
     mel = MelSpectrogram(cfg.audio)
@@ -130,7 +138,10 @@ def main() -> int:
 
     torch.manual_seed(cfg.train.seed)
     model = build_model(cfg)
-    source = WaveformCorpusSource(manifest, batch_size=args.batch_size, corpus_dir=corpus, seed=cfg.train.seed)
+    source = WaveformCorpusSource(
+        manifest, batch_size=args.batch_size, corpus_dir=corpus, seed=cfg.train.seed,
+        max_seconds=args.max_seconds,
+    )
     print(f"corpus {len(records)} utterances | {count_parameters(model)/1e6:.3f} M params | "
           f"{args.recon_steps} recon steps + {args.adv_steps} adversarial steps "
           f"| warmup {cfg.train.warmup_steps} (capped to a tenth of each phase)")
@@ -178,7 +189,7 @@ def main() -> int:
             "ema": ema,
         }
         phases.append(row)
-        print(f"    {name}: {seconds:.0f}s ({seconds/steps:.2f}s/step) | loss {logs.get('loss'):.4f} "
+        print(f"    {name}: {seconds:.0f}s ({seconds/steps:.2f}s/step) | loss {(logs.get('loss') or float('nan')):.4f} "
               f"| live mel {live['mel_l1']:.4f} cos {live['waveform_cosine']:+.3f} "
               f"| ema mel {ema.get('mel_l1', float('nan')):.4f} "
               f"cos {ema.get('waveform_cosine', float('nan')):+.3f} "

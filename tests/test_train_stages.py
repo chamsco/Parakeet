@@ -127,6 +127,42 @@ def test_reconstruction_only_phase_skips_the_discriminator(fast_cfg, tmp_path):
     )
 
 
+def test_nonfinite_gradients_are_skipped_even_with_a_finite_loss(fast_cfg, tmp_path, monkeypatch):
+    """Round 24: the scaled-corpus run went non-finite at step 1756 and, with only the *loss* checked,
+    NaN gradients were written into the parameters so every later loss was NaN (2245 of 4000 steps
+    "skipped" while the weights stayed broken).  Clipping a NaN gradient does not help."""
+    from parakeet.train import stages as stages_module
+
+    cfg = copy.deepcopy(fast_cfg)
+    cfg.train.max_steps = 1
+    model = build_model(cfg)
+    source = SyntheticBatchSource(cfg, "distill-text", batch_size=2, n_frames=16, n_tokens=6)
+def test_nonfinite_gradients_are_skipped_even_with_a_finite_loss(fast_cfg, tmp_path):
+    """Round 24: the scaled-corpus run went non-finite at step 1756 and, with only the *loss* checked,
+    NaN gradients were written into the parameters, so every later loss was NaN -- 2245 of 4000 steps
+    "skipped" while the weights stayed broken.  Clipping a NaN gradient does not help."""
+    from parakeet.train import stages as stages_module
+
+    cfg = copy.deepcopy(fast_cfg)
+    cfg.train.max_steps = 1
+    model = build_model(cfg)
+    source = SyntheticBatchSource(cfg, "distill-text", batch_size=2, n_frames=16, n_tokens=6)
+    # a hook that replaces a real gradient with NaN: the loss stays finite, the gradient does not
+    param = next(model.text.parameters())
+    hook = param.register_hook(lambda grad: torch.full_like(grad, float("nan")))
+    try:
+        logs = stages_module.run_stage(
+            "distill-text", cfg, model=model, batches=source, max_steps=2, out_dir=str(tmp_path)
+        )
+    finally:
+        hook.remove()
+    assert logs["nonfinite_steps"] >= 1, "the poisoned gradient must be detected"
+    assert logs["first_nonfinite_step"] == 1
+    assert all(bool(torch.isfinite(p).all()) for p in model.parameters()), (
+        "no parameter may be left non-finite"
+    )
+
+
 def test_nonfinite_loss_is_skipped_and_recorded(fast_cfg, tmp_path, monkeypatch):
     """Divergence must be a *finding*, not an all-NaN report at the end.
 

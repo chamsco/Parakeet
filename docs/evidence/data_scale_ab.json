@@ -1,0 +1,59 @@
+{
+  "question": "does 6x more training audio improve the student on prompts it has never seen?",
+  "arms": {
+    "small_corpus_21": "21 curated utterances (rounds 18-23), rate 3, through-decoder objective",
+    "scaled_corpus_129": "129 curated utterances over 47 prompts (round 24), same objective and rate"
+  },
+  "held_out": {
+    "split": "prompt-disjoint",
+    "manifest": "val.jsonl",
+    "utterances": {
+      "small_corpus_21": 12,
+      "scaled_corpus_129": 12
+    }
+  },
+  "student": {
+    "wer": {
+      "small_corpus_21": 1.0,
+      "scaled_corpus_129": 1.0
+    },
+    "dnsmos": {
+      "small_corpus_21": 1.4414755547816303,
+      "scaled_corpus_129": 1.5372911945959398
+    },
+    "log_mel_cosine": {
+      "small_corpus_21": 0.9391362319389979,
+      "scaled_corpus_129": 0.9465690751870474
+    },
+    "x_realtime": {
+      "small_corpus_21": 125.335579761598,
+      "scaled_corpus_129": 142.73659556942738
+    }
+  },
+  "controls": {
+    "teacher_wer": {
+      "small_corpus_21": 0.0,
+      "scaled_corpus_129": 0.0
+    },
+    "teacher_dnsmos": {
+      "small_corpus_21": 2.6554135124703757,
+      "scaled_corpus_129": 2.6554135124703757
+    }
+  },
+  "autoencoder_ceiling": {
+    "source": "runs/ae_scaled/report.json",
+    "round_trip_wer": 0.289,
+    "teacher_wer_on_the_same_subset": 0.281,
+    "note": "the scaled autoencoder's round-trip is indistinguishable from the recogniser's own noise floor on this split, so the *renderer* is not the limit any more"
+  },
+  "conclusion": "6x more training audio improves both proxies (DNSMOS 1.441 -> 1.537, mel cosine 0.9391 -> 0.9466) and the model stays two orders of magnitude faster than real time, but **WER on unseen prompts is ~1.0 in both arms**.  The round-23 headline (1.648 -> 0.667) was measured on the corpus's own texts, so it was partly fitting; with a prompt-disjoint hold-out the student is still at chance on new sentences.  That is the honest state, and it is exactly what a held-out split is for.",
+  "not_yet_generalising": true,
+  "checks": {
+    "the_recogniser_control_holds_on_the_hold_out": true,
+    "the_naturalness_control_holds": true,
+    "more_data_improves_the_perceptual_proxy": true,
+    "more_data_improves_the_mel_proxy": true,
+    "both_arms_stay_far_faster_than_real_time": true,
+    "the_hold_out_finding_is_recorded": true
+  }
+}

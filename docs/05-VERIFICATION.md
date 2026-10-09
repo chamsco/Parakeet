@@ -12,14 +12,14 @@ python scripts/reflow_demo.py                               # validates NFE-2 sa
 python scripts/streaming_demo.py                            # blockwise streaming + TTFA (~7 min CPU)
 python scripts/export_onnx.py --pipeline                    # int8 ONNX + runtime benchmark
 python scripts/profile_pipeline.py                          # where does the time actually go
-python -m pytest -q                                         # 254 tests
+python -m pytest -q                                         # 255 tests
 python scripts/bench_rtf.py --config configs/parakeet_tiny.yaml
 ```
 
 ## 1. Test suite
 
 ```
-254 passed
+255 passed
 ```
 
 Coverage by area:
@@ -1139,7 +1139,89 @@ with equal durations could not catch it, so the test now uses a batch with uneve
 `real_eval.py` inferred `n_voices` from a neighbouring cache directory, which failed for any run whose
 cache lived elsewhere; it now reads the width from the checkpoint itself.
 
-## 26. Smoke test output (measured)
+## 26. Scaling the corpus, and two thresholds that a real corpus broke (measured)
+
+Round 23 fixed the objective, so the binding constraint became data: every real-audio measurement in
+this project had trained and evaluated on the **same 21 utterances**. `scripts/scale_corpus.py`
+synthesises a larger Kokoro corpus (59 prompts × 4 voices = 236 utterances, **19.4 min** of audio in
+10 min at RTF 0.52) and splits it **by prompt**, so validation text is unseen rather than merely held
+out by filename:
+
+| | utterances | minutes | prompts |
+|---|---|---|---|
+| train | 129 | 10.9 | 47 |
+| val | 31 | 2.7 | 12 (unseen text) |
+
+All 11 voices in this bundle are `af_*`, so the corpus is single-gender — which limits what multi-voice
+conditioning can be shown to do, and is recorded in the corpus report rather than implied away.
+
+### What the hold-out revealed: the earlier WER gains were partly fitting
+
+The scaled autoencoder generalises: trained on 129 utterances over 47 prompts, its round-trip on the
+validation utterances is **WER 0.289 against the teacher's own 0.281** — indistinguishable from the
+recogniser's noise floor on that split, and a better mel fit than the small-corpus run (0.4597 vs
+0.4987). The renderer is no longer the limit.
+
+The text side is a different story, and it is the important one:
+
+| evaluated on **12 unseen prompts** | 21-utterance model | scaled model (129 utts / 47 prompts) |
+|---|---|---|
+| student WER | 1.000 | **1.000** |
+| student DNSMOS | 1.441 | **1.537** |
+| log-mel cosine | 0.9391 | **0.9466** |
+| speed | 125× real time | 143× real time |
+| teacher WER / DNSMOS (controls) | 0.000 / 2.655 | 0.000 / 2.655 |
+
+Six times more audio improves both proxies and nothing else moves. **Round 23's headline (WER 1.648 →
+0.667) was measured on the corpus's own texts**, so it was partly fitting; with a prompt-disjoint
+hold-out the student is still at chance on new sentences. The A/B records this as
+`not_yet_generalising: true` in its body and states it in the conclusion, because a hold-out exists to
+change the story when the story was flattering.
+
+This reframes the next step: the remaining problem is not renderer capacity, corpus size, latent rate,
+or the objective — it is that ~10 minutes of multi-voice synthetic speech does not teach a 9.6 M model
+to read *new* text. The levers that follow from this measurement are a much larger and more varied
+corpus (the RTF 0.52 synthesiser makes that cheap), and a text side with a stronger inductive bias for
+generalising across unseen sentences.
+
+### The gate that would have deleted the whole corpus
+
+`CurateConfig.min_dnsmos = 3.5` was a borrowed constant ("PilotTTS: deficient if MOS ≤ 3.5") and, like
+several things in this project, it had never met a real corpus: no caller injected a predictor, so the
+perceptual stage was silently skipped and only the signal gates ran. Now that `speechmos` is installed
+it is the default, and the first measurement is unambiguous:
+
+| statistic (160 curated Kokoro utterances, DNSMOS P.835) | value |
+|---|---|
+| mean / median | 2.86 / 3.21 |
+| p05 / p10 / p25 | 1.88 / 1.94 / 2.19 |
+| the same audio's **P.808** sub-score | 3.83–4.04 |
+| kept by `min_dnsmos = 3.5` | **1 of 160** |
+| kept by the calibrated `min_dnsmos = 2.0` | 138 of 160 (86 %) |
+
+The borrowed 3.5 would have discarded a corpus whose ASR WER is **0.000**. The same audio scores ~3.9
+on P.808, so the constant was almost certainly on that scale rather than the P.835 *overall* scale —
+which is why the default is now **calibrated from this distribution** (2.0, dropping the worst 14 %)
+with the measurement in the code comment, and why the test asserts the calibrated value rather than
+trusting any published number.
+
+The signal gates have the same flavour of problem: **76 of 236** utterances (32 %) were rejected as
+`narrowband` (bandwidth99 < 5 kHz), a CosyVoice-derived threshold meeting a different synthesiser. That
+is a real cost — ~5 minutes of audio — and the honest reading is that the gate is doing something
+(selecting the wider-band half) while the *number* is not calibrated for this teacher.
+
+### Divergence at scale, and the guard's second iteration
+
+The first scaled autoencoder run **diverged at step 1756** and never recovered: 2245 of 4000 steps were
+skipped, and because only the *loss* was checked, NaN gradients were still written into the parameters,
+so every later loss was NaN. Round 20's guard turned an all-NaN report into a diagnosis with a step
+number; round 24 completes it — `run_stage` now checks the **gradients** too (`_optimise` returns False
+if any gradient is non-finite, so the update is skipped) — and the run caps clip length
+(`--max-seconds`), because a padded batch containing a 20 s utterance is both heterogeneous and, most
+likely, the trigger. A test injects a NaN gradient with a finite loss and asserts the step is skipped
+and no parameter is left non-finite.
+
+## 27. Smoke test output (measured)
 
 ```
 parakeet-tiny [tiny] sr=24000 mel=80@93.8Hz latent=24 compress=1/6 voice=constant

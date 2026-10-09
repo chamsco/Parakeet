@@ -314,6 +314,36 @@ STAGE_STEPS: Dict[str, str] = {
 }
 
 
+def _gradients_are_finite(model: nn.Module) -> bool:
+    """Every gradient that exists must be finite.  Clipping does not rescue a NaN gradient."""
+    return all(
+        p.grad is None or bool(torch.isfinite(p.grad).all()) for p in model.parameters()
+    )
+
+
+def _record_divergence(
+    count: int, first: Optional[int], step: int
+) -> Tuple[int, Optional[int]]:
+    return count + 1, (step + 1 if first is None else first)
+
+
+def _optimise(step: int, model: nn.Module, opt: torch.optim.Optimizer, loss: torch.Tensor, grad_clip: float) -> bool:
+    """Backward, guard, clip, step.  Returns False when the update was skipped as divergent.
+
+    Skipping is the difference between "this run diverged at step N" and "the report is all NaN":
+    round 24 measured 2245 of 4000 skipped steps in one run, all of which would otherwise have written
+    NaN into the parameters.
+    """
+    if not bool(torch.isfinite(loss)):
+        return False
+    loss.backward()
+    if not _gradients_are_finite(model):
+        return False
+    torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+    opt.step()
+    return True
+
+
 def _named_top_level(model: nn.Module):
     """Direct child modules with names, for the frozen/trainable report."""
     return list(model.named_children())
@@ -539,6 +569,18 @@ def run_stage(
                 sched.step()
                 continue
             loss.backward()
+            # A finite loss does not imply finite gradients: round 24's scaled-corpus run went
+            # non-finite at step 1756, and with only the loss checked the parameters were written with
+            # NaN grads, so every later loss was NaN (2245 of 4000 steps "skipped" while the weights
+            # stayed broken).  `_optimise` checks the gradients too and skips the update if any is
+            # non-finite.
+            if not _gradients_are_finite(model):
+                nonfinite_steps, first_nonfinite_step = _record_divergence(
+                    nonfinite_steps, first_nonfinite_step, step
+                )
+                opt.zero_grad(set_to_none=True)
+                sched.step()
+                continue
             torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.train.grad_clip)
             opt.step()
             if disc_opt is not None:
@@ -555,24 +597,40 @@ def run_stage(
                     extra_logs["disc"] = float(d_loss.detach())
         elif stage == "flow":
             loss, step_logs = flow_step(cfg, model, batch)
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.train.grad_clip)
-            opt.step()
+            if not _optimise(step, model, opt, loss, cfg.train.grad_clip):
+                nonfinite_steps, first_nonfinite_step = _record_divergence(
+                    nonfinite_steps, first_nonfinite_step, step
+                )
+                opt.zero_grad(set_to_none=True)
+                sched.step()
+                continue
         elif stage == "reflow":
             loss, step_logs = reflow_step(cfg, model, batch, teacher_model=teacher)
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.train.grad_clip)
-            opt.step()
+            if not _optimise(step, model, opt, loss, cfg.train.grad_clip):
+                nonfinite_steps, first_nonfinite_step = _record_divergence(
+                    nonfinite_steps, first_nonfinite_step, step
+                )
+                opt.zero_grad(set_to_none=True)
+                sched.step()
+                continue
         elif stage == "distill-text":
             loss, step_logs = tiny_text_step(cfg, model, batch, text_criterion)
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.train.grad_clip)
-            opt.step()
+            if not _optimise(step, model, opt, loss, cfg.train.grad_clip):
+                nonfinite_steps, first_nonfinite_step = _record_divergence(
+                    nonfinite_steps, first_nonfinite_step, step
+                )
+                opt.zero_grad(set_to_none=True)
+                sched.step()
+                continue
         elif stage == "distill-audio":
             loss, step_logs, _recon = text_audio_step(cfg, model, batch, losses, text_criterion)
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.train.grad_clip)
-            opt.step()
+            if not _optimise(step, model, opt, loss, cfg.train.grad_clip):
+                nonfinite_steps, first_nonfinite_step = _record_divergence(
+                    nonfinite_steps, first_nonfinite_step, step
+                )
+                opt.zero_grad(set_to_none=True)
+                sched.step()
+                continue
         else:  # pragma: no cover - guarded above
             raise AssertionError(stage)
 

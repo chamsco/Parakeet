@@ -86,6 +86,7 @@ def main() -> int:
     ap.add_argument("--checkpoint", default="runs/real_train/distill-text_last.pt")
     ap.add_argument("--cache", default="runs/real_train/latent_cache")
     ap.add_argument("--corpus", default="data/real_corpus/corpus")
+    ap.add_argument("--manifest", default=None, help="manifest file inside --corpus (e.g. val.jsonl for a held-out split)")
     ap.add_argument("--config", default="configs/parakeet_tiny.yaml")
     ap.add_argument("--latent-rate", type=int, default=None, help="latents per text token (must match the checkpoint)")
     ap.add_argument("--limit", type=int, default=6)
@@ -96,9 +97,13 @@ def main() -> int:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     corpus = Path(args.corpus)
-    manifest = corpus / "curated" / "kept.jsonl"
-    if not manifest.exists():
-        manifest = corpus / "manifest.jsonl"
+    manifest_name = getattr(args, "manifest", None)
+    if manifest_name:
+        manifest = Path(manifest_name) if Path(manifest_name).is_absolute() else corpus / manifest_name
+    else:
+        manifest = corpus / "curated" / "kept.jsonl"
+        if not manifest.exists():
+            manifest = corpus / "manifest.jsonl"
     records = [json.loads(l) for l in manifest.read_text(encoding="utf-8").splitlines() if l.strip()]
     dataset = LatentShardDataset(args.cache)
     meta = json.loads((Path(args.cache) / "cache_meta.json").read_text(encoding="utf-8"))

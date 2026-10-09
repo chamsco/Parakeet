@@ -171,6 +171,24 @@ CLAIMS: List[Dict[str, Any]] = [
         "fmt": "reference WER {value:.2f} < autoencoder round-trip {other:.2f}",
     },
     {
+        "id": "data_scale_ab",
+        "statement": "6x more audio improves the proxies on a **prompt-disjoint hold-out**; WER on unseen prompts is still ~1.0 (recorded)",
+        "report": ["runs/data_scale_ab.json"],
+        "field": "checks",
+        "op": "all_true",
+        "fmt": "{passed}/{total} checks",
+    },
+    {
+        "id": "scaled_corpus",
+        "statement": "a **19.4-minute** prompt-disjoint corpus trains the autoencoder past the baseline "
+                     "(29 divergent steps skipped and recorded, not hidden)",
+        "report": ["runs/ae_scaled/report.json"],
+        "field": "final.mel_l1",
+        "op": "lt_field",
+        "compare": "baseline_for_comparison.mel_l1",
+        "fmt": "scaled-corpus mel L1 {value:.4f} < shipped-recipe {other:.4f}",
+    },
+    {
         "id": "objective_ab",
         "statement": "training **through the decoder** beats a latent L1 (WER 1.648 → 0.667)",
         "report": ["runs/objective_ab.json"],

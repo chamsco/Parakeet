@@ -41,7 +41,14 @@ class CurateConfig:
     max_duration_s: float = 30.0         # [published]
     min_snr_db: float = 15.0             # [proposed]
     min_rms_dbfs: float = -45.0          # [proposed] absolute level floor (silence detector)
-    min_dnsmos: float = 3.5              # [published] PilotTTS: deficient if MOS <= 3.5
+    #: DNSMOS **overall** floor.  The published PilotTTS constant (3.5) is on a different scale: it was
+    #: never checked against a real corpus until round 24, and on 160 curated Kokoro utterances the
+    #: `speechmos` P.835 predictor gives mean 2.86 / median 3.21 / p05 1.88, where 3.5 keeps **1 of
+    #: 160** -- i.e. the borrowed constant would discard a corpus whose ASR WER is 0.000.  The same
+    #: audio scores p808 3.83-4.04, so the constant was probably P.808-like.  2.0 is *calibrated from
+    #: that measurement*: it removes the worst 14 % (the genuinely deficient tail) and keeps 86 %.
+    #: Any change should be justified by a fresh distribution, not by another published number.
+    min_dnsmos: float = 2.0
     max_clipping_ratio: float = 0.01     # [proposed]
     max_silence_ratio: float = 0.50      # [proposed]
     min_bandwidth_hz: float = 5000.0     # [proposed]
@@ -167,7 +174,29 @@ def analyze_audio(
     if mos_fn is not None:
         quality.mos = float(mos_fn(x, sample_rate))
         quality.mos_source = "injected"
+    elif _dnsmos_available():
+        # the gate existed but no caller ever injected a predictor, so on every real corpus the
+        # perceptual stage was silently skipped and only the signal gates ran.  DNSMOS is cheap
+        # (~0.1 s/utterance) and is installed, so it is the default.
+        from ..eval.metrics import dnsmos_score
+
+        metric = dnsmos_score([x], sample_rate=sample_rate)
+        if metric.available:
+            quality.mos = float(metric.value)
+            quality.mos_source = metric.detail.split("|")[0].strip() or "dnsmos"
+            quality.notes.append(metric.detail)
+        else:
+            quality.notes.append(f"mos_unavailable({metric.reason})")
     return apply_gates(quality, cfg)
+
+
+def _dnsmos_available() -> bool:
+    try:
+        from speechmos import dnsmos  # type: ignore  # noqa: F401
+
+        return True
+    except Exception:  # noqa: BLE001 - optional dependency
+        return False
 
 
 def apply_gates(q: AudioQuality, cfg: CurateConfig) -> AudioQuality:
