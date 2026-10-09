@@ -12,14 +12,14 @@ python scripts/reflow_demo.py                               # validates NFE-2 sa
 python scripts/streaming_demo.py                            # blockwise streaming + TTFA (~7 min CPU)
 python scripts/export_onnx.py --pipeline                    # int8 ONNX + runtime benchmark
 python scripts/profile_pipeline.py                          # where does the time actually go
-python -m pytest -q                                         # 204 tests
+python -m pytest -q                                         # 213 tests
 python scripts/bench_rtf.py --config configs/parakeet_tiny.yaml
 ```
 
 ## 1. Test suite
 
 ```
-204 passed
+213 passed
 ```
 
 Coverage by area:
@@ -36,6 +36,7 @@ Coverage by area:
 | `test_curate.py` | every curation gate fires on a constructed failure (too short/long, clipped, silent, low SNR, narrowband, low MOS, ASR disagreement); **all** reasons reported, not just the first; SNR correctly reported as *unevaluable* without a noise floor; WER and punctuation-gap maths; reject records are never dropped |
 | `test_learning.py` | synthetic fixture is structurally exact (frame counts, peak, F0 declination); latent normaliser fits and inverts; token targets are exact and normalised; decoder-latent alignment; supplied-latent path leaves the encoder gradient-free; **stage freezing does not leak between stages**; and the headline: 40 CPU steps measurably improve both the representation and the distilled text side |
 | `test_onnx.py` | ONNX decoder matches PyTorch to **<1e-4**; text side matches to **<1e-4 across token lengths 5/8/17** (the legacy exporter's baked-in length would fail this); dynamic time axis across 7/23/41 frames; int8 files are smaller and run on CPU; dtypes are validated at the wrapper boundary; external weight sidecars are counted in size; full int8 pipeline tracks PyTorch (cosine >0.95) and is smaller in total (skips if `onnx`/`onnxruntime`/`onnxscript` absent) |
+| `test_model_card.py` | every claim cites **committed** evidence whose SHA-256 matches the manifest; a missing report comes back `unmeasured` and a corrupted value comes back `fail` (positive controls on the check itself); the rendered card states its limitations (no checkpoint, out-of-scope uses, no UTMOS) and its licence table is generated from the teacher specs |
 | `test_resume.py` | **an interrupted-then-resumed run is bit-identical to an uninterrupted one** (max parameter difference exactly 0); checkpoints carry model + optimizer + EMA + discriminator + step + RNG; the RNG stream is restored (and can be opted out); the LR schedule continues instead of restarting; batch-order state round-trips; the step resumed from is reported; a missing checkpoint raises |
 | `test_teacher_backends.py` | the three **real** teacher backends (the only code that had never been executed) verified with injected stubs: the Orpheus codebook-to-SNAC-level mapping asserted element-wise against a reimplementation of the published decoder — with a positive control proving the old contiguous grouping fails it — plus level shapes, partial-frame dropping, token filtering, prompt wrapping and sampling settings; Kokoro chunk concatenation, empty output and durations fallback; MiniMax request payload/headers, hex WAV decode, missing-audio error and the licence gate |
 | `test_provenance_and_hygiene.py` | **every `.py` under `parakeet/` is tracked by git** (the unanchored `data/` ignore rule hid the whole data package for ten commits), plus scripts/CI/configs ship; no public name in the package is referenced nowhere (with an explicit allowlist escape hatch); `run_stage` writes `run.json` with git revision, config SHA-256, versions, and the trainable/frozen report, and merges caller provenance; `SpeakerConfig.freeze` really freezes the identity encoder while the Q-Former adapts; a saved checkpoint round-trips from both a raw encoder state dict and a full-model state dict, and a mismatched one raises |
@@ -647,7 +648,38 @@ different trajectory — by construction. The demo's first version compared a 40
 20-step run and "detected" a divergence of 8.8e-3 that was entirely its own doing. A control
 (`pre_interruption_runs_match`) now isolates that, so a real resume regression cannot hide behind it.
 
-## 16. Smoke test output (measured)
+## 16. The model card is generated from evidence, and fails without it (measured)
+
+A model card is usually prose that drifts: numbers copied from an old run, a limitation quietly
+dropped, a claim whose measurement stopped being produced. `scripts/model_card.py` removes the prose
+from the loop — `docs/MODEL_CARD.md` is **generated**, and every advertised number carries the report
+file and JSON path it came from.
+
+| feature | how it works |
+|---|---|
+| every claim is tied to evidence | 15 claims, each with a report path and a JSON field |
+| missing evidence is visible | a claim with no report renders as **unmeasured**, never deleted |
+| bad numbers are visible | a measured value outside its threshold renders as **FAILING**, named |
+| a fresh clone can verify | the reports live in gitignored `runs/`, so the cited evidence is **committed** in `docs/evidence/` with a SHA-256 manifest |
+| the card cannot rot | `--refresh-evidence` regenerates the bundle from fresh runs; CI re-runs every demo, refreshes, and fails on `git diff --exit-code` |
+
+Verified: **15/15 claims pass**, each citing `docs/evidence/<claim>.json`; a simulated clone
+containing only `docs/`, `parakeet/` and `configs/` (no `runs/`) still verifies all 15 from the
+committed bundle; and two **positive controls** prove the check has teeth — against an empty report
+root every claim comes back `unmeasured`, and a deliberately corrupted value comes back `fail`.
+
+The card also states what the tables cannot: no trained checkpoint exists, the fixtures are not
+speech, UTMOS is unavailable (so naturalness remains a citation), and the teacher/licence table is
+generated from `parakeet.data.teacher.TEACHERS` — the same specs the licence gate uses — rather than
+being retyped. MiniMax appears there as **restricted and non-trainable**, and the parameter counts
+(9.616 M / 45.038 M) are computed by building the models, not copied.
+
+CI runs the whole evidence chain as a `workflow_dispatch` job: every demo, then
+`--refresh-evidence`, `--check` and a diff against the committed card. If a demo stops writing its
+report or a measurement moves, the job fails — so "every number in the card is reproducible from the
+commands printed in the card" is a gate, not a promise.
+
+## 17. Smoke test output (measured)
 
 ```
 parakeet-tiny [tiny] sr=24000 mel=80@93.8Hz latent=24 compress=1/6 voice=constant
@@ -698,7 +730,7 @@ overhead — it is not a valid throughput measurement until the model predicts s
 learning demo (§2) trains properly but on 15 seconds of *synthetic* audio, so it demonstrates that
 the machinery learns, not that the model is good.
 
-## 17. Deliberate engineering checks worth calling out
+## 18. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
@@ -734,7 +766,7 @@ the machinery learns, not that the model is good.
   `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
   else, rather than surfacing a cryptic `torch.stft` message.
 
-## 18. Environment notes
+## 19. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).

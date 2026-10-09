@@ -1,0 +1,50 @@
+{
+  "config": "configs/parakeet_tiny.yaml",
+  "params": 2613493,
+  "teachers": {
+    "low_hz": 92.01006296856909,
+    "high_hz": 214.55790504047008,
+    "utterances_each": 4
+  },
+  "steps_per_run": 80,
+  "runs": [
+    {
+      "high_share": 0.0,
+      "predicted_f0_hz": 86.91594696044922,
+      "probe_low_initial_loss": 5.939632415771484,
+      "probe_low_loss": 2.0409159660339355
+    },
+    {
+      "high_share": 0.25,
+      "predicted_f0_hz": 96.64967346191406,
+      "probe_low_initial_loss": 5.939632415771484,
+      "probe_low_loss": 2.155330181121826
+    },
+    {
+      "high_share": 0.5,
+      "predicted_f0_hz": 135.7761688232422,
+      "probe_low_initial_loss": 5.939632415771484,
+      "probe_low_loss": 2.2608749866485596
+    },
+    {
+      "high_share": 0.75,
+      "predicted_f0_hz": 169.98046875,
+      "probe_low_initial_loss": 5.939632415771484,
+      "probe_low_loss": 2.3906517028808594
+    },
+    {
+      "high_share": 1.0,
+      "predicted_f0_hz": 199.56553649902344,
+      "probe_low_initial_loss": 5.939632415771484,
+      "probe_low_loss": 2.5527024269104004
+    }
+  ],
+  "predicted_f0_span_hz": 112.64958953857422,
+  "checks": {
+    "mixture_steers_monotonically": true,
+    "mixture_span_is_meaningful": true,
+    "every_run_learned": true,
+    "probe_loss_tracks_mixture": true
+  },
+  "seconds_total": 4.11019629999646
+}

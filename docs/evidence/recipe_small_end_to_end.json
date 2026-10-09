@@ -1,0 +1,51 @@
+{
+  "config": "configs/parakeet_small.yaml",
+  "stage": "flow",
+  "mixture": {
+    "stub_low": 0.6,
+    "stub_high": 0.4
+  },
+  "prompts": 6,
+  "corpus": {
+    "utterances": 6,
+    "audio_seconds": 29.216000000000005,
+    "teachers": [
+      "stub_high",
+      "stub_low"
+    ]
+  },
+  "steps": {
+    "autoencoder": 120,
+    "flow": 120
+  },
+  "ae_recon_before": 3.106317679087321,
+  "ae_recon_after": 2.2867053945859275,
+  "student_loss_before": 42.094173431396484,
+  "student_loss_after": 39.41258239746094,
+  "batch_teacher_weights": [
+    0.6000000238418579,
+    0.6000000238418579,
+    0.4000000059604645,
+    0.6000000238418579
+  ],
+  "synthesis": {
+    "mel_l1_vs_corpus": 2.84232497215271,
+    "phase_coherence": 0.15587836503982544,
+    "seconds": 3.3386666666666667
+  },
+  "checks": {
+    "corpus_uses_both_teachers": true,
+    "autoencoder_improved": true,
+    "curation_ran": true,
+    "curation_kept_usable_data": true,
+    "cache_uses_the_curated_manifest": true,
+    "cache_records_mixture": true,
+    "weights_reach_the_batch": true,
+    "references_reach_the_flow_stage": true,
+    "student_improved": true,
+    "style_separation_is_active": true,
+    "synthesis_produces_audio": true,
+    "reference_changes_the_conditioning": true
+  },
+  "seconds_total": 758.6963642000046
+}

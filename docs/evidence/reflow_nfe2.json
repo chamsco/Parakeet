@@ -1,0 +1,115 @@
+{
+  "config": "configs/parakeet_small.yaml",
+  "params_total": 45037868,
+  "corpus": {
+    "utterances": 16,
+    "audio_seconds": 15.018666666666666
+  },
+  "steps": {
+    "ae": 200,
+    "flow": 300,
+    "reflow": 150
+  },
+  "nfe": {
+    "teacher": 16,
+    "reference": 32
+  },
+  "flow_loss_first": 21.901704788208008,
+  "flow_loss_last": 0.8647546947002411,
+  "reflow_loss_first": 2.7499284744262695,
+  "reflow_loss_last": 1.7974525094032288,
+  "mean": {
+    "mse_teacher16_vs_ref": 1.8476245403289795,
+    "mse_naive2_vs_ref": 2.124797999858856,
+    "mse_reflow2_vs_ref": 1.5055643022060394,
+    "mse_naive2_vs_data": 0.7853125631809235,
+    "mse_reflow2_vs_data": 1.7395756542682648,
+    "mse_ref_vs_data": 2.2352896332740784,
+    "mel_naive2": 1.749071329832077,
+    "mel_reflow2": 1.8304311335086823,
+    "mel_reference": 1.8913469016551971,
+    "mel_ae_floor": 1.6685160398483276,
+    "mel_naive2_vs_refaudio": 0.31283625215291977,
+    "mel_reflow2_vs_refaudio": 0.21296976879239082
+  },
+  "timing_ms": {
+    "nfe_reference": 274.51070000824984,
+    "nfe_2": 28.398299997206777
+  },
+  "items": [
+    {
+      "item": 0.0,
+      "mse_teacher16_vs_ref": 1.8907440900802612,
+      "mse_naive2_vs_ref": 2.0035619735717773,
+      "mse_reflow2_vs_ref": 1.45579993724823,
+      "mse_naive2_vs_data": 0.7570585608482361,
+      "mse_reflow2_vs_data": 1.5936423540115356,
+      "mse_ref_vs_data": 2.0139386653900146,
+      "mel_naive2_vs_refaudio": 0.3220396339893341,
+      "mel_reflow2_vs_refaudio": 0.21137496829032898,
+      "mel_naive2": 1.7466281652450562,
+      "mel_reflow2": 1.8248502016067505,
+      "mel_reference": 1.889711856842041,
+      "mel_ae_floor": 1.679459810256958
+    },
+    {
+      "item": 1.0,
+      "mse_teacher16_vs_ref": 1.882375717163086,
+      "mse_naive2_vs_ref": 1.7226693630218506,
+      "mse_reflow2_vs_ref": 1.491296648979187,
+      "mse_naive2_vs_data": 0.6875931024551392,
+      "mse_reflow2_vs_data": 1.4061182737350464,
+      "mse_ref_vs_data": 1.786916732788086,
+      "mel_naive2_vs_refaudio": 0.2993355989456177,
+      "mel_reflow2_vs_refaudio": 0.20695707201957703,
+      "mel_naive2": 1.4957903623580933,
+      "mel_reflow2": 1.5694941282272339,
+      "mel_reference": 1.6188791990280151,
+      "mel_ae_floor": 1.4391788244247437
+    },
+    {
+      "item": 2.0,
+      "mse_teacher16_vs_ref": 1.8169642686843872,
+      "mse_naive2_vs_ref": 2.309037208557129,
+      "mse_reflow2_vs_ref": 1.494903326034546,
+      "mse_naive2_vs_data": 1.0263917446136475,
+      "mse_reflow2_vs_data": 1.892325520515442,
+      "mse_ref_vs_data": 2.4823243618011475,
+      "mel_naive2_vs_refaudio": 0.3162045478820801,
+      "mel_reflow2_vs_refaudio": 0.21557658910751343,
+      "mel_naive2": 1.7914026975631714,
+      "mel_reflow2": 1.8740705251693726,
+      "mel_reference": 1.9277427196502686,
+      "mel_ae_floor": 1.688411831855774
+    },
+    {
+      "item": 3.0,
+      "mse_teacher16_vs_ref": 1.8004140853881836,
+      "mse_naive2_vs_ref": 2.463923454284668,
+      "mse_reflow2_vs_ref": 1.5802572965621948,
+      "mse_naive2_vs_data": 0.6702068448066711,
+      "mse_reflow2_vs_data": 2.066216468811035,
+      "mse_ref_vs_data": 2.6579787731170654,
+      "mel_naive2_vs_refaudio": 0.3137652277946472,
+      "mel_reflow2_vs_refaudio": 0.21797044575214386,
+      "mel_naive2": 1.9624640941619873,
+      "mel_reflow2": 2.053309679031372,
+      "mel_reference": 2.129053831100464,
+      "mel_ae_floor": 1.867013692855835
+    }
+  ],
+  "seconds_total": 290.7773298999964,
+  "checks": {
+    "reflow_beats_naive_vs_teacher": true,
+    "reflow_matches_teacher_discretization": true,
+    "reflow_beats_naive_in_audio_space": true
+  },
+  "diagnostics": {
+    "note": "model-quality limited, not sampler limited: the reference NFE-32 endpoint is far from the data latent at this training budget, and mel-vs-target is dominated by the AE floor",
+    "mse_ref_vs_data": 2.2352896332740784,
+    "mse_naive2_vs_data": 0.7853125631809235,
+    "mse_reflow2_vs_data": 1.7395756542682648,
+    "mel_ae_floor": 1.6685160398483276,
+    "audio_dynamic_range_ratio": 20.507867084837923
+  }
+}

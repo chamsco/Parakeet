@@ -1,0 +1,64 @@
+{
+  "config": "configs/parakeet_tiny.yaml",
+  "params": 9615685,
+  "corpus": {
+    "utterances": 16,
+    "audio_seconds": 15.018666666666666,
+    "tokens_per_utterance": 8,
+    "layouts": [
+      "long",
+      "short"
+    ]
+  },
+  "steps": {
+    "ae": 250,
+    "text": 400,
+    "decoder": 120
+  },
+  "ae_recon_before": 2.59804318100214,
+  "ae_recon_after": 1.6637138724327087,
+  "text_loss_before": 5.164932817220688,
+  "text_loss_after": 0.46729969792068005,
+  "e2e_mel_before": 2.1526067331433296,
+  "e2e_mel_after": 1.588958777487278,
+  "duration_mae_frames": 0.296875,
+  "phase_coherence_before": 0.135652095079422,
+  "phase_coherence_after": 0.1775476634502411,
+  "latent_normalizer": {
+    "abs_mean": 1.2760443687438965,
+    "mean_sigma": 0.26621541380882263,
+    "updates": 8
+  },
+  "stage_logs": {
+    "distill_text": {
+      "duration": 0.053022065560022986,
+      "f0": 0.046878324914723636,
+      "energy": 0.03515302671740452,
+      "latent": 0.3878170543909073,
+      "loss": 0.5228704716761907,
+      "lr": 6.53e-05,
+      "step": 400.0
+    },
+    "distill_decoder": {
+      "mel": 1.5139184981584548,
+      "spectral": 4.651949079831441,
+      "spec_weight": 45.0,
+      "spec_sc": 0.9272490039467811,
+      "spec_log_mag": 3.724700073401133,
+      "adv": 0.642275144214121,
+      "feat_match": 0.04319351421048244,
+      "phase_lock": 0.6761017019550005,
+      "loss": 211.61409581502278,
+      "lr": 1.23e-05,
+      "disc": 1.078928415849805,
+      "step": 120.0
+    }
+  },
+  "seconds_total": 568.8856019999948,
+  "checks": {
+    "autoencoder_learned": true,
+    "text_side_learned": true,
+    "end_to_end_improved": true,
+    "durations_fit": true
+  }
+}

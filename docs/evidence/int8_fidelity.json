@@ -1,0 +1,71 @@
+{
+  "rows": [
+    {
+      "text": "the quick brown fox jumps over the lazy dog",
+      "torch_ms": 19.740279999678023,
+      "onnx_fp32_ms": 10.432420001598075,
+      "onnx_int8_ms": 4.519760000403039,
+      "onnx_int8_shipped_ms": 6.737459998112172,
+      "audio_seconds": 0.5013333333333333,
+      "int8_vs_torch_speedup": 4.367550488945813,
+      "int8_shipped_vs_torch_speedup": 2.929929083840086,
+      "int8_vs_torch_mel_l1": 0.009465128183364868,
+      "int8_vs_torch_waveform_cosine": 0.9998070001602173
+    },
+    {
+      "text": "parakeet is a small and fast text to speech model",
+      "torch_ms": 20.29329999932088,
+      "onnx_fp32_ms": 11.738379998132586,
+      "onnx_int8_ms": 5.778499998268671,
+      "onnx_int8_shipped_ms": 8.748479999485426,
+      "audio_seconds": 0.5866666666666667,
+      "int8_vs_torch_speedup": 3.5118629411440803,
+      "int8_shipped_vs_torch_speedup": 2.3196372398993317,
+      "int8_vs_torch_mel_l1": 0.06201498955488205,
+      "int8_vs_torch_waveform_cosine": 0.9773098230361938
+    },
+    {
+      "text": "real time factor is the number that matters on a laptop",
+      "torch_ms": 23.56699999945704,
+      "onnx_fp32_ms": 13.412380000227131,
+      "onnx_int8_ms": 5.9522800002014264,
+      "onnx_int8_shipped_ms": 8.852360001765192,
+      "audio_seconds": 0.6293333333333333,
+      "int8_vs_torch_speedup": 3.9593231498954227,
+      "int8_shipped_vs_torch_speedup": 2.662227925068309,
+      "int8_vs_torch_mel_l1": 0.009680729359388351,
+      "int8_vs_torch_waveform_cosine": 0.999771773815155
+    }
+  ],
+  "text_side_mb": {
+    "fp32": 18.757562,
+    "int8": 5.221575
+  },
+  "vocoder_mb": {
+    "fp32": 17.972021,
+    "int8": 4.684369
+  },
+  "mean_ms": {
+    "torch": 21.200193332818646,
+    "onnx_fp32": 11.861059999985931,
+    "onnx_int8": 5.416846666291046,
+    "onnx_int8_shipped": 8.112766666454263
+  },
+  "mean_audio_seconds": 0.5724444444444444,
+  "torch_rtf": 0.03703449922270338,
+  "int8_rtf": 0.009462659160834514,
+  "int8_shipped_rtf": 0.01417214673875939,
+  "torch_x_realtime": 27.001850193426314,
+  "int8_x_realtime": 105.67853951022049,
+  "int8_shipped_x_realtime": 70.56094030307356,
+  "int8_vs_torch_speedup": 3.913751789347689,
+  "int8_shipped_vs_torch_speedup": 2.6131890888073976,
+  "int8_vs_torch_mel_l1": 0.027053615699211758,
+  "int8_vs_torch_waveform_cosine": 0.9922961990038554,
+  "total_int8_mb": 9.905944,
+  "total_fp32_mb": 36.729583,
+  "threads": 1,
+  "config": "configs/parakeet_tiny.yaml",
+  "checkpoint": null,
+  "export_seconds": 8.149573499991675
+}

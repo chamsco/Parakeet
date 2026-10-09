@@ -96,7 +96,7 @@ the engineering.
       reference cap and the teacher mixture entirely; `curate_manifest` (the whole P1 pipeline) was
       dead code and now runs by default. Wiring it exposed two real gate defects: digital silence
       passed (no absolute level gate) and `silence_ratio` scored 0.0 for it.
-* [ ] Model card: teachers used, licence obligations, intended/misuse cases, deep-synthesis
+* [x] Model card, **generated from evidence** (`scripts/model_card.py` -> `docs/MODEL_CARD.md`): 15 claims, each citing a report file and JSON path; missing evidence renders as unmeasured and a bad value as FAILING; the cited evidence is committed under `docs/evidence/` with a SHA-256 manifest so a fresh clone can verify it; the licence table comes from the teacher specs.  CI (workflow_dispatch) re-runs every demo, refreshes the bundle and fails on `git diff --exit-code`, so the card cannot rot
       marking, provenance hashes
 
 ## P5 — Optional quality work

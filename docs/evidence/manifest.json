@@ -1,0 +1,115 @@
+{
+  "generated": "2026-10-09T10:51:52",
+  "git": {
+    "rev": "c933cc4",
+    "dirty": true
+  },
+  "note": "Committed snapshots of the reports the model card cites.  Refresh with `python scripts/model_card.py --refresh-evidence` after re-running the demos; the hashes make a stale bundle visible.",
+  "entries": [
+    {
+      "claim": "int8_pipeline_speed",
+      "status": "copied",
+      "source": "runs/onnx_pipeline/pipeline_report.json",
+      "evidence": "docs/evidence/int8_pipeline_speed.json",
+      "sha256": "b2c9c7f933185cb22da9473f8e758199130b07802a81ca3bba6279ba6539a4e2"
+    },
+    {
+      "claim": "int8_speedup_vs_pytorch",
+      "status": "copied",
+      "source": "runs/onnx_pipeline/pipeline_report.json",
+      "evidence": "docs/evidence/int8_speedup_vs_pytorch.json",
+      "sha256": "b2c9c7f933185cb22da9473f8e758199130b07802a81ca3bba6279ba6539a4e2"
+    },
+    {
+      "claim": "int8_size",
+      "status": "copied",
+      "source": "runs/onnx_pipeline/pipeline_report.json",
+      "evidence": "docs/evidence/int8_size.json",
+      "sha256": "b2c9c7f933185cb22da9473f8e758199130b07802a81ca3bba6279ba6539a4e2"
+    },
+    {
+      "claim": "int8_fidelity",
+      "status": "copied",
+      "source": "runs/onnx_pipeline/pipeline_report.json",
+      "evidence": "docs/evidence/int8_fidelity.json",
+      "sha256": "b2c9c7f933185cb22da9473f8e758199130b07802a81ca3bba6279ba6539a4e2"
+    },
+    {
+      "claim": "streaming_ttfa",
+      "status": "copied",
+      "source": "runs/streaming_demo/report.json",
+      "evidence": "docs/evidence/streaming_ttfa.json",
+      "sha256": "220735b6d73349e07a4f0ee73d8f2b9389b408e6b00a8cbb3f476a114a510378"
+    },
+    {
+      "claim": "streaming_quality",
+      "status": "copied",
+      "source": "runs/streaming_demo/report.json",
+      "evidence": "docs/evidence/streaming_quality.json",
+      "sha256": "220735b6d73349e07a4f0ee73d8f2b9389b408e6b00a8cbb3f476a114a510378"
+    },
+    {
+      "claim": "reflow_nfe2",
+      "status": "copied",
+      "source": "runs/reflow_demo/report.json",
+      "evidence": "docs/evidence/reflow_nfe2.json",
+      "sha256": "c61e1d667f7405cfdc8c54e54644789d96c25bee4cb6a3bd03f1e51bea9574ee"
+    },
+    {
+      "claim": "mixture_steers",
+      "status": "copied",
+      "source": "runs/mixture_demo/report.json",
+      "evidence": "docs/evidence/mixture_steers.json",
+      "sha256": "7bb8d4e39fd5542a71b2c1eb35e8fa70455bd3c6240ea86bc81a52b30f605c59"
+    },
+    {
+      "claim": "multi_voice",
+      "status": "copied",
+      "source": "runs/voice_demo/report.json",
+      "evidence": "docs/evidence/multi_voice.json",
+      "sha256": "4a35d2a276107b96d90bafeca1a603c61425941748042999c7c84d73c78a9d62"
+    },
+    {
+      "claim": "recipe_tiny_end_to_end",
+      "status": "copied",
+      "source": "runs/recipe_curate/report.json",
+      "evidence": "docs/evidence/recipe_tiny_end_to_end.json",
+      "sha256": "2d5286948b20b62e0758538a1a249c611f1a7b6704c12fddb30dea157aeca7a9"
+    },
+    {
+      "claim": "recipe_small_end_to_end",
+      "status": "copied",
+      "source": "runs/recipe_flow/report.json",
+      "evidence": "docs/evidence/recipe_small_end_to_end.json",
+      "sha256": "ac55a3a7c84eb6ec5ae824fa28d0050dedac4f3a9217af6c557cdd52e111e1ca"
+    },
+    {
+      "claim": "resume_exact",
+      "status": "copied",
+      "source": "runs/resume_demo/report.json",
+      "evidence": "docs/evidence/resume_exact.json",
+      "sha256": "50c7a8dfd6f946f3eb15af1dead8f6294664bcafce9f86ff4607afe233ba3e90"
+    },
+    {
+      "claim": "phase_lock_locks",
+      "status": "copied",
+      "source": "runs/phase_lock_ab/report.json",
+      "evidence": "docs/evidence/phase_lock_locks.json",
+      "sha256": "b1e8bd4817908cd6baf32d6fe469e6ca30a6110b29993dfba976019441be3a08"
+    },
+    {
+      "claim": "learning_progress",
+      "status": "copied",
+      "source": "runs/learn_demo/report.json",
+      "evidence": "docs/evidence/learning_progress.json",
+      "sha256": "f4951efef17b986e986b81329ebdbc32a5f2f7e6986509f79dbebe938096ea16"
+    },
+    {
+      "claim": "learning_text_side",
+      "status": "copied",
+      "source": "runs/learn_demo/report.json",
+      "evidence": "docs/evidence/learning_text_side.json",
+      "sha256": "f4951efef17b986e986b81329ebdbc32a5f2f7e6986509f79dbebe938096ea16"
+    }
+  ]
+}

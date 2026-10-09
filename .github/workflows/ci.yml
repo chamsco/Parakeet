@@ -69,10 +69,13 @@ jobs:
 
   benchmarks:
     # The slower, timing-sensitive checks run on demand only: they measure real-time factors and
-    # ONNX latency, which are meaningless on a shared CI runner.
+    # ONNX latency, which are meaningless on a shared CI runner.  This job also regenerates the whole
+    # evidence bundle behind docs/MODEL_CARD.md and fails if the committed card is stale -- which
+    # makes "every number is reproducible from the commands in the card" a gate rather than a claim.
+    # Expect ~40 minutes on a 2-core runner.
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -89,12 +92,36 @@ jobs:
       - name: pipeline profile
         run: python scripts/profile_pipeline.py --config configs/parakeet_tiny.yaml --out runs/profile.json
       - name: int8 ONNX pipeline
-        run: python scripts/export_onnx.py --config configs/parakeet_tiny.yaml --pipeline --out runs/onnx
+        run: python scripts/export_onnx.py --config configs/parakeet_tiny.yaml --pipeline --out runs/onnx_pipeline
       - name: streaming and TTFA
-        run: python scripts/streaming_demo.py --out runs/streaming
+        run: python scripts/streaming_demo.py --out runs/streaming_demo
       - name: reflow (few-step sampling)
-        run: python scripts/reflow_demo.py --out runs/reflow
+        run: python scripts/reflow_demo.py --out runs/reflow_demo
+      - name: learning demos
+        run: |
+          python scripts/learn_demo.py --out runs/learn_demo
+          python scripts/mixture_demo.py --out runs/mixture_demo
+          python scripts/voice_demo.py --out runs/voice_demo
+      - name: phase-lock A/B and checkpoint/resume
+        run: |
+          python scripts/phase_lock_ab.py --out runs/phase_lock_ab
+          python scripts/resume_demo.py --out runs/resume_demo
+      - name: whole recipe, both student paths
+        run: |
+          python scripts/recipe_dry_run.py --out runs/recipe_dry_run
+          python scripts/recipe_dry_run.py --stage flow --out runs/recipe_flow
+      - name: regenerate the model card and fail if it is stale
+        # If a demo stops producing a report, or a measurement moves, the committed card no longer
+        # matches what a fresh run produces.  That is the point: the card cannot rot silently.
+        run: |
+          python scripts/model_card.py --refresh-evidence
+          python scripts/model_card.py --check
+          git diff --exit-code -- docs/evidence docs/MODEL_CARD.md
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: benchmark-reports
-          path: runs/*.json
+          path: |
+            runs/*.json
+            docs/MODEL_CARD.md
+            docs/evidence/
