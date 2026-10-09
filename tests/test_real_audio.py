@@ -287,6 +287,37 @@ def test_wer_is_reported_when_the_control_passes(monkeypatch):
     assert calls["count"] == 2
 
 
+def test_dnsmos_clamps_out_of_range_audio_and_reports_it(monkeypatch):
+    """The decoder does not guarantee `|sample| <= 1`, and the resampler can overshoot even after a
+    first clamp (measured: `np.ndarray values must be between -1 and 1` from DNSMOS on one utterance
+    of a token-rate sweep).  A metric should measure a hot signal rather than refuse it -- while still
+    making the clipping visible, because a hot output is itself a finding."""
+    import sys
+    import types
+
+    seen = {}
+
+    def run(sample, sr, **kwargs):
+        seen["max_abs"] = float(max(abs(sample.min()), abs(sample.max())))
+        return {"ovrl_mos": 2.5, "sig_mos": 2.5, "bak_mos": 3.0, "p808_mos": 3.0}
+
+    fake = types.ModuleType("speechmos.dnsmos")
+    fake.run = run
+    package = types.ModuleType("speechmos")
+    package.dnsmos = fake
+    monkeypatch.setitem(sys.modules, "speechmos", package)
+    monkeypatch.setitem(sys.modules, "speechmos.dnsmos", fake)
+
+    from parakeet.eval.metrics import dnsmos_score
+
+    hot = torch.full((24000,), 3.7)  # far outside the range DNSMOS accepts
+    metric = dnsmos_score([hot], sample_rate=24000)
+    assert metric.available, metric.reason
+    assert metric.value == pytest.approx(2.5)
+    assert seen["max_abs"] <= 1.0, "the audio handed to DNSMOS must be in range"
+    assert "clipped" in metric.detail, "and the clipping must be reported, not hidden"
+
+
 def test_real_evaluation_evidence_reports_its_controls():
     """A naturalness number without the teacher control, and WER without its recogniser, are not
     results."""

@@ -28,6 +28,7 @@ from ..config import ParakeetConfig
 from .autoencoder import LatentNormalizer, SpeechAutoencoder
 from .blocks import sequence_mask
 from .duration import (
+    align_subtokens_to_frames,
     DurationPredictor,
     UtteranceLengthPredictor,
     align_tokens_to_frames,
@@ -79,7 +80,11 @@ class ParakeetTiny(nn.Module):
         #: per-token acoustic state, predicted by the small text side (Paradee's "phoneme
         #: features"): a vector in the autoencoder's latent space.
         self.latent_head = nn.Sequential(
-            nn.Linear(cfg.text.dim, cfg.text.dim), nn.GELU(), nn.Linear(cfg.text.dim, cfg.autoencoder.latent_dim)
+            nn.Linear(cfg.text.dim, cfg.text.dim), nn.GELU(),
+            nn.Linear(
+                cfg.text.dim,
+                cfg.autoencoder.latent_dim * max(1, int(cfg.autoencoder.latent_rate)),
+            ),
         )
         self.f0_head = nn.Linear(cfg.text.dim, 1)
         self.energy_head = nn.Linear(cfg.text.dim, 1)
@@ -125,8 +130,21 @@ class ParakeetTiny(nn.Module):
         energy: Optional[torch.Tensor] = None,
         max_frames: Optional[int] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Build the frame-rate latent the decoder consumes."""
-        frames, frame_mask = align_tokens_to_frames(latent_tok, durations)
+        """Build the frame-rate latent the decoder consumes.
+
+        With ``latent_rate`` > 1 each text token carries that many sub-latents, expanded over the same
+        sub-spans the cache averaged its targets over (`subtoken_spans`), so the decoder sees a piece-
+        wise-constant latent whose steps are half/third as coarse -- which is what closed most of the
+        seam in the round-22 sweep.
+        """
+        rate = max(1, int(self.cfg.autoencoder.latent_rate))
+        latent_dim = int(self.cfg.autoencoder.latent_dim)
+        if rate > 1 and latent_tok.shape[-1] == rate * latent_dim:
+            subtokens = latent_tok.reshape(*latent_tok.shape[:-1], rate, latent_dim)
+            total = int(durations.sum().item()) if max_frames is None else max_frames
+            frames, frame_mask = align_subtokens_to_frames(subtokens, durations, total)
+        else:
+            frames, frame_mask = align_tokens_to_frames(latent_tok, durations)
         if max_frames is not None:
             frames = frames[:, :max_frames]
             frame_mask = frame_mask[:, :max_frames]

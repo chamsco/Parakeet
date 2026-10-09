@@ -1,7 +1,7 @@
 {
-  "generated": "2026-10-09T15:03:12",
+  "generated": "2026-10-09T15:28:41",
   "git": {
-    "rev": "5e7e282",
+    "rev": "51782c9",
     "dirty": true
   },
   "note": "Committed snapshots of the reports the model card cites.  Refresh with `python scripts/model_card.py --refresh-evidence` after re-running the demos; the hashes make a stale bundle visible.",
@@ -110,6 +110,20 @@
       "source": "runs/real_diagnose/report.json",
       "evidence": "docs/evidence/real_diagnosis.json",
       "sha256": "46edb94cb590ab5431f13f6b227de912fda548dd3c303642061f7693b9873f21"
+    },
+    {
+      "claim": "latent_rate_ab",
+      "status": "copied",
+      "source": "runs/latent_rate_ab.json",
+      "evidence": "docs/evidence/latent_rate_ab.json",
+      "sha256": "9129ab3de9e358c9b98dc51196e57564ce028ccebcc0afb492c6571d87573b05"
+    },
+    {
+      "claim": "seam_rate_sweep",
+      "status": "copied",
+      "source": "runs/seam_rate.json",
+      "evidence": "docs/evidence/seam_rate_sweep.json",
+      "sha256": "5ff49326ec2fa0b8de2b67c52d5fd66f1732b879a0c54c635bf96c84935f3c9d"
     },
     {
       "claim": "seam_ab",

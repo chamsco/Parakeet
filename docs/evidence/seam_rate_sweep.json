@@ -1,0 +1,80 @@
+{
+  "checkpoint": "runs/seam_on/distill-decoder_last.pt",
+  "utterances": 6,
+  "recogniser": "base.en",
+  "reference_wer": 0.0,
+  "rates": [
+    {
+      "rate": 1,
+      "wer": 0.7222222222222222,
+      "wer_available": true,
+      "wer_reason": "",
+      "dnsmos": 1.5521672146898966,
+      "dnsmos_available": true,
+      "dnsmos_reason": "",
+      "log_mel_cosine": 0.9783052901426951,
+      "dims_per_frame": 3.8898333958196316,
+      "audio_finite": true,
+      "control_note": "the recogniser transcribed the teacher's audio correctly"
+    },
+    {
+      "rate": 2,
+      "wer": 0.2037037037037037,
+      "wer_available": true,
+      "wer_reason": "",
+      "dnsmos": 1.473616132362272,
+      "dnsmos_available": true,
+      "dnsmos_reason": "",
+      "log_mel_cosine": 0.9886480967203776,
+      "dims_per_frame": 7.779666791639263,
+      "audio_finite": true,
+      "control_note": "the recogniser transcribed the teacher's audio correctly"
+    },
+    {
+      "rate": 3,
+      "wer": 0.09259259259259259,
+      "wer_available": true,
+      "wer_reason": "",
+      "dnsmos": 1.5017041885649476,
+      "dnsmos_available": true,
+      "dnsmos_reason": "",
+      "log_mel_cosine": 0.9910575946172079,
+      "dims_per_frame": 11.669500187458894,
+      "audio_finite": true,
+      "control_note": "the recogniser transcribed the teacher's audio correctly"
+    },
+    {
+      "rate": 6,
+      "wer": 0.2962962962962963,
+      "wer_available": true,
+      "wer_reason": "",
+      "dnsmos": 1.6839964120438318,
+      "dnsmos_available": true,
+      "dnsmos_reason": "",
+      "log_mel_cosine": 0.9930967291196188,
+      "dims_per_frame": 23.339000374917788,
+      "audio_finite": true,
+      "control_note": "the recogniser transcribed the teacher's audio correctly"
+    },
+    {
+      "rate": 12,
+      "wer": 0.16666666666666666,
+      "wer_available": true,
+      "wer_reason": "",
+      "dnsmos": 1.6597134177099964,
+      "dnsmos_available": true,
+      "dnsmos_reason": "",
+      "log_mel_cosine": 0.9938101768493652,
+      "dims_per_frame": 46.678000749835576,
+      "audio_finite": true,
+      "control_note": "the recogniser transcribed the teacher's audio correctly"
+    }
+  ],
+  "note": "K sub-latents per token built from the TEACHER's frame latent: an oracle for a text side predicting K latents per token.  rate 1 is the current pipeline; a large rate approaches the frame latent (WER 0.167) exactly.",
+  "checks": {
+    "recogniser_works_on_the_reference": true,
+    "the_control_held_for_every_rate": true,
+    "a_small_rate_increase_closes_most_of_the_seam": true,
+    "the_curve_plateaus_rather_than_improving_forever": true
+  }
+}

@@ -12,14 +12,14 @@ python scripts/reflow_demo.py                               # validates NFE-2 sa
 python scripts/streaming_demo.py                            # blockwise streaming + TTFA (~7 min CPU)
 python scripts/export_onnx.py --pipeline                    # int8 ONNX + runtime benchmark
 python scripts/profile_pipeline.py                          # where does the time actually go
-python -m pytest -q                                         # 248 tests
+python -m pytest -q                                         # 252 tests
 python scripts/bench_rtf.py --config configs/parakeet_tiny.yaml
 ```
 
 ## 1. Test suite
 
 ```
-248 passed
+252 passed
 ```
 
 Coverage by area:
@@ -38,10 +38,14 @@ Coverage by area:
 | `test_onnx.py` | ONNX decoder matches PyTorch to **<1e-4**; text side matches to **<1e-4 across token lengths 5/8/17** (the legacy exporter's baked-in length would fail this); dynamic time axis across 7/23/41 frames; int8 files are smaller and run on CPU; dtypes are validated at the wrapper boundary; external weight sidecars are counted in size; full int8 pipeline tracks PyTorch (cosine >0.95) and is smaller in total (skips if `onnx`/`onnxruntime`/`onnxscript` absent) |
 | `test_train_stages.py` (extended, again) | the decoder stage really consumes the **token-expanded** distribution when the flag is on (and the log records which was used, so a silent revert is visible); and `--set`/warm-start/frame-latent paths still behave |
 | `test_train_stages.py` (extended) | a reconstruction-only phase really is reconstruction-only (`adversarial` weight 0 ⇒ no `disc` loss and no discriminator step, while the generator still trains) — that option is 24× cheaper per step and is what fixed the autoencoder; and a non-finite loss is **skipped, counted, reported with its first step, written to `divergence.json`, and leaves the parameters finite**, so divergence is a finding instead of an all-NaN report |
+| `test_duration_scale.py` (extended) | the sub-token geometry is **shared**: a sub-vector index must land in the frame span its target was averaged over, so targets and expansion cannot drift apart; degenerate tokens (fewer frames than the rate) stay in bounds; and `latent_rate` widens the head without changing the frame count |
+| `test_duration_scale.py` (extended) | the sub-token geometry is **shared**: a sub-vector index must land in the frame span its target was averaged over, so targets and expansion cannot drift apart; degenerate tokens (fewer frames than the rate) stay in bounds; and `latent_rate` widens the head without changing the frame count |
 | `test_duration_scale.py` | durations round-trip through their normalisation exactly; zero on the normalised scale means the measured corpus mean (6 frames), not 1; a one-standard-deviation head output stretches the sequence by ~1.48× — not the ~2.7× that `log_duration.exp()` would give, so the trap is caught even though both produce audio; the loss term is ~zero against the normalised target and >0.5 against a raw-log one; and the diagnosis evidence carries its validity checks and a named bottleneck |
 | `test_real_audio.py` | the voicing threshold admits more frames as it rises **while the pitch estimate stays put** (the real-speech signature of a threshold that was too strict); an unvoiced token inherits the nearest voiced pitch instead of 0 Hz; the unaligned split neither collapses nor ignores the energy; the Kokoro runtime dispatch lands on an importable backend and rejects an unknown voice with the available list; the DNSMOS wrapper reads `ovrl_mos` rather than defaulting to 0.0 (the bug the teacher control caught); the real-audio, real-training and real-evaluation evidence all record their provenance, their controls and their caveats |
 | `test_train_stages.py` (extended, again) | the decoder stage really consumes the **token-expanded** distribution when the flag is on (and the log records which was used, so a silent revert is visible); and `--set`/warm-start/frame-latent paths still behave |
 | `test_train_stages.py` (extended) | a reconstruction-only phase really is reconstruction-only (`adversarial` weight 0 ⇒ no `disc` loss and no discriminator step, while the generator still trains) — that option is 24× cheaper per step and is what fixed the autoencoder; and a non-finite loss is **skipped, counted, reported with its first step, written to `divergence.json`, and leaves the parameters finite**, so divergence is a finding instead of an all-NaN report |
+| `test_duration_scale.py` (extended) | the sub-token geometry is **shared**: a sub-vector index must land in the frame span its target was averaged over, so targets and expansion cannot drift apart; degenerate tokens (fewer frames than the rate) stay in bounds; and `latent_rate` widens the head without changing the frame count |
+| `test_duration_scale.py` (extended) | the sub-token geometry is **shared**: a sub-vector index must land in the frame span its target was averaged over, so targets and expansion cannot drift apart; degenerate tokens (fewer frames than the rate) stay in bounds; and `latent_rate` widens the head without changing the frame count |
 | `test_duration_scale.py` | durations round-trip through their normalisation exactly; zero on the normalised scale means the measured corpus mean (6 frames), not 1; a one-standard-deviation head output stretches the sequence by ~1.48× — not the ~2.7× that `log_duration.exp()` would give, so the trap is caught even though both produce audio; the loss term is ~zero against the normalised target and >0.5 against a raw-log one; and the diagnosis evidence carries its validity checks and a named bottleneck |
 | `test_real_audio.py` | the voicing threshold admits more frames as it rises **while the pitch estimate stays put** (the real-speech signature of a threshold that was too strict); an unvoiced token inherits the nearest voiced pitch instead of 0 Hz; the unaligned split neither collapses nor ignores the energy; the Kokoro runtime dispatch lands on an importable backend and rejects an unknown voice with the available list; the real-audio evidence records its provenance and its duration caveat |
 | `test_ablation.py` | the offered lite config really is smaller and really trains and synthesizes; it **matches the geometry the ablation recommended** (read from the committed evidence, so it holds in a clone); and the evidence records its own limitations (a caveat, a held-out split of ≥ 3 items, both train and val fits) — a study without its caveat is an overclaim |
@@ -1036,7 +1040,62 @@ the next round: raise the effective token rate (predict sub-token latents rather
 text token), or add a refinement stage that consumes token latents and predicts frame latents — the
 role the flow/consistency sampler plays in the Small model.
 
-## 24. Smoke test output (measured)
+## 24. The seam is mostly *information*: a token-rate sweep, and the rate change end to end (measured)
+
+Round 21 showed that training the decoder on the distribution inference feeds it helps the seam
+(0.889 → 0.722) but does not close it. The suspected cause was arithmetic: one latent per text token
+is 24 numbers per ~6 frames — **3.9 dimensions per frame against the encoder's 24** — so no decoder
+recovers detail the averaging removed.
+
+`scripts/seam_rate.py` tests that directly and **without training**: for K sub-latents per token it
+fills each sub-span with the mean of the teacher's own frame latent over that sub-span and decodes.
+K=1 reproduces the pipeline; K = frames-per-token approaches the frame latent. This is an *oracle* for
+a text side that predicts K latents perfectly, which is exactly the quantity needed to decide whether
+to change the architecture.
+
+| rate | dims/frame | WER | log-mel cosine | DNSMOS |
+|---|---|---|---|---|
+| 1 (shipped) | 3.9 | 0.722 | 0.9783 | 1.55 |
+| 2 | 7.8 | 0.204 | 0.9886 | 1.47 |
+| **3** | 11.7 | **0.093** | 0.9911 | 1.50 |
+| 6 | 23.3 | 0.296 | 0.9931 | 1.68 |
+| 12 | 46.7 | 0.167 | 0.9938 | 1.66 |
+
+**77 % of the seam is information loss**, and doubling the token rate already recovers most of it. The
+curve plateaus (and the WER bounces around at this sample size) beyond rate 3 — the decoder was trained
+on rate-1 inputs, so higher rates are off-distribution. The check is therefore stated as a plateau, not
+as "more is always better", which the data does not support.
+
+Two things surfaced while measuring this, both fixed: the decoder's output can leave
+`[-1, 1]` (DNSMOS refused the array), and the polyphase resampler **overshoots even after a clamp**, so
+`dnsmos_score` now clamps after resampling and reports the clipped fraction in its detail.
+
+### The change, and the honest result
+
+`latent_rate` is now a config field: the cache averages sub-token targets over sub-spans and the text
+side's latent head widens to `latent_rate × latent_dim`. The geometry comes from one function
+(`subtoken_spans`) used by **both** the target builder and the expansion, because splitting the span in
+two places is how this kind of change silently misaligns — a test pins that contract.
+
+Both arms: same autoencoder, same corpus, same 800 steps.
+
+| | rate 1 | rate 3 |
+|---|---|---|
+| student WER (`base.en`) | 2.204 | **1.648** |
+| student DNSMOS | 1.430 | **1.633** |
+| log-mel cosine vs reference | 0.9393 | 0.9427 |
+| speed | 135× real time | 116× real time |
+| teacher WER / DNSMOS (controls) | 0.000 / 2.613 | 0.000 / 2.613 |
+
+The oracle gain **does** transfer: the student improves on both axes at no meaningful cost in speed
+(the model is 32 KB wider, and both arms run two orders of magnitude faster than real time). And the
+student is still unintelligible while the oracle path is not — which localises what remains: **the gap
+is latent prediction, not the seam and not the autoencoder.** The text side fits its objective well
+(loss 0.655) while the audio it renders is wrong, the signature of a latent-space L1 that does not
+track what the decoder needs. The next change is therefore to the **objective**, not the architecture:
+train the text side through the decoder with a mel/audio loss instead of an L1 on cached latents.
+
+## 25. Smoke test output (measured)
 
 ```
 parakeet-tiny [tiny] sr=24000 mel=80@93.8Hz latent=24 compress=1/6 voice=constant
@@ -1087,7 +1146,7 @@ overhead — it is not a valid throughput measurement until the model predicts s
 learning demo (§2) trains properly but on 15 seconds of *synthetic* audio, so it demonstrates that
 the machinery learns, not that the model is good.
 
-## 25. Deliberate engineering checks worth calling out
+## 26. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
@@ -1123,7 +1182,7 @@ the machinery learns, not that the model is good.
   `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
   else, rather than surfacing a cryptic `torch.stft` message.
 
-## 26. Environment notes
+## 27. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).

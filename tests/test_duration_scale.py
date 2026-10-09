@@ -111,6 +111,64 @@ def test_the_distillation_loss_compares_against_the_normalised_target():
     assert float(wrong_parts["duration"]) > 0.5
 
 
+def test_subtoken_geometry_is_shared_between_targets_and_expansion():
+    """The cache averages sub-token targets over spans; inference must expand over the *same* spans.
+
+    Splitting the geometry in two places is how this kind of change silently misaligns, so both call
+    the same function.  This test pins that contract: a sub-vector index must land in the frame span
+    the target was averaged over.
+    """
+    from parakeet.models.duration import align_subtokens_to_frames, subtoken_spans
+
+    durations = torch.tensor([5, 7, 3])
+    rate = 3
+    subtokens = torch.arange(1 * 3 * rate * 2, dtype=torch.float32).reshape(1, 3, rate, 2)
+    total = int(durations.sum())
+    frames, mask = align_subtokens_to_frames(subtokens, durations, total)
+
+    assert frames.shape == (1, total, 2)
+    assert bool(mask.all()), "every frame must be covered"
+    for token_index, spans in enumerate(subtoken_spans(durations, rate, total)):
+        for k, (a, b) in enumerate(spans):
+            assert b > a
+            expected = subtokens[0, token_index, k]
+            assert torch.allclose(frames[0, a, :], expected), (token_index, k, a)
+            assert torch.allclose(frames[0, b - 1, :], expected), (token_index, k, b - 1)
+
+
+def test_subtoken_spans_degenerate_tokens_stay_in_bounds():
+    """A token with fewer frames than the rate must not produce out-of-range or negative spans."""
+    from parakeet.models.duration import subtoken_spans
+
+    spans = subtoken_spans(torch.tensor([1, 1]), 3, 2)
+    assert len(spans) == 2
+    for token_spans in spans:
+        assert token_spans, "a token that exists must get at least one span"
+        for a, b in token_spans:
+            assert 0 <= a < b <= 2
+
+
+def test_latent_rate_widens_the_head_but_not_the_frame_count():
+    """The rate changes how many numbers a token carries, never how many frames come out."""
+    from parakeet.models import build_model
+
+    cfg = load_config("configs/parakeet_tiny.yaml")
+    cfg.n_voices = 1
+    ids = torch.randint(1, 20, (1, 5))
+    durations = torch.tensor([[6, 6, 6, 6, 6]])
+    for rate in (1, 3):
+        cfg.autoencoder.latent_rate = rate
+        model = build_model(cfg)
+        model.eval()
+        with torch.no_grad():
+            side = model.text_side(ids)
+            latent, _ = model.decoder_latent_from_tokens(
+                side["latent_token"], durations, side["f0"], side["energy"]
+            )
+        assert side["latent_token"].shape[-1] == rate * cfg.autoencoder.latent_dim
+        assert latent.shape[-1] == int(durations.sum()), "the frame count must not depend on the rate"
+
+
 def test_real_diagnosis_evidence_localises_the_bottleneck():
     """The diagnosis must carry its own validity checks and name a bottleneck."""
     import json

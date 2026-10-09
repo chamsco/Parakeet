@@ -61,6 +61,13 @@ class AutoencoderConfig:
     #: token-expanded path scores WER 0.870 where the frame path scores 0.167, for 0.016 of mel
     #: cosine.  Kept as a flag so the comparison stays reproducible.
     decoder_uses_token_latents: bool = True
+    #: How many latents the text side predicts **per text token**.  At the default 1 the token path
+    #: carries 24 numbers per ~6 frames (~3.9 dimensions per frame against the encoder's 24), and
+    #: round 22 measured that this accounts for most of the token->frame seam: with oracle sub-latents
+    #: from the teacher's own frame latent, WER falls 0.722 (rate 1) -> 0.204 (rate 2) -> 0.093
+    #: (rate 3), against 0.167 for the frame latent itself, with no further gain beyond rate 3.
+    #: Raising it widens the text side's latent head to ``latent_rate * latent_dim``.
+    latent_rate: int = 1
 
 
 @dataclass

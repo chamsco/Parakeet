@@ -59,6 +59,10 @@ def main() -> int:
     ap.add_argument("--steps-ae", type=int, default=300)
     ap.add_argument("--steps-text", type=int, default=400)
     ap.add_argument("--batch-size", type=int, default=4)
+    ap.add_argument("--latent-rate", type=int, default=None,
+                    help="latents per text token (config default 1).  Round 22 measured that rate 2-3 "
+                         "recovers most of the token->frame seam with oracle sub-latents; this is the "
+                         "test of whether a *trained* text side realises that")
     ap.add_argument("--reuse-ae", action="store_true",
                     help="load the autoencoder checkpoint from --out instead of retraining it "
                          "(the AE takes ~25 min on CPU; the text side takes ~20 s)")
@@ -77,6 +81,8 @@ def main() -> int:
     ]
     voices = sorted({str(r.get("voice") or "") for r in records})
     cfg = load_config(args.config)
+    if args.latent_rate:
+        cfg.autoencoder.latent_rate = args.latent_rate
     cfg.n_voices = max(1, len(voices))
     cfg.train.batch_size = args.batch_size
     cfg.train.log_every = max(1, args.steps_ae // 6)

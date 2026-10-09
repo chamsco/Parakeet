@@ -61,6 +61,7 @@ def main() -> int:
     ap.add_argument("--checkpoint", default="runs/real_train/distill-text_last.pt")
     ap.add_argument("--corpus", default="data/real_corpus/corpus")
     ap.add_argument("--config", default="configs/parakeet_tiny.yaml")
+    ap.add_argument("--latent-rate", type=int, default=None, help="latents per text token (must match the checkpoint)")
     ap.add_argument("--limit", type=int, default=8)
     ap.add_argument("--whisper", default="base.en", help="faster-whisper model size")
     ap.add_argument("--out", default="runs/real_eval")
@@ -82,6 +83,8 @@ def main() -> int:
     cache_meta = Path(args.checkpoint).parent / "latent_cache" / "cache_meta.json"
     voices = json.loads(cache_meta.read_text(encoding="utf-8"))["voice_names"] if cache_meta.exists() else [""]
     cfg = load_config(args.config)
+    if getattr(args, "latent_rate", None):
+        cfg.autoencoder.latent_rate = args.latent_rate
     cfg.n_voices = max(1, len(voices))
     model = build_model(cfg)
     payload = torch.load(args.checkpoint, map_location="cpu", weights_only=False)

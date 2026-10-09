@@ -68,6 +68,7 @@ def extract_signals(
     token_ids: torch.Tensor,
     durations: Optional[torch.Tensor] = None,
     latent_frames: Optional[torch.Tensor] = None,
+    latent_rate: int = 1,
 ) -> SignalTargets:
     """Compute per-token teacher targets from a (teacher) waveform.
 
@@ -122,16 +123,28 @@ def extract_signals(
 
     latent_token = None
     if latent_frames is not None:
-        # average the frame latents inside each token span -> "phoneme feature" (Paradee)
+        # average the frame latents inside each token span -> "phoneme feature" (Paradee).  With
+        # ``latent_rate`` > 1 the span is split into that many equal sub-spans and each sub-vector is
+        # the mean over its own sub-span: the geometry comes from `subtoken_spans`, the same function
+        # inference uses to expand predictions, so the two cannot drift apart.
+        from ..models.duration import subtoken_spans
+
+        rate = max(1, int(latent_rate or 1))
         spans: List[torch.Tensor] = []
-        start = 0
-        for d in durations.tolist():
-            end = min(n_frames, start + int(d))
-            if end <= start:
-                spans.append(torch.zeros(latent_frames.shape[1]))
-            else:
-                spans.append(latent_frames[0, :, start:end].mean(dim=-1))
-            start = end
+        geometry = subtoken_spans(durations, rate, n_frames)
+        for token_spans in geometry:
+            if not token_spans:
+                token_spans = [(0, max(1, min(n_frames, 1)))]
+            whole = latent_frames[0, :, token_spans[0][0] : token_spans[-1][1]]
+            token_mean = whole.mean(dim=-1) if whole.numel() else torch.zeros(latent_frames.shape[1])
+            pieces = []
+            for a, b in token_spans:
+                a = max(0, min(int(a), n_frames))
+                b = max(a + 1, min(int(b), n_frames))
+                pieces.append(latent_frames[0, :, a:b].mean(dim=-1) if b > a else token_mean)
+            while len(pieces) < rate:  # a token shorter than `rate` frames keeps its shape
+                pieces.append(token_mean)
+            spans.append(torch.cat(pieces[:rate]))
         latent_token = torch.stack(spans)
 
     return SignalTargets(
@@ -303,7 +316,8 @@ def build_latent_cache(
         # so both settings coincide until an aligner fills them in.
         teacher_frames = rec.get("token_frames") if use_teacher_durations else None
         sig = extract_signals(
-            wav_t, cfg, ids, durations=teacher_frames, latent_frames=latent
+            wav_t, cfg, ids, durations=teacher_frames, latent_frames=latent,
+            latent_rate=cfg.autoencoder.latent_rate,
         )
         n_frames = min(sig.n_frames, latent.shape[-1])
         n_tokens = int(ids.numel())

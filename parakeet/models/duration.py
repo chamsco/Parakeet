@@ -11,7 +11,7 @@ Two heads, both used by Parakeet:
 
 from __future__ import annotations
 
-from typing import Optional, Tuple
+from typing import List, Optional, Sequence, Tuple
 
 import torch
 import torch.nn as nn
@@ -93,6 +93,75 @@ def align_tokens_to_frames(
         n = min(idx.numel(), t_max)
         out[i, :n] = token_features[i, idx[:n]]
         mask[i, :n] = True
+    return out, mask
+
+
+def subtoken_spans(
+    durations: torch.Tensor, rate: int, n_frames: Optional[int] = None
+) -> List[List[Tuple[int, int]]]:
+    """Split each token's frame span into ``rate`` sub-spans, evenly.
+
+    This exists so the **cache builder and inference cannot disagree** about the geometry.  Round 22
+    measured that a token path carrying one latent per token (24 numbers per ~6 frames, 3.9
+    dimensions per frame) accounts for most of the token->frame seam, and that carrying 2-3 per token
+    recovers it: WER 0.722 at rate 1, 0.204 at rate 2, 0.093 at rate 3, against 0.167 for the frame
+    latent itself.  Splitting the span in two places -- once when building targets, once when
+    expanding predictions -- is exactly how such a change silently misaligns, so both callers use
+    this function.
+
+    A token shorter than ``rate`` frames yields spans clamped to the token; callers must fill any
+    missing sub-vector with the token's own mean so the width stays ``rate * dim``.
+    """
+    spans: List[List[Tuple[int, int]]] = []
+    start = 0
+    for length in durations.tolist():
+        end = start + int(length)
+        if n_frames is not None:
+            end = min(int(n_frames), end)
+        token_spans: List[Tuple[int, int]] = []
+        if end > start:
+            edges = torch.linspace(start, end, rate + 1).round().long().tolist()
+            for k in range(rate):
+                a, b = int(edges[k]), int(edges[k + 1])
+                b = min(max(b, a + 1), end)
+                token_spans.append((a, b) if b > a else (start, end))
+        spans.append(token_spans)
+        start = end
+    return spans
+
+
+def align_subtokens_to_frames(
+    subtokens: torch.Tensor, durations: torch.Tensor, n_frames: Optional[int] = None
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """``(B, T, rate, C)`` per-token sub-latents -> ``(B, frames, C)`` using the shared geometry.
+
+    The inverse of how :func:`subtoken_spans` defines the spans, so a latent built here matches one
+    whose sub-vectors were averaged over those same spans.
+    """
+    b, t, rate, dim = subtokens.shape
+    if durations.dim() == 1:  # a single item
+        durations = durations.unsqueeze(0)
+    if n_frames is not None:
+        total = int(n_frames)
+    else:
+        total = int(durations.sum(dim=-1).max().item())
+    out = torch.zeros(b, total, dim, dtype=subtokens.dtype, device=subtokens.device)
+    mask = torch.zeros(b, total, dtype=torch.bool, device=subtokens.device)
+    for i in range(b):
+        item_total = int(durations[i].sum().item()) if n_frames is None else total
+        item_total = min(item_total, total)
+        geometry = subtoken_spans(durations[i], rate, item_total)
+        for token_index, spans in enumerate(geometry):
+            if token_index >= t:
+                break
+            for k, (a, bb) in enumerate(spans):
+                if a >= total:
+                    continue
+                bb = min(bb, total)
+                if bb <= a:
+                    continue
+                out[i, a:bb] = subtokens[i, token_index, k if k < rate else rate - 1]
+                mask[i, a:bb] = True
     return out, mask
 
 

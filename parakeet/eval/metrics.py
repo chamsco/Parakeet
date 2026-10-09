@@ -144,8 +144,16 @@ def dnsmos_score(audio: Sequence[torch.Tensor], sample_rate: int = 24000) -> Opt
         return OptionalMetric(None, False, f"`speechmos` not installed ({exc.__class__.__name__})")
     try:  # pragma: no cover - requires the optional dependency
         results = []
+        clipped = []
         for wav in audio:
             mono = wav.reshape(-1)
+            # the decoder is not guaranteed to stay inside [-1, 1] (measured: a token-rate sweep hit
+            # "np.ndarray values must be between -1 and 1" from DNSMOS on one utterance), and a metric
+            # should measure the audio rather than refuse it -- but the clipping is reported, because
+            # a hot output is itself a finding
+            over = float((mono.abs() > 1.0).float().mean()) if mono.numel() else 0.0
+            clipped.append(over)
+            mono = mono.clamp(-1.0, 1.0)
             if sample_rate != 16000:
                 try:
                     from scipy.signal import resample_poly
@@ -158,6 +166,9 @@ def dnsmos_score(audio: Sequence[torch.Tensor], sample_rate: int = 24000) -> Opt
                     mono = torch.nn.functional.interpolate(
                         mono.reshape(1, 1, -1), size=target, mode="linear", align_corners=False
                     ).reshape(-1)
+                # polyphase interpolation can *overshoot* the input range, so the clamp has to happen
+                # again after resampling (measured: it did, and DNSMOS refused the array)
+                mono = mono.clamp(-1.0, 1.0)
             results.append(dnsmos.run(mono.numpy(), 16000, return_df=False))
         # keys are `ovrl_mos`, `sig_mos`, `bak_mos`, `p808_mos` -- NOT `mos_ovrl`, which is what the
         # first version of this wrapper looked for, silently returning 0.0 for real speech
@@ -174,6 +185,9 @@ def dnsmos_score(audio: Sequence[torch.Tensor], sample_rate: int = 24000) -> Opt
             )
         else:
             detail = "dnsmos p835 ovrl"
+        clipped_frac = float(np.mean(clipped)) if clipped else 0.0
+        if clipped_frac > 0:
+            detail += f" | {100 * clipped_frac:.2f}% of samples clipped to [-1, 1]"
         return OptionalMetric(float(np.mean(overall)), True, detail=detail)
     except Exception as exc:  # pragma: no cover
         return OptionalMetric(None, False, str(exc))

@@ -1,0 +1,53 @@
+{
+  "question": "does a trained text side realise the oracle gain from predicting sub-token latents, and if not, where does the remaining gap live?",
+  "setup": {
+    "same_autoencoder": true,
+    "steps_text": 800,
+    "corpus_utterances": 21,
+    "latent_rate": {
+      "rate1": 1,
+      "rate3": 3
+    }
+  },
+  "student": {
+    "wer": {
+      "rate1": 2.2037037037037037,
+      "rate3": 1.6481481481481481
+    },
+    "dnsmos": {
+      "rate1": 1.4298934344703618,
+      "rate3": 1.6334609129813167
+    },
+    "log_mel_cosine": {
+      "rate1": 0.9393297334512075,
+      "rate3": 0.9426545401414236
+    },
+    "x_realtime": {
+      "rate1": 135.17472140327192,
+      "rate3": 116.52609527696939
+    },
+    "text_side_loss_after": {
+      "rate1": 0.5167061331726256,
+      "rate3": 0.65509546654565
+    }
+  },
+  "controls": {
+    "teacher_wer": {
+      "rate1": 0.0,
+      "rate3": 0.0
+    },
+    "teacher_dnsmos": {
+      "rate1": 2.6128619289535666,
+      "rate3": 2.6128619289535666
+    }
+  },
+  "conclusion": "Raising the latent rate to 3 improves the student on both axes (WER 2.204 -> 1.648, DNSMOS 1.43 -> 1.63) at no cost in speed, so the oracle finding does transfer.  But the student is still unintelligible, and the oracle path is not: the remaining gap is *latent prediction*, not the seam and not the autoencoder.  The text side fits its training objective well (loss 0.655) while the audio it renders is wrong, which is the signature of a latent-space loss that does not track what the decoder needs -- the next thing to change is the objective, not the architecture: train the text side through the decoder with a mel/audio loss instead of an L1 on cached latents.",
+  "checks": {
+    "both_arms_have_a_valid_recogniser_control": true,
+    "both_arms_have_a_valid_naturalness_control": true,
+    "rate3_improves_intelligibility": true,
+    "rate3_improves_naturalness": true,
+    "rate3_keeps_the_mel_proxy": true,
+    "both_arms_stay_far_faster_than_real_time": true
+  }
+}

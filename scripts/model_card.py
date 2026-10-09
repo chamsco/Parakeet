@@ -171,6 +171,22 @@ CLAIMS: List[Dict[str, Any]] = [
         "fmt": "reference WER {value:.2f} < autoencoder round-trip {other:.2f}",
     },
     {
+        "id": "latent_rate_ab",
+        "statement": "predicting **sub-token latents** improves the student end to end (rate 1 vs 3)",
+        "report": ["runs/latent_rate_ab.json"],
+        "field": "checks",
+        "op": "all_true",
+        "fmt": "{passed}/{total} checks",
+    },
+    {
+        "id": "seam_rate_sweep",
+        "statement": "the token→frame seam is mostly **information** loss (oracle rate sweep)",
+        "report": ["runs/seam_rate.json"],
+        "field": "checks",
+        "op": "all_true",
+        "fmt": "{passed}/{total} checks",
+    },
+    {
         "id": "seam_ab",
         "statement": "the token→frame seam A/B is recorded **including the part that did not work**",
         "report": ["runs/seam_ab.json"],
