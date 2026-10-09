@@ -171,6 +171,14 @@ CLAIMS: List[Dict[str, Any]] = [
         "fmt": "reference WER {value:.2f} < autoencoder round-trip {other:.2f}",
     },
     {
+        "id": "fit_diagnosis",
+        "statement": "the text side matches the latent's **mean** (cosine 0.81) with almost **no per-token structure** (per-dim correlation 0.13) and under-predicts length (0.77x)",
+        "report": ["runs/fit_diag_char.json"],
+        "field": "checks",
+        "op": "all_true",
+        "fmt": "{passed}/{total} checks",
+    },
+    {
         "id": "tokenizer_ab",
         "statement": "phoneme input does **not** beat characters, and the student never fit its own "
                      "training prompts either (WER ≥ 1.0 everywhere) — so the rounds comparing corpus "

@@ -1,0 +1,37 @@
+{
+  "checkpoint": "runs\\mixed_audio\\distill-audio_last.pt",
+  "cache": "runs/mixed_train/latent_cache",
+  "text_mode": "char",
+  "latent_rate": 3,
+  "samples": 24,
+  "train_items": {
+    "duration_mae_frames": 2.312192067503929,
+    "duration_ratio": 0.7698831302981771,
+    "f0_mae": 0.15894916001707315,
+    "energy_mae": 0.17871825955808163,
+    "latent_cosine": 0.804753765463829,
+    "latent_dim_correlation": 0.12564088803828274
+  },
+  "validation_items": {
+    "duration_mae_frames": 3.7141791383425393,
+    "duration_ratio": 0.5834491653747386,
+    "f0_mae": 0.16622585710138083,
+    "energy_mae": 0.21754510762790838,
+    "latent_cosine": 0.7723023667931557,
+    "latent_dim_correlation": 0.10651589425358704
+  },
+  "gap": {
+    "duration_mae_frames": -1.4019870708386102,
+    "duration_ratio": 0.18643396492343856,
+    "f0_mae": -0.007276697084307671,
+    "energy_mae": -0.03882684806982675,
+    "latent_cosine": 0.03245139867067337,
+    "latent_dim_correlation": 0.019124993784695704
+  },
+  "note": "the train items are the corpus's own utterances; the validation items are the tail of the cache (a proxy -- a proper val cache would be better).  Both low means underfitting; high train with low validation means the model memorised.",
+  "checks": {
+    "durations_are_not_collapsed": true,
+    "latent_tokens_correlate_with_the_target": true,
+    "the_two_splits_are_measurable": true
+  }
+}

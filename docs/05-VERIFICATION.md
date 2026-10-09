@@ -1516,7 +1516,38 @@ text. A test pins the segmenter's contract and the mixer's ability to join corpo
 manifest layouts (`PATH:MANIFEST`) — the generated corpora write `train.jsonl`, an ingested one writes
 `curated/kept.jsonl`.
 
-## 33. Smoke test output (measured)
+## 33. What the text side actually learned: a fit diagnosis (measured)
+
+Round 28's WER-1.000-on-training-text finding said the model never fit. WER says *that* it did not; this
+says *which* output is wrong, which is what chooses the fix. `scripts/fit_diagnosis.py` runs the trained
+text side over the cache and compares each of its four outputs against the teacher's:
+
+| split | duration MAE | duration ratio | F0 MAE | energy MAE | latent cosine | **per-dim correlation** |
+|---|---|---|---|---|---|---|
+| train (the corpus's own utterances) | 2.31 frames | **0.770** | 0.159 | 0.179 | 0.805 | **0.126** |
+| validation (tail of the cache) | 3.71 frames | 0.583 | 0.166 | 0.218 | 0.772 | 0.107 |
+
+Three readings, all actionable:
+
+1. **The latent is right in the mean and wrong in the structure.** A flattened cosine of 0.81 looks
+   healthy, but the per-dimension correlation is **0.126** — the predicted 72-dimensional token latent
+   is essentially uncorrelated with the target dimension by dimension. The model learned *the average
+   latent* (which dominates both the cosine and the mel loss), not *which latent this token needs*. That
+   is the signature the whole project has been chasing: mel cosine 0.95 against the reference while the
+   speech is unintelligible.
+2. **The duration head is biased, not merely noisy:** it predicts 0.77× the true length on training text
+   and 0.58× on unseen text, and at ~6 frames per token a 2.31-frame MAE is a ~38 % relative error.
+3. **This is underfitting, not memorisation:** every metric is worse on validation, and none is good on
+   train. There is no fit to overfit from yet.
+
+The fix this points at is not another data A/B. A one-shot regression of 72 latent values per token from
+a small character encoder is being asked to learn the acoustics of speech from text — and the papers do
+not do that: they run a **flow-matching or autoregressive decoder** over acoustic tokens, which is what
+this repository's Small path implements and the Tiny path deliberately skipped. The 6000-step run in
+flight tests the cheaper hypothesis (more optimisation) first; if the per-dimension correlation does not
+climb, the structural one is next.
+
+## 34. Smoke test output (measured)
 
 ```
 parakeet-tiny [tiny] sr=24000 mel=80@93.8Hz latent=24 compress=1/6 voice=constant
@@ -1567,7 +1598,7 @@ overhead — it is not a valid throughput measurement until the model predicts s
 learning demo (§2) trains properly but on 15 seconds of *synthetic* audio, so it demonstrates that
 the machinery learns, not that the model is good.
 
-## 34. Deliberate engineering checks worth calling out
+## 35. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
@@ -1603,7 +1634,7 @@ the machinery learns, not that the model is good.
   `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
   else, rather than surfacing a cryptic `torch.stft` message.
 
-## 35. Environment notes
+## 36. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
