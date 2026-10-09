@@ -79,6 +79,11 @@ the engineering.
 * [x] End-to-end recipe dry run with dependency-free fixture teachers
       (`scripts/recipe_dry_run.py`) — it immediately found two bugs in the documented cache path
       that no per-part demo could see
+* [x] **Entry-point wiring**: `make_batch_source` and `cache_teacher_corpus` moved the batch-source
+      and cache decisions out of the scripts, which had been bypassing cross-sample pairing, the
+      reference cap and the teacher mixture entirely; `curate_manifest` (the whole P1 pipeline) was
+      dead code and now runs by default. Wiring it exposed two real gate defects: digital silence
+      passed (no absolute level gate) and `silence_ratio` scored 0.0 for it.
 * [ ] Model card: teachers used, licence obligations, intended/misuse cases, deep-synthesis
       marking, provenance hashes
 

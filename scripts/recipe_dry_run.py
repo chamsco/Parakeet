@@ -186,20 +186,50 @@ def main() -> int:
     print(f"  -> reconstruction log-mel L1 {ae_before:.4f} -> {ae_after:.4f}")
     strict["autoencoder_improved"] = ae_after < ae_before
 
-    # ---------------- 3. latent cache with mixture provenance ----------------
-    _banner("3/6 latent cache (frozen autoencoder, per-record teacher_weight)")
-    cache_dir = build_latent_cache(
-        manifest,
+    # ---------------- 3. curation + latent cache ----------------
+    _banner("3/6 curation (P1 gates) + latent cache")
+    import soundfile as sf
+
+    from parakeet.data.curate import CurateConfig, curate_manifest
+    from parakeet.data.features import cache_teacher_corpus
+
+    def _load_wav(rel: str):
+        wav, sr = sf.read(str(Path(args.out) / "corpus" / rel), dtype="float32")
+        return torch.from_numpy(wav), sr
+
+    # The published thresholds are calibrated for real 24 kHz speech (CosyVoice: >= 3 s; >= 5 kHz
+    # bandwidth).  The fixtures are ~0.3 s band-limited synthetic stacks, so the published gates
+    # reject every one of them -- a property of the fixture, not a defect.  Both runs are reported,
+    # and the fixture-appropriate config is the one used, because otherwise there would be no data.
+    published = curate_manifest(records, _load_wav, out / "corpus" / "curated_published",
+                                CurateConfig(), normalize=True)
+    relaxed_cfg = CurateConfig(min_duration_s=0.1, min_bandwidth_hz=0.0, min_snr_db=0.0)
+    report = curate_manifest(records, _load_wav, out / "corpus" / "curated", relaxed_cfg,
+                             normalize=True)
+    print(f"  published gates : kept {published.n_kept}/{published.n_total} "
+          f"{dict(published.reason_counts)}")
+    print(f"  fixture gates   : kept {report.n_kept}/{report.n_total}, "
+          f"rejected {report.n_rejected} {dict(report.reason_counts)}")
+    print("  (fixtures are ~0.3 s band-limited stacks; the published duration/bandwidth gates reject "
+          "100 % of them. Level, clipping and silence gates are NOT relaxed.)")
+    strict["curation_ran"] = report.n_total == len(records)
+    strict["curation_kept_usable_data"] = report.n_kept >= 1
+
+    cache_dir = cache_teacher_corpus(
+        out / "corpus",
         out / "latent_cache",
         cfg,
         model.autoencoder,
         tokenizer=tokenizer,
         teacher_latent_norm=model.latent_norm,
-        teacher_weights=mix,
     )
     cache_meta = json.loads((cache_dir / "cache_meta.json").read_text(encoding="utf-8"))
-    print(f"  -> {cache_meta['n_shards']} shard(s), teachers {cache_meta['teacher_names']}, "
-          f"weights {cache_meta['teacher_weights']}")
+    print(f"  -> {cache_meta['n_shards']} shard(s) from the curated manifest | "
+          f"teachers {cache_meta['teacher_names']} | weights {cache_meta['teacher_weights']} | "
+          f"voices {cache_meta['voice_names']}")
+    strict["cache_uses_the_curated_manifest"] = len(
+        json.loads((cache_dir / "index.json").read_text(encoding="utf-8"))
+    ) >= 1 and (out / "corpus" / "curated" / "kept.jsonl").exists()
     strict["cache_records_mixture"] = cache_meta["teacher_weights"] == mix
 
     dataset = LatentShardDataset(cache_dir)

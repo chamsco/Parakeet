@@ -12,14 +12,14 @@ python scripts/reflow_demo.py                               # validates NFE-2 sa
 python scripts/streaming_demo.py                            # blockwise streaming + TTFA (~7 min CPU)
 python scripts/export_onnx.py --pipeline                    # int8 ONNX + runtime benchmark
 python scripts/profile_pipeline.py                          # where does the time actually go
-python -m pytest -q                                         # 158 tests
+python -m pytest -q                                         # 167 tests
 python scripts/bench_rtf.py --config configs/parakeet_tiny.yaml
 ```
 
 ## 1. Test suite
 
 ```
-158 passed
+167 passed
 ```
 
 Coverage by area:
@@ -36,6 +36,7 @@ Coverage by area:
 | `test_curate.py` | every curation gate fires on a constructed failure (too short/long, clipped, silent, low SNR, narrowband, low MOS, ASR disagreement); **all** reasons reported, not just the first; SNR correctly reported as *unevaluable* without a noise floor; WER and punctuation-gap maths; reject records are never dropped |
 | `test_learning.py` | synthetic fixture is structurally exact (frame counts, peak, F0 declination); latent normaliser fits and inverts; token targets are exact and normalised; decoder-latent alignment; supplied-latent path leaves the encoder gradient-free; **stage freezing does not leak between stages**; and the headline: 40 CPU steps measurably improve both the representation and the distilled text side |
 | `test_onnx.py` | ONNX decoder matches PyTorch to **<1e-4**; text side matches to **<1e-4 across token lengths 5/8/17** (the legacy exporter's baked-in length would fail this); dynamic time axis across 7/23/41 frames; int8 files are smaller and run on CPU; dtypes are validated at the wrapper boundary; external weight sidecars are counted in size; full int8 pipeline tracks PyTorch (cosine >0.95) and is smaller in total (skips if `onnx`/`onnxruntime`/`onnxscript` absent) |
+| `test_pipeline_wiring.py` | `make_batch_source` pairs references for the flow stage only (and honours the config cap, and falls back to synthetic batches); `cache_teacher_corpus` takes the mixture from `corpus_meta.json` (the CLI used to pass none), prefers a curated `kept.jsonl` including in `curated/`, and errors without a manifest; the P1 gates discriminate, **reject digital silence even with duration/bandwidth/SNR relaxed** (`min_rms_dbfs`), and score `silence_ratio` 1.0 for it; a curated manifest round-trips into a valid cache |
 | `test_conditioning.py` | the cache batch carries a padded, masked reference (and legacy caches without `log_mel` still collate); pairing never uses the target utterance and takes the positive from the same voice and the negative from a different one; `max_ref_frames` truncates like PilotTTS's 15 s cap; **with no reference the identity/style encoders receive exactly zero gradient** (the control for the pre-fix cached path) while with one they receive gradient and the separation term is active; the separation loss pushes different speakers apart and the consistency term is off by default |
 | `test_voice.py` | the fixture voices really are multi-voice (measured monotone pitch); the voice embedding conditions **every** head (duration/F0/energy/latent — the first version only modulated the latent); the default voice is index 0; the cache records per-voice indices and rejects a corpus with more voices than the model has; **cached F0 targets follow the voice pitch** (fails if the unbounded fixture sweep, the formant-biased estimator, or the unvoiced-zero averaging regresses); YIN is the default and is accurate; per-token aggregation ignores unvoiced zeros |
 | `test_streaming.py` | the reported vector-field context is confirmed **empirically** (perturb a frame, the response stops exactly at `3 × depth`); `layer_scale_init` leaves the VF per-frame at init (documented, not hidden); a single block equals the one-shot sampler exactly; multi-block stays closer to one-shot than an independent draw; blocks cover every frame in order and concatenate to the batch result; chunked phase lock matches offline (cosine >0.99) and buffers a full `n_fft`; streaming synthesis yields several chunks whose total length matches the one-shot path, with and without the filter |
@@ -371,7 +372,52 @@ increase with the voice's pitch multiplier — it fails if any of the three regr
 `test_yin_is_used_by_default_and_is_no_worse_than_autocorrelation`, and
 `test_aggregate_to_tokens_ignores_unvoiced_zeros`.
 
-## 10. Speaker/style conditioning from a latent cache (measured)
+## 11. The CLI entry points were bypassing all of it (measured)
+
+Rounds 6-9 wired the mixture, multi-voice conditioning and cross-sample pairing into the *library*.
+Round 10 checked the two entry points a user actually runs, and found the features unreachable from
+both:
+
+* **`scripts/train.py` built `LatentShardBatchSource` without `pair_references`**, so the documented
+  `--stage flow` command trained on each utterance's own mel — no cross-sample pairing whatsoever —
+  and with no reference-length cap. The batch-source decision now lives in
+  `parakeet.data.dataset.make_batch_source`, which is shared, tested and defaults to pairing for the
+  flow stage (`--no-pair-references` opts out, `--max-ref-frames` overrides the 1500-frame cap);
+* **`make_teacher_corpus.py --cache-only` called `build_latent_cache` with no mixture at all**, so
+  every teacher weight became 1.0 and "mix training" reverted to a decoration on the documented
+  path. The cache is now built by `parakeet.data.features.cache_teacher_corpus`, which reads the
+  mixture from the corpus's own provenance (`corpus_meta.json`), prefers the curated `kept.jsonl`
+  (also in `curated/`) and passes the corpus root as the record base;
+* **`curate_manifest` — the entire documented P1 quality pipeline — was dead code.** No entry point
+  called it. Curation now runs by default in the corpus builder (`--no-curate` skips it) and in the
+  dry run.
+
+### Two real defects the wiring exposed in the P1 gates
+
+Wiring curation is what made them observable:
+
+1. **Digital silence passed the gates.** With the duration and bandwidth gates relaxed, a file with
+   `rms = -160 dBFS` was **kept** — there was no absolute level check, and `min_snr_db` was skipped
+   because SNR is unevaluable for silence. Fixed with a `min_rms_dbfs` gate ([proposed], -45 dBFS);
+   the test asserts silence is rejected *even under otherwise-relaxed gates*.
+2. **`silence_ratio` reported 0.0 for digital silence.** The rule is "frame energy below peak − 40
+   dB", which is degenerate when the peak is zero, so a silent file scored as *not* silent. Fixed:
+   a signal with no discernible peak is 100 % silence.
+
+Both matter because a teacher API that fails silently produces exactly such files, and the curation
+stage is the only thing standing between them and the training set.
+
+Also reported deliberately: the **published** thresholds (CosyVoice: ≥ 3 s; ≥ 5 kHz bandwidth)
+reject **100 %** of the synthetic fixtures, which are ~0.3 s band-limited stacks. The dry run prints
+both the published and the fixture-appropriate results and uses the latter, because the mismatch is
+a property of the fixture rather than a defect in the gates — but hiding it would have been a lie
+about what the fixture can demonstrate.
+
+`recipe_dry_run.py` now covers the whole documented chain — prompts → synthesis → **curation** →
+cache from the curated manifest → training → synthesis — passing 10/10 checks on both the Tiny and
+the Small/flow stage.
+
+## 12. Speaker/style conditioning from a latent cache (measured)
 
 The third instance of the same class of bug, this time in the **flagship** path. `collate` dropped
 `log_mel` entirely, so the Small/flow model trained from a latent cache received `ref_mel=None`:
@@ -414,7 +460,7 @@ dominated by `x0` and two different references give near-identical audio (cosine
 the same degeneracy found in round 5; measuring it would have been a fake control, so the structural
 measurement is the meaningful one at this stage.
 
-## 11. Smoke test output (measured)
+## 13. Smoke test output (measured)
 
 ```
 parakeet-tiny [tiny] sr=24000 mel=80@93.8Hz latent=24 compress=1/6 voice=constant
@@ -465,7 +511,7 @@ overhead — it is not a valid throughput measurement until the model predicts s
 learning demo (§2) trains properly but on 15 seconds of *synthetic* audio, so it demonstrates that
 the machinery learns, not that the model is good.
 
-## 12. Deliberate engineering checks worth calling out
+## 14. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
@@ -501,7 +547,7 @@ the machinery learns, not that the model is good.
   `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
   else, rather than surfacing a cryptic `torch.stft` message.
 
-## 13. Environment notes
+## 15. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).

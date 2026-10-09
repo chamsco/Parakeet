@@ -15,6 +15,7 @@ plus `PARAKEET_ACCEPT_TEACHER_TOS=1`, or `--i-have-written-permission`).  See do
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -25,7 +26,8 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from parakeet.config import load_config  # noqa: E402
-from parakeet.data.features import build_latent_cache  # noqa: E402
+from parakeet.data.curate import curate_manifest  # noqa: E402
+from parakeet.data.features import cache_teacher_corpus  # noqa: E402
 from parakeet.data.teacher import (  # noqa: E402
     DEFAULT_MIX,
     TeacherLicenseError,
@@ -66,6 +68,13 @@ def main() -> int:
     ap.add_argument("--config", default="configs/parakeet_tiny.yaml")
     ap.add_argument("--ae-checkpoint", default=None)
     ap.add_argument("--cache-out", default="data/latent_cache")
+    ap.add_argument("--no-curate", action="store_true",
+                    help="skip the P1 quality gates (loudness/clipping/SNR/punctuation).  Curation "
+                         "is ON by default: it is the documented pipeline, and curate_manifest() "
+                         "used to be dead code that no entry point ever called")
+    ap.add_argument("--curate-out", default=None, help="where kept.jsonl/rejected.jsonl go")
+    ap.add_argument("--cache-curated-only", action="store_true", default=True,
+                    help="cache the curated (kept.jsonl) manifest rather than the raw one")
     args = ap.parse_args()
 
     mix = resolve_mix(args.teachers.split(","))
@@ -90,15 +99,20 @@ def main() -> int:
             print(f"loaded autoencoder from {args.ae_checkpoint}")
         else:
             print("WARNING: no --ae-checkpoint, latents come from a randomly-initialised encoder")
-        out = build_latent_cache(
-            corpus / "manifest.jsonl",
+        # the mixture is read from the corpus provenance, so the cache cannot silently lose it
+        out = cache_teacher_corpus(
+            corpus,
             args.cache_out,
             cfg,
             model.autoencoder,
             tokenizer=TextTokenizer(mode=cfg.text.mode),
             limit=args.limit,
+            teacher_latent_norm=model.latent_norm,
         )
+        meta = json.loads((Path(args.cache_out) / "cache_meta.json").read_text(encoding="utf-8"))
         print(f"wrote latent cache -> {out}")
+        print(f"  teachers {meta['teacher_names']} | mixture {meta['teacher_weights']} | "
+              f"voices {meta['voice_names']}")
         return 0
 
     if not args.texts:
@@ -125,6 +139,28 @@ def main() -> int:
     print(f"manifest -> {manifest}")
     for b in backends.values():
         b.close()
+
+    if not args.no_curate:
+        import soundfile as sf
+
+        records = [
+            json.loads(line)
+            for line in manifest.read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+
+        def load_wav(rel: str):
+            wav, sr = sf.read(str(Path(args.out) / rel), dtype="float32")
+            return torch.from_numpy(wav), sr
+
+        curate_out = Path(args.curate_out) if args.curate_out else Path(args.out) / "curated"
+        report = curate_manifest(records, load_wav, curate_out, normalize=True)
+        print(
+            f"curation -> kept {report.n_kept}/{report.n_total} "
+            f"({report.hours_kept * 3600:.1f}s), rejected {report.n_rejected} "
+            f"{dict(report.reason_counts)}"
+        )
+        print(f"  kept -> {curate_out/'kept.jsonl'}\n  rejected -> {curate_out/'rejected.jsonl'}")
     return 0
 
 

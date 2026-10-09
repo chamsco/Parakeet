@@ -150,6 +150,9 @@ class LossConfig:
 @dataclass
 class TrainConfig:
     stage: str = "autoencoder"  # autoencoder | flow | distill-decoder | distill-text | consistency
+    #: cap on the speaker/style reference prompt in mel frames (1500 @ 93.75 Hz = 16 s, PilotTTS's
+    #: 15 s prompt limit).  Without a cap, one long utterance blows up the conditioning batch.
+    max_ref_frames: int = 1500
     batch_size: int = 8
     lr: float = 2e-4
     weight_decay: float = 0.01

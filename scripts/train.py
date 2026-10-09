@@ -22,7 +22,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from parakeet.config import load_config  # noqa: E402
-from parakeet.data.dataset import LatentShardBatchSource, LatentShardDataset, SyntheticBatchSource  # noqa: E402
+from parakeet.data.dataset import make_batch_source  # noqa: E402
 from parakeet.models import build_model, count_parameters  # noqa: E402
 from parakeet.train.stages import STAGE_STEPS, run_stage  # noqa: E402
 
@@ -40,6 +40,11 @@ def main() -> int:
     ap.add_argument("--device", default=None)
     ap.add_argument("--dry-run", action="store_true", help="use synthetic batches (no data needed)")
     ap.add_argument("--resume", default=None)
+    ap.add_argument("--no-pair-references", action="store_true",
+                    help="condition the flow stage on each utterance's own mel instead of a "
+                         "different utterance of the same voice (PilotTTS pairing is the default)")
+    ap.add_argument("--max-ref-frames", type=int, default=None,
+                    help="cap the reference prompt length (default: train.max_ref_frames)")
     args = ap.parse_args()
 
     cfg = load_config(args.config)
@@ -49,6 +54,8 @@ def main() -> int:
         cfg.train.max_steps = args.steps
     if args.out:
         cfg.train.out_dir = args.out
+    if args.max_ref_frames:
+        cfg.train.max_ref_frames = args.max_ref_frames
 
     model = build_model(cfg)
     if args.resume:
@@ -59,13 +66,26 @@ def main() -> int:
 
     print(f"stage={args.stage} variant={cfg.variant} params={count_parameters(model)/1e6:.3f}M")
 
+    # the batch-source decision lives in the library so it is shared and tested (it was neither
+    # when it lived here: the CLI bypassed cross-sample pairing for the flow stage entirely)
     if args.dry_run or not args.cache:
         if not args.dry_run:
             print("no --cache given: falling back to --dry-run synthetic batches")
-        source = SyntheticBatchSource(cfg, args.stage, batch_size=cfg.train.batch_size)
+        source = make_batch_source(cfg, args.stage, None, batch_size=cfg.train.batch_size)
     else:
-        dataset = LatentShardDataset(args.cache)
-        source = LatentShardBatchSource(dataset, batch_size=cfg.train.batch_size, seed=cfg.train.seed)
+        source = make_batch_source(
+            cfg,
+            args.stage,
+            args.cache,
+            batch_size=cfg.train.batch_size,
+            pair_references=not args.no_pair_references,
+            max_ref_frames=cfg.train.max_ref_frames,
+        )
+        if args.stage == "flow":
+            print(
+                f"flow conditioning: pair_references={not args.no_pair_references} "
+                f"max_ref_frames={cfg.train.max_ref_frames}"
+            )
 
     def log_fn(logs):
         printable = " ".join(
