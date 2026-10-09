@@ -181,6 +181,57 @@ def test_shipped_tiny_config_synthesizes(tiny_yaml):
     assert synth.buzz_metric(wav) >= 0.0
 
 
+def test_phase_lock_constants_are_cached_not_rebuilt():
+    """Per-call constants (window, band grid, delay grid, search matrix) must be built once.
+
+    Profiling the shipped int8 pipeline showed rebuilding them costing 0.64 ms of a 7.1 ms call
+    (measured with a controlled A/B in scripts/): 9 % of the latency for arithmetic that never
+    changes with the audio.  Identity comparison is the non-flaky way to assert "not rebuilt".
+    """
+    import importlib
+
+    pl_mod = importlib.import_module("parakeet.inference.phase_lock")
+    from parakeet.inference import phase_lock
+    from parakeet.inference.phase_lock import _CONSTANT_CACHE_LIMIT, clear_constant_cache
+
+    clear_constant_cache()
+    wav = torch.randn(1, 24000) * 0.05
+    phase_lock(wav, sample_rate=24000)
+    first = pl_mod._lock_constants(
+        24000, 1024, 256, 1024, (2000.0, 8000.0), 256, wav.device, wav.dtype, "ramp"
+    )
+    second = pl_mod._lock_constants(
+        24000, 1024, 256, 1024, (2000.0, 8000.0), 256, wav.device, wav.dtype, "ramp"
+    )
+    assert first is second, "the same geometry must reuse the cached constants"
+    assert first["d"] is second["d"], "the search matrix must not be rebuilt"
+
+    # a different geometry is a different entry, and the cache cannot grow without bound
+    pl_mod._lock_constants(
+        24000, 1024, 256, 1024, (1000.0, 4000.0), 256, wav.device, wav.dtype, "ramp"
+    )
+    assert len(pl_mod._CONSTANT_CACHE) >= 2
+    for i in range(_CONSTANT_CACHE_LIMIT + 4):
+        pl_mod._lock_constants(
+            24000, 1024, 256, 1024, (500.0 + i, 4000.0), 256, wav.device, wav.dtype, "ramp"
+        )
+    assert len(pl_mod._CONSTANT_CACHE) <= _CONSTANT_CACHE_LIMIT, "the cache must stay bounded"
+    clear_constant_cache()
+    assert len(pl_mod._CONSTANT_CACHE) == 0
+
+
+def test_phase_lock_output_is_unchanged_by_the_cache():
+    """A caching optimisation must not change a single sample."""
+    from parakeet.inference import phase_lock
+    from parakeet.inference.phase_lock import clear_constant_cache
+
+    wav = torch.randn(1, 48000, generator=torch.Generator().manual_seed(0)) * 0.05
+    clear_constant_cache()
+    cold = phase_lock(wav, sample_rate=24000)
+    warm = phase_lock(wav, sample_rate=24000)  # second call hits the cache
+    assert torch.equal(cold, warm)
+
+
 def test_phase_lock_default_grid_is_the_measured_choice():
     """The delay-grid resolution bounds the achievable lock.
 

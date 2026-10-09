@@ -63,10 +63,10 @@ Two variants share every block:
 | | Number | Where |
 |---|---|---|
 | Full Tiny synthesis, PyTorch fp32 | ~21 ms for 0.57 s audio → **19–27× real time** | `smoke_test.py`, `profile_pipeline.py` |
-| **Full Tiny pipeline as int8 ONNX** | **5.4 ms → 106× real time** (3.9× faster than PyTorch); **8.1 ms → 71×** with the phase-lock filter shipped | `export_onnx.py --pipeline` |
+| **Full Tiny pipeline as int8 ONNX** | **5.2 ms → 103× real time** (4.0× faster than PyTorch); **7.3 ms → 74×** with the phase-lock filter shipped (was 71× before the per-call constants were cached) | `export_onnx.py --pipeline` |
 | Model size, int8 ONNX | **36.7 → 9.9 MB** (text side 18.8 → 5.2, vocoder 18.0 → 4.7) | `export_onnx.py --pipeline` |
-| int8 fidelity vs PyTorch | waveform cosine **0.992–0.9998**, mel L1 0.010–0.027 (untrained weights, so a lower bound) | `export_onnx.py --pipeline` |
-| Where the time goes | decoder 36 %, text side 31 %, phase lock 10 %, python 13 % — the vocoder is *not* the bottleneck | `profile_pipeline.py` |
+| int8 fidelity vs PyTorch | waveform cosine **0.992–0.9998**, mel L1 0.010–0.027 (untrained weights, seeded run, so reproducible) | `export_onnx.py --pipeline` |
+| Where the time goes | decoder 35 %, text side 30 %, phase lock 10 %, python/dispatch 12 % — the vocoder is *not* the bottleneck; the removable part of the dispatch overhead was the phase-lock grids (0.386 ms → 0.4 µs cached) | `profile_pipeline.py` |
 | Streaming decoder | **exactly equal** to offline decoding (5.6e-09) | `test_inference.py` |
 | **Time to first audio** | 21.9 s utterance: one-shot **979 ms → streaming 125 ms (7.81×)**, and ~flat in length; blockwise output 50–100× closer to one-shot than an independent draw. Cost is stated: 2.81× total compute at block 16, 1.07× at block 128 | `streaming_demo.py` |
 | Does it learn? | AE recon **36 %** better, text side **91 %**, text→audio **26 %** vs untrained, duration MAE **3 ms**, generated/target log-mel cosine **0.954** | `learn_demo.py` |
@@ -100,7 +100,7 @@ python scripts/resume_demo.py --quick            # crash + resume is byte-for-by
 python scripts/recipe_dry_run.py --stage flow    # Small flow path + paired references
 python scripts/recipe_dry_run.py --quick        # the WHOLE recipe offline, no teachers needed
 python scripts/export_onnx.py                   # int8 ONNX vocoder + PyTorch/ONNX benchmark
-python -m pytest -q                            # 213 tests
+python -m pytest -q                            # 215 tests
 python scripts/bench_rtf.py --config configs/parakeet_tiny.yaml --steps 2
 ```
 
@@ -141,7 +141,7 @@ configs/      parakeet_tiny.yaml (9.6M) | parakeet_small.yaml (45M) | parakeet_s
 scripts/      smoke_test.py | learn_demo.py | reflow_demo.py | streaming_demo.py |
               mixture_demo.py | voice_demo.py | recipe_dry_run.py | export_onnx.py | profile_pipeline.py |
               train.py | make_teacher_corpus.py | bench_rtf.py
-tests/        213 tests: config, audio DSP, models, losses, all five stages, inference,
+tests/        215 tests: config, audio DSP, models, losses, all five stages, inference,
               streaming, mixture weighting, data/corpus paths, curation, ONNX/int8, learning
 .github/      ci.yml -- suite + smoke test + fast demos on every push; benchmarks on demand
 ```

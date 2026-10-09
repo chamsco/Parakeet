@@ -12,14 +12,14 @@ python scripts/reflow_demo.py                               # validates NFE-2 sa
 python scripts/streaming_demo.py                            # blockwise streaming + TTFA (~7 min CPU)
 python scripts/export_onnx.py --pipeline                    # int8 ONNX + runtime benchmark
 python scripts/profile_pipeline.py                          # where does the time actually go
-python -m pytest -q                                         # 213 tests
+python -m pytest -q                                         # 215 tests
 python scripts/bench_rtf.py --config configs/parakeet_tiny.yaml
 ```
 
 ## 1. Test suite
 
 ```
-213 passed
+215 passed
 ```
 
 Coverage by area:
@@ -679,7 +679,46 @@ CI runs the whole evidence chain as a `workflow_dispatch` job: every demo, then
 report or a measurement moves, the job fails — so "every number in the card is reproducible from the
 commands printed in the card" is a gate, not a promise.
 
-## 17. Smoke test output (measured)
+## 17. The python/dispatch overhead: what was actually removable (measured)
+
+The profile had been reporting ~12-15 % of the shipped latency as unaccounted "python/dispatch", so
+this round profiled the real path with `cProfile` instead of guessing. The finding was specific:
+`phase_lock` rebuilt its **per-call constants** — the Hann window, the band frequency grid, the delay
+grid, and a `(n_tau, band_bins)` complex search matrix built with `torch.exp` — on every call, and
+`torch.exp`/`torch.polar` on those grids showed up as ~0.4 ms per call of pure setup. They do not
+depend on the audio at all.
+
+Fixed by caching them per `(device, dtype, geometry, method)`, with a bounded cache:
+
+| measurement | result |
+|---|---|
+| grid construction, cold | **0.386 ms** |
+| cached lookup | **0.4 µs** |
+| fixed saving per synthesis call (audio-independent) | **~0.39 ms** |
+| controlled interleaved A/B, full int8 pipeline | 7.101 → **6.458 ms (-9.1 %)** |
+| shipped int8 pipeline, benchmark report | 8.11 → **7.25 ms (70.6 → 74.0× real time)** |
+| phase-lock output with and without the cache | **bit-identical** |
+
+Two notes on honesty here. First, my initial estimate was "12 %", derived from reasoning about the
+profile rather than measuring the cache — the controlled A/B then said 9.1 % and the direct
+measurement of the grid cost said 0.386 ms/call (~5 %). The three numbers bracket the truth, and all
+three are reported rather than the most flattering one. Second, the cache key originally used
+`str(device)` and `str(dtype)`, i.e. it allocated two strings per call inside the very code meant to
+remove overhead; `torch.device` and `torch.dtype` are hashable as-is.
+
+The rest of the unaccounted time is **not** removable python: it is ONNX Runtime's `run` call
+(2.0 ms/call for both sessions, including the compute itself). What remains above that is
+`torch.polar` (0.4 ms), the iSTFT overlap-add (0.3 ms) and the latent build (0.1 ms) — all real work.
+
+### A reproducibility defect found while regenerating the benchmark
+
+The regenerated report showed `waveform cosine 0.9148` where the README cited 0.992–0.9998. The
+cause was not a regression: `export_onnx.py --pipeline` built an **unseeded** random model, so the
+int8-vs-PyTorch fidelity figure moved from run to run and the cited number could not be reproduced.
+`scripts/export_onnx.py` now seeds before `build_model` (a checkpoint makes the seed irrelevant), and
+the seeded report reads `mel L1 0.0174, cosine 0.9981`.
+
+## 18. Smoke test output (measured)
 
 ```
 parakeet-tiny [tiny] sr=24000 mel=80@93.8Hz latent=24 compress=1/6 voice=constant
@@ -730,7 +769,7 @@ overhead — it is not a valid throughput measurement until the model predicts s
 learning demo (§2) trains properly but on 15 seconds of *synthetic* audio, so it demonstrates that
 the machinery learns, not that the model is good.
 
-## 18. Deliberate engineering checks worth calling out
+## 19. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
@@ -766,7 +805,7 @@ the machinery learns, not that the model is good.
   `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
   else, rather than surfacing a cryptic `torch.stft` message.
 
-## 19. Environment notes
+## 20. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).

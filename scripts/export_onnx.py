@@ -51,6 +51,10 @@ def main() -> int:
     args = ap.parse_args()
 
     cfg = load_config(args.config)
+    # Seed before building: without a checkpoint the weights are random, and the int8 fidelity
+    # figures (mel L1, waveform cosine) then move run to run -- the report would cite a number that
+    # nobody can reproduce.  A checkpoint makes the seed irrelevant.
+    torch.manual_seed(cfg.train.seed)
     model = build_model(cfg).eval()
     if args.checkpoint:
         payload = torch.load(args.checkpoint, map_location="cpu", weights_only=False)

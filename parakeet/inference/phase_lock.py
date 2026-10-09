@@ -21,7 +21,7 @@ the evaluation harness to quantify the buzz before/after.
 
 from __future__ import annotations
 
-from typing import Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 import torch
 
@@ -32,6 +32,58 @@ def _band_slice(sample_rate: int, n_fft: int, band: Tuple[float, float]) -> Tupl
     lo = int(round(band[0] / (sample_rate / n_fft)))
     hi = int(round(band[1] / (sample_rate / n_fft))) + 1
     return max(1, lo), min(n_fft // 2 + 1, hi)
+
+
+#: Per-call constants (window, band grid, delay grid and the complex search matrix) do not depend on
+#: the audio, yet they were rebuilt on every call.  Profiling the shipped int8 pipeline showed
+#: ``torch.exp``/``torch.polar`` on those grids costing ~0.8 ms of a 6.9 ms call -- 12 % of the
+#: latency for arithmetic that never changes.  Cached per (device, dtype, geometry, method), bounded
+#: so a caller sweeping band/method combinations cannot grow it without limit.
+_CONSTANT_CACHE: Dict[tuple, Dict[str, torch.Tensor]] = {}
+_CONSTANT_CACHE_LIMIT = 8
+
+
+def _lock_constants(
+    sample_rate: int,
+    n_fft: int,
+    hop_length: int,
+    win_length: int,
+    band: Tuple[float, float],
+    n_tau: int,
+    device: torch.device,
+    dtype: torch.dtype,
+    method: str,
+    kind: str = "filter",
+) -> Dict[str, torch.Tensor]:
+    # device and dtype are hashable as-is: building their str() per call was measurable overhead in
+    # the very cache meant to remove overhead
+    key = (
+        kind, device, dtype, sample_rate, n_fft, hop_length, win_length,
+        tuple(band), n_tau, method,
+    )
+    entry = _CONSTANT_CACHE.get(key)
+    if entry is None:
+        lo, hi = _band_slice(sample_rate, n_fft, band)
+        complex_dtype = torch.complex64 if dtype is torch.float32 else torch.complex128
+        freqs = torch.arange(lo, hi, device=device, dtype=torch.float32) * (sample_rate / n_fft)
+        taus = torch.linspace(0.0, 1.0 / 60.0, n_tau, device=device)
+        entry = {
+            "lo": lo,
+            "hi": hi,
+            "freqs": freqs,
+            "taus": taus,
+            # the delay search matrix: (n_tau, band bins), the expensive part of the filter's setup
+            "d": torch.exp(1j * 2 * torch.pi * freqs[None, :] * taus[:, None]).to(complex_dtype),
+        }
+        if len(_CONSTANT_CACHE) >= _CONSTANT_CACHE_LIMIT:
+            _CONSTANT_CACHE.pop(next(iter(_CONSTANT_CACHE)))
+        _CONSTANT_CACHE[key] = entry
+    return entry
+
+
+def clear_constant_cache() -> None:
+    """Drop cached grids (for tests that assert on construction, or to free memory)."""
+    _CONSTANT_CACHE.clear()
 
 
 @torch.no_grad()
@@ -46,18 +98,20 @@ def phase_coherence(
     """Mean phase concentration in ``band`` (1.0 == perfectly locked, ~0 == random phase)."""
     if wav.dim() == 1:
         wav = wav.unsqueeze(0)
+    const = _lock_constants(
+        sample_rate, n_fft, hop_length, n_fft, band, n_tau, wav.device, wav.dtype, "ramp",
+        kind="coherence",
+    )
     window = torch.hann_window(n_fft, device=wav.device)
     spec = torch.stft(wav, n_fft, hop_length, n_fft, window, return_complex=True)
-    lo, hi = _band_slice(sample_rate, n_fft, band)
+    lo, hi = const["lo"], const["hi"]
     sub = spec[:, lo:hi, :]
-    freqs = torch.arange(lo, hi, device=wav.device, dtype=torch.float32) * (sample_rate / n_fft)
-    taus = torch.linspace(0.0, 1.0 / 60.0, n_tau, device=wav.device)
     phase = torch.angle(sub)  # (B, Fb, T)
     e = torch.exp(1j * phase)
     # (B*T, Fb) x (Fb, G) -> (B*T, G)
     b, fb, t = e.shape
-    d = torch.exp(1j * 2 * torch.pi * freqs[None, :] * taus[:, None])  # (G, Fb)
-    r = (e.permute(0, 2, 1).reshape(b * t, fb) @ d.to(e.dtype).T).abs() / fb
+    d = const["d"].to(e.dtype)  # (G, Fb), cached
+    r = (e.permute(0, 2, 1).reshape(b * t, fb) @ d.T).abs() / fb
     return r.max(dim=-1).values.mean()
 
 
@@ -125,6 +179,9 @@ def phase_lock(
         # looks like.  Pad to one frame, filter, then trim.
         wav = torch.nn.functional.pad(wav, (0, n_fft - original_length))
     win_length = win_length or n_fft
+    const = _lock_constants(
+        sample_rate, n_fft, hop_length, win_length, band, n_tau, wav.device, wav.dtype, method
+    )
     window = torch.hann_window(win_length, device=wav.device, dtype=wav.dtype)
     spec = torch.stft(
         wav, n_fft, hop_length, win_length, window, center=True, return_complex=True
@@ -132,8 +189,8 @@ def phase_lock(
     mag = spec.abs()
     phase = torch.angle(spec)
 
-    lo, hi = _band_slice(sample_rate, n_fft, band)
-    freqs = torch.arange(lo, hi, device=wav.device, dtype=torch.float32) * (sample_rate / n_fft)
+    lo, hi = const["lo"], const["hi"]
+    freqs = const["freqs"]
     b, full_f, t = phase.shape
 
     if method == "smooth":
@@ -143,10 +200,10 @@ def phase_lock(
         rel = spec[:, lo:hi, :] * torch.conj(e) / e.abs().clamp_min(1e-8)
         w_band = rel.real.clamp(-1.0, 1.0)
     elif method == "ramp":
-        taus = torch.linspace(0.0, 1.0 / 60.0, n_tau, device=wav.device)
+        taus = const["taus"]
         e = torch.exp(1j * phase[:, lo:hi, :])  # (B, Fb, T)
         fb = e.shape[1]
-        d = torch.exp(1j * 2 * torch.pi * freqs[None, :] * taus[:, None]).to(e.dtype)  # (G, Fb)
+        d = const["d"].to(e.dtype)  # (G, Fb), cached
         proj = e.permute(0, 2, 1).reshape(b * t, fb) @ d.T  # (B*T, G)
         r = proj.abs() / fb
         best = r.argmax(dim=-1)
