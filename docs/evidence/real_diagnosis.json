@@ -1,7 +1,7 @@
 {
   "checkpoint": "runs/real_train/distill-text_last.pt",
   "checkpoint_step": 800,
-  "utterances": 79616,
+  "utterances": 74240,
   "recogniser": "base.en",
   "paths": [
     {
@@ -13,59 +13,66 @@
     },
     {
       "path": "1. ae_roundtrip",
-      "wer": 1.0,
+      "wer": 0.16666666666666666,
       "wer_available": true,
-      "dnsmos": 1.2429092395834935,
+      "dnsmos": 1.6634680998123945,
       "dnsmos_available": true
     },
     {
       "path": "2. teacher_frame_latent",
-      "wer": 1.0,
+      "wer": 0.16666666666666666,
       "wer_available": true,
-      "dnsmos": 1.2429102255587259,
+      "dnsmos": 1.663473018292781,
       "dnsmos_available": true
     },
     {
       "path": "3. teacher_token_expanded",
-      "wer": 1.0,
+      "wer": 0.8703703703703703,
       "wer_available": true,
-      "dnsmos": 1.3510186626931777,
+      "dnsmos": 1.4734398015512669,
+      "dnsmos_available": true
+    },
+    {
+      "path": "3b. token_expanded_no_prosody",
+      "wer": 0.9259259259259259,
+      "wer_available": true,
+      "dnsmos": 1.4473502517687098,
       "dnsmos_available": true
     },
     {
       "path": "4. student (text in)",
-      "wer": 1.0,
+      "wer": 1.7222222222222223,
       "wer_available": true,
-      "dnsmos": 1.324827696151411,
+      "dnsmos": 1.6185505365494688,
       "dnsmos_available": true
     }
   ],
   "log_mel_cosine_vs_reference": {
-    "ae_roundtrip": 0.9277579387029012,
-    "teacher_frame_latent": 0.9277579585711161,
-    "teacher_token_expanded": 0.928715189297994,
-    "student": 0.9323009053866068
+    "ae_roundtrip": 0.9941192169984182,
+    "teacher_frame_latent": 0.9941192368666331,
+    "teacher_token_expanded": 0.9782470365365347,
+    "student": 0.9402843515078226
   },
   "fidelity": {
     "ae_roundtrip": {
-      "snr_db": -0.09722374379634857,
-      "waveform_cosine": -0.00044315399524445337,
-      "log_mel_cosine": 0.9277579387029012
+      "snr_db": -2.152091840902964,
+      "waveform_cosine": 0.05380522304524978,
+      "log_mel_cosine": 0.9941192169984182
     },
     "teacher_frame_latent": {
-      "snr_db": -0.09722250451644261,
-      "waveform_cosine": -0.00044314264475057524,
-      "log_mel_cosine": 0.9277579585711161
+      "snr_db": -2.152021845181783,
+      "waveform_cosine": 0.053805194329470396,
+      "log_mel_cosine": 0.9941192368666331
     },
     "teacher_token_expanded": {
-      "snr_db": -0.09887185196081798,
-      "waveform_cosine": -4.627324718361099e-06,
-      "log_mel_cosine": 0.928715189297994
+      "snr_db": -1.2333149413267772,
+      "waveform_cosine": -0.0016527002056439717,
+      "log_mel_cosine": 0.9782470365365347
     },
     "student": {
-      "snr_db": -0.08981434628367424,
-      "waveform_cosine": 0.0007600511307828128,
-      "log_mel_cosine": 0.9323009053866068
+      "snr_db": -0.008441937738098204,
+      "waveform_cosine": -0.0035707921100159488,
+      "log_mel_cosine": 0.9402843515078226
     }
   },
   "durations": [
@@ -73,84 +80,84 @@
       "utt": "kokoro_0000001",
       "reference_frames": 329,
       "teacher_duration_frames": 329,
-      "predicted_frames": 273
+      "predicted_frames": 260
     },
     {
       "utt": "kokoro_0000004",
       "reference_frames": 309,
       "teacher_duration_frames": 309,
-      "predicted_frames": 297
+      "predicted_frames": 276
     },
     {
       "utt": "kokoro_0000005",
       "reference_frames": 333,
       "teacher_duration_frames": 333,
-      "predicted_frames": 297
+      "predicted_frames": 276
     },
     {
       "utt": "kokoro_0000006",
       "reference_frames": 291,
       "teacher_duration_frames": 291,
-      "predicted_frames": 297
+      "predicted_frames": 276
     },
     {
       "utt": "kokoro_0000008",
       "reference_frames": 292,
       "teacher_duration_frames": 292,
-      "predicted_frames": 313
+      "predicted_frames": 292
     },
     {
       "utt": "kokoro_0000009",
       "reference_frames": 346,
       "teacher_duration_frames": 346,
-      "predicted_frames": 313
+      "predicted_frames": 292
     }
   ],
   "durations_summary": {
     "reference_frames_mean": 316.6666666666667,
-    "predicted_frames_mean": 298.3333333333333,
-    "ratio": 0.9421052631578947
+    "predicted_frames_mean": 278.6666666666667,
+    "ratio": 0.88
   },
   "latents": [
     {
       "utt": "kokoro_0000001",
-      "teacher_latent_std": 0.9025457501411438,
-      "teacher_token_std": 0.6001811027526855,
+      "teacher_latent_std": 0.7911431193351746,
+      "teacher_token_std": 0.6391724348068237,
       "decoded_frames": 329
     },
     {
       "utt": "kokoro_0000004",
-      "teacher_latent_std": 0.9901754260063171,
-      "teacher_token_std": 0.7813681960105896,
+      "teacher_latent_std": 0.9096630811691284,
+      "teacher_token_std": 0.7861049175262451,
       "decoded_frames": 309
     },
     {
       "utt": "kokoro_0000005",
-      "teacher_latent_std": 0.889022171497345,
-      "teacher_token_std": 0.6102802753448486,
+      "teacher_latent_std": 0.7881965637207031,
+      "teacher_token_std": 0.6515873670578003,
       "decoded_frames": 333
     },
     {
       "utt": "kokoro_0000006",
-      "teacher_latent_std": 0.9010691046714783,
-      "teacher_token_std": 0.671942412853241,
+      "teacher_latent_std": 0.8184855580329895,
+      "teacher_token_std": 0.7090853452682495,
       "decoded_frames": 291
     },
     {
       "utt": "kokoro_0000008",
-      "teacher_latent_std": 1.0001970529556274,
-      "teacher_token_std": 0.8006253242492676,
+      "teacher_latent_std": 0.905539333820343,
+      "teacher_token_std": 0.7827054858207703,
       "decoded_frames": 292
     },
     {
       "utt": "kokoro_0000009",
-      "teacher_latent_std": 0.9219815731048584,
-      "teacher_token_std": 0.6686845421791077,
+      "teacher_latent_std": 0.8078246712684631,
+      "teacher_token_std": 0.6809089183807373,
       "decoded_frames": 346
     }
   ],
   "diagnosis": {
-    "bottleneck": "autoencoder",
+    "bottleneck": "token expansion (per-token latents -> frame latents)",
     "ceiling": "the autoencoder round-trip is the best this system can do",
     "ordering": "reference >= ae_roundtrip >= teacher_frame_latent >= teacher_token_expanded >= student",
     "note": "Whichever step first loses intelligibility is the bottleneck: if ae_roundtrip is already bad, no text-side work helps; if only the student is bad, it is prediction error and capacity/data, not the seam."
@@ -161,9 +168,10 @@
     "the_reference_scores_best": true
   },
   "findings": {
-    "ae_roundtrip_is_intelligible": false,
+    "ae_roundtrip_is_intelligible": true,
     "ae_roundtrip_is_correlated_with_its_input": false,
-    "token_expansion_is_not_the_bottleneck": true,
+    "token_expansion_is_not_the_bottleneck": false,
+    "student_is_competitive_with_the_token_path": false,
     "predicted_duration_is_in_the_right_ballpark": true
   }
 }

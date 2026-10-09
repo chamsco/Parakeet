@@ -1,0 +1,98 @@
+{
+  "config": "configs/parakeet_tiny.yaml",
+  "corpus": {
+    "manifest": "kept.jsonl",
+    "utterances": 21,
+    "audio_seconds": 74.67208333333333
+  },
+  "steps": {
+    "recon": 2000,
+    "adversarial": 200
+  },
+  "params": 9615917,
+  "phases": [
+    {
+      "phase": "recon",
+      "steps": 2000,
+      "adversarial_weight": 0.0,
+      "seconds": 445.13992679998046,
+      "seconds_per_step": 0.22256996339999022,
+      "nonfinite_steps": 0.0,
+      "first_nonfinite_step": null,
+      "final_loss": 4.3312954843044285,
+      "live": {
+        "mel_l1": 0.5070519894361496,
+        "waveform_cosine": 0.040324976085685194,
+        "snr_db": -2.1723510026931763,
+        "phase_coherence": 0.16900605149567127,
+        "dnsmos": 1.6633910423437293
+      },
+      "ema": {
+        "mel_l1": 0.5070519894361496,
+        "waveform_cosine": 0.040324976085685194,
+        "snr_db": -2.1723510026931763,
+        "phase_coherence": 0.16900605149567127,
+        "dnsmos": 1.6633910423437293
+      }
+    },
+    {
+      "phase": "adversarial",
+      "steps": 200,
+      "adversarial_weight": 1.0,
+      "seconds": 966.0185070000007,
+      "seconds_per_step": 4.830092535000003,
+      "nonfinite_steps": 0.0,
+      "first_nonfinite_step": null,
+      "final_loss": 4.647201418876648,
+      "live": {
+        "mel_l1": 0.5058186016976833,
+        "waveform_cosine": 0.03516820212826133,
+        "snr_db": -2.6708257496356964,
+        "phase_coherence": 0.16595043241977692,
+        "dnsmos": 1.6452261119341527
+      },
+      "ema": {
+        "mel_l1": 0.5058186016976833,
+        "waveform_cosine": 0.03516820212826133,
+        "snr_db": -2.6708257496356964,
+        "phase_coherence": 0.16595043241977692,
+        "dnsmos": 1.6452261119341527
+      }
+    }
+  ],
+  "final": {
+    "mel_l1": 0.5058186016976833,
+    "waveform_cosine": 0.03516820212826133,
+    "snr_db": -2.6708257496356964,
+    "phase_coherence": 0.16595043241977692,
+    "dnsmos": 1.6452261119341527,
+    "weights": "ema"
+  },
+  "round_trip": {
+    "student": 0.1527777777777778,
+    "teacher": 0.0,
+    "recogniser": "base.en",
+    "attempts": 1,
+    "control_note": "the recogniser transcribed the teacher's audio correctly",
+    "note": "encode-decode of the teacher's own audio; no text side involved"
+  },
+  "baseline_for_comparison": {
+    "description": "the shipped recipe: 300 adversarial steps from random init (round 18/19)",
+    "mel_l1": 1.3864,
+    "waveform_cosine": 0.0,
+    "round_trip_wer": 1.0
+  },
+  "checks": {
+    "no_divergence": true,
+    "reconstruction_improved_on_the_baseline": true,
+    "recon_phase_improved_the_loss": true,
+    "round_trip_wer_is_measured_with_a_valid_control": true,
+    "round_trip_wer_beats_the_baseline": true
+  },
+  "caveats": [
+    "still a short CPU budget: an improvement, not a converged codec",
+    "the adversarial phase costs ~24x more per step than reconstruction",
+    "a hand-rolled loop without warmup diverged to NaN here (round 20); this run uses run_stage"
+  ],
+  "seconds_total": 1440.5457951000135
+}

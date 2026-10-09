@@ -171,6 +171,14 @@ CLAIMS: List[Dict[str, Any]] = [
         "fmt": "reference WER {value:.2f} < autoencoder round-trip {other:.2f}",
     },
     {
+        "id": "ae_phased_training",
+        "statement": "the autoencoder bottleneck is **fixed** by spending the budget reconstruction-first",
+        "report": ["runs/ae_long/report.json"],
+        "field": "checks",
+        "op": "all_true",
+        "fmt": "{passed}/{total} checks",
+    },
+    {
         "id": "real_training",
         "statement": "the student **trains on real speech** (autoencoder + text side, Kokoro corpus)",
         "report": ["runs/real_train/report.json"],

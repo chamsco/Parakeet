@@ -53,6 +53,64 @@ def test_tiny_stage_runs(fast_cfg, stage, tmp_path):
     assert (tmp_path / f"{stage}_last.pt").exists()
 
 
+def test_reconstruction_only_phase_skips_the_discriminator(fast_cfg, tmp_path):
+    """A reconstruction-only phase is 24x cheaper per step on this CPU (round 20), so it must be a
+    first-class option: with the adversarial weight at zero the discriminator is never stepped and
+    no `disc` loss appears in the logs."""
+    cfg = copy.deepcopy(fast_cfg)
+    cfg.train.loss.adversarial = 0.0
+    cfg.train.loss.feature_match = 0.0
+    cfg.train.max_steps = 1
+    model = build_model(cfg)
+    before = {k: v.detach().clone() for k, v in model.autoencoder.state_dict().items()}
+    source = SyntheticBatchSource(cfg, "autoencoder", batch_size=2, n_frames=32, n_tokens=12)
+    logs = run_stage("autoencoder", cfg, model=model, batches=source, max_steps=1, out_dir=str(tmp_path))
+    assert logs["loss"] == logs["loss"]
+    assert "disc" not in logs, "the discriminator must not run when its weight is zero"
+    assert any(not torch.equal(before[k], v) for k, v in model.autoencoder.state_dict().items()), (
+        "the generator must still train"
+    )
+
+
+def test_nonfinite_loss_is_skipped_and_recorded(fast_cfg, tmp_path, monkeypatch):
+    """Divergence must be a *finding*, not an all-NaN report at the end.
+
+    A reconstruction-only run on real speech went mel 2.06 -> 0.50 and then to NaN with no visible
+    symptom until the final report.  The loop now skips non-finite updates, keeps the schedule moving,
+    reports the first offending step, writes `divergence.json`, and leaves the parameters finite.
+    """
+    import json
+
+    from parakeet.train import stages as stages_module
+
+    cfg = copy.deepcopy(fast_cfg)
+    cfg.train.max_steps = 1
+    model = build_model(cfg)
+    source = SyntheticBatchSource(cfg, "autoencoder", batch_size=2, n_frames=32, n_tokens=12)
+    real_step = stages_module.autoencoder_step
+    calls = {"n": 0}
+
+    def exploding_step(*args, **kwargs):
+        calls["n"] += 1
+        total, logs, recon = real_step(*args, **kwargs)
+        if calls["n"] == 1:
+            return total * float("nan"), logs, recon
+        return total, logs, recon
+
+    monkeypatch.setattr(stages_module, "autoencoder_step", exploding_step)
+    logs = stages_module.run_stage(
+        "autoencoder", cfg, model=model, batches=source, max_steps=3, out_dir=str(tmp_path)
+    )
+    assert calls["n"] >= 3
+    assert logs["nonfinite_steps"] >= 1
+    assert logs["first_nonfinite_step"] == 1
+    for name, value in model.autoencoder.state_dict().items():
+        assert torch.isfinite(value).all(), f"{name} became non-finite despite the guard"
+    payload = json.loads((tmp_path / "divergence.json").read_text(encoding="utf-8"))
+    assert payload["first_nonfinite_step"] == 1
+    assert payload["skipped_updates"] is True
+
+
 @pytest.mark.parametrize("stage", SMALL_STAGES)
 def test_small_stage_runs(stage, tmp_path):
     cfg = _fast_small()

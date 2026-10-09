@@ -106,7 +106,17 @@ def main() -> int:
     if reusing:
         _banner(f"1/4 autoencoder: reusing {ae_checkpoint.name} (no retraining)")
         payload = torch.load(ae_checkpoint, map_location="cpu", weights_only=False)
-        model.load_state_dict(payload.get("ema", {}).get("shadow", payload["model"]), strict=False)
+        state = payload.get("ema", {}).get("shadow", payload["model"])
+        # an autoencoder checkpoint may have been trained with a different voice table (the AE does not
+        # use voices at all), and `strict=False` does NOT tolerate a shape mismatch -- so take the
+        # autoencoder subtree explicitly rather than failing on `voice_embed`
+        ae_state = {k: v for k, v in state.items() if k.startswith("autoencoder.")}
+        if not ae_state:
+            raise RuntimeError(f"{ae_checkpoint} carries no autoencoder weights")
+        load_info = model.load_state_dict(ae_state, strict=False)
+        print(f"  loaded {len(ae_state)} autoencoder tensors "
+              f"(skipped {len(state) - len(ae_state)} non-AE keys from the checkpoint)")
+        del load_info
         # the comparison stays honest: the baseline is a freshly initialised model, so "improved"
         # still means "better than untrained" even though no training happened this run
         ae_before = ae_reconstruction_l1(build_model(cfg), waves, cfg)

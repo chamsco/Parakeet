@@ -122,8 +122,19 @@ def test_real_diagnosis_evidence_localises_the_bottleneck():
     payload = json.loads(path.read_text(encoding="utf-8"))
 
     assert all(payload["checks"].values()), "the diagnostic's own validity checks must pass"
-    assert payload["diagnosis"]["bottleneck"] in {"autoencoder", "text side", "none detected"}
+    bottleneck = payload["diagnosis"]["bottleneck"]
+    assert isinstance(bottleneck, str) and bottleneck, "the diagnosis must name a bottleneck"
+    # the whole point of a chain-walk: it must not say "none detected" while a teacher-input path
+    # (one with no prediction error at all) is unintelligible
     paths = {row["path"]: row for row in payload["paths"]}
+    assert "ae_roundtrip" in payload["fidelity"]
+    ae_ok = payload["findings"]["ae_roundtrip_is_intelligible"]
+    token_row = next((row for key, row in paths.items() if key.startswith("3.")), None)
+    if ae_ok and token_row is not None and (token_row["wer"] or 0) > 0.5:
+        assert "token expansion" in bottleneck, (
+            f"the autoencoder is fine but the token path is not, so the bottleneck is the seam; "
+            f"got {bottleneck!r}"
+        )
     # the reference must beat every produced path, otherwise the metric is not measuring
     reference = paths["reference (Kokoro, the ceiling)"]["wer"]
     for name, row in paths.items():

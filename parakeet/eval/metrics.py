@@ -213,6 +213,60 @@ def whisper_wer(
         return OptionalMetric(None, False, str(exc))
 
 
+def whisper_wer_with_control(
+    audio: Sequence[torch.Tensor],
+    texts: Sequence[str],
+    control_audio: Optional[Sequence[torch.Tensor]] = None,
+    sample_rate: int = 24000,
+    model_size: str = "base.en",
+    attempts: int = 2,
+) -> Dict[str, object]:
+    """WER measured against the recogniser's **own control**, with a retry.
+
+    The control is the teacher's audio for the same text: if the recogniser cannot transcribe *that*,
+    the WER it produces for the student is not a measurement of the student.
+
+    This is not hypothetical.  A run of ``scripts/ae_train.py`` reported teacher WER **0.926** where
+    the same three clips, same model, same code path scored **0.000**; re-running reproduced 0.000,
+    and the audio tensors were verified byte-identical (no in-place mutation anywhere in the mel /
+    encode / decode / phase-coherence / DNSMOS path).  A transient int8 CTranslate2 failure produced a
+    meaningless number, and the only reason it was caught is that the control was reported next to it.
+
+    So: run the control **first**, retry the whole measurement once if it fails, and report the WER as
+    *unavailable* -- with the failure as the reason -- if the control still fails.  Returns
+    ``{"wer", "control", "attempts", "note"}``.
+    """
+    last_control = OptionalMetric(None, False, "not run")
+    last_wer = OptionalMetric(None, False, "not run")
+    for attempt in range(1, max(1, attempts) + 1):
+        if control_audio is not None:
+            last_control = whisper_wer(
+                control_audio, texts, sample_rate=sample_rate, model_size=model_size
+            )
+            control_ok = bool(last_control.available and last_control.value < 0.5)
+        else:
+            control_ok = True
+        last_wer = whisper_wer(audio, texts, sample_rate=sample_rate, model_size=model_size)
+        if control_ok and last_wer.available:
+            return {
+                "wer": last_wer,
+                "control": last_control,
+                "attempts": attempt,
+                "note": "the recogniser transcribed the teacher's audio correctly",
+            }
+    reason = (
+        f"the recogniser failed its own control (teacher WER "
+        f"{last_control.value if last_control.value is not None else 'unavailable'}), so the "
+        f"student WER from the same call is not reported"
+    )
+    return {
+        "wer": OptionalMetric(None, False, reason, detail=f"faster-whisper {model_size}"),
+        "control": last_control,
+        "attempts": attempts,
+        "note": reason,
+    }
+
+
 def speaker_similarity(
     a: torch.Tensor, b: torch.Tensor, cfg: ParakeetConfig
 ) -> OptionalMetric:

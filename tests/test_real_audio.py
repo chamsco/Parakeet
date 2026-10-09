@@ -237,6 +237,56 @@ def test_real_training_evidence_records_a_real_baseline():
     assert "no perceptual metric" in joined or "utmos" in joined
 
 
+def test_wer_is_withheld_when_the_recogniser_fails_its_own_control(monkeypatch):
+    """A transient ASR failure produced teacher WER 0.926 where the same clips scored 0.000.
+
+    Re-running reproduced 0.000 and the audio tensors were verified byte-identical, so the bad number
+    came from the recogniser, not the corpus.  The control is what caught it, so the control now
+    gates the measurement: fail it twice and the WER is *unavailable with the failure as the reason*
+    rather than a number someone might quote.
+    """
+    from parakeet.eval import metrics
+
+    calls = {"count": 0}
+
+    def fake_wer(audio, texts, sample_rate=24000, model_size="large-v3"):
+        calls["count"] += 1
+        is_control = float(audio[0].reshape(-1)[0]) == 42.0
+        if is_control:
+            return metrics.OptionalMetric(0.93, True, detail="fake asr")  # control fails
+        return metrics.OptionalMetric(0.10, True, detail="fake asr")
+
+    monkeypatch.setattr(metrics, "whisper_wer", fake_wer)
+    control = [torch.full((64,), 42.0)]
+    student = [torch.zeros(64)]
+    result = metrics.whisper_wer_with_control(student, ["hello"], control_audio=control, attempts=2)
+
+    assert result["wer"].available is False, "a number from a failed control must not be reported"
+    assert "control" in result["wer"].reason
+    assert result["attempts"] == 2, "the control failure must be retried before giving up"
+    assert calls["count"] == 4, "two attempts, each transcribing control then student"
+
+
+def test_wer_is_reported_when_the_control_passes(monkeypatch):
+    from parakeet.eval import metrics
+
+    calls = {"count": 0}
+
+    def fake_wer(audio, texts, sample_rate=24000, model_size="large-v3"):
+        calls["count"] += 1
+        is_control = float(audio[0].reshape(-1)[0]) == 42.0
+        return metrics.OptionalMetric(0.0 if is_control else 0.25, True, detail="fake asr")
+
+    monkeypatch.setattr(metrics, "whisper_wer", fake_wer)
+    result = metrics.whisper_wer_with_control(
+        [torch.zeros(64)], ["hello"], control_audio=[torch.full((64,), 42.0)], attempts=2
+    )
+    assert result["wer"].available is True
+    assert result["wer"].value == pytest.approx(0.25)
+    assert result["attempts"] == 1
+    assert calls["count"] == 2
+
+
 def test_real_evaluation_evidence_reports_its_controls():
     """A naturalness number without the teacher control, and WER without its recogniser, are not
     results."""

@@ -117,6 +117,7 @@ def main() -> int:
     ae_audio: List[torch.Tensor] = []
     frame_audio: List[torch.Tensor] = []
     token_audio: List[torch.Tensor] = []
+    token_plain_audio: List[torch.Tensor] = []
     student_audio: List[torch.Tensor] = []
     references: List[torch.Tensor] = []
     texts: List[str] = []
@@ -150,12 +151,24 @@ def main() -> int:
             )
             token_wav = model.autoencoder.decode(tok).reshape(-1)
 
+            # 3b. the same expansion *without* the prosody projection.  `latent_from_tokens` adds
+            # `prosody_proj(f0, energy)` to the latent, and no training stage ever calls that function
+            # (the autoencoder stage never builds a latent from tokens, `distill-text` only compares
+            # token-level predictions, and `distill-decoder` consumes the *cached frame* latent) --
+            # so the projection is an untrained random module applied at inference only.  This path
+            # isolates its cost.
+            tok_plain, _ = model.decoder_latent_from_tokens(
+                item["latent_token"][None], item["durations"][None]
+            )
+            token_plain_wav = model.autoencoder.decode(tok_plain).reshape(-1)
+
             # 4. the actual student path
             student_wav = synth.synthesize(records[i]["text"], seed=0).reshape(-1)
 
             ae_audio.append(ae_wav)
             frame_audio.append(frame_wav)
             token_audio.append(token_wav)
+            token_plain_audio.append(token_plain_wav)
             student_audio.append(student_wav)
             references.append(reference)
             texts.append(records[i]["text"])
@@ -187,12 +200,13 @@ def main() -> int:
                 ):
                     write_wav(out / f"{name}_{i}.wav", audio.reshape(1, -1), cfg.audio.sample_rate)
 
-    _banner("four paths through the same decoder, scored by the same recogniser")
+    _banner("paths through the same decoder, scored by the same recogniser")
     results = [
         measure("reference (Kokoro, the ceiling)", references, texts, cfg, args.whisper),
         measure("1. ae_roundtrip", ae_audio, texts, cfg, args.whisper),
         measure("2. teacher_frame_latent", frame_audio, texts, cfg, args.whisper),
         measure("3. teacher_token_expanded", token_audio, texts, cfg, args.whisper),
+        measure("3b. token_expanded_no_prosody", token_plain_audio, texts, cfg, args.whisper),
         measure("4. student (text in)", student_audio, texts, cfg, args.whisper),
     ]
     for row in results:
@@ -215,6 +229,7 @@ def main() -> int:
     frame_wer = by_path["2. teacher_frame_latent"]["wer"]
     token_wer = by_path["3. teacher_token_expanded"]["wer"]
     ae_wer = by_path["1. ae_roundtrip"]["wer"]
+    student_wer = by_path["4. student (text in)"]["wer"]
     reference_wer = by_path["reference (Kokoro, the ceiling)"]["wer"]
     predicted_total = statistics.mean(r["predicted_frames"] for r in duration_rows)
     reference_total = statistics.mean(r["reference_frames"] for r in duration_rows)
@@ -269,17 +284,24 @@ def main() -> int:
         "token_expansion_is_not_the_bottleneck": bool(
             token_wer is not None and frame_wer is not None and token_wer <= frame_wer + 0.15
         ),
+        "student_is_competitive_with_the_token_path": bool(
+            student_wer is not None and token_wer is not None and student_wer <= token_wer + 0.15
+        ),
         "predicted_duration_is_in_the_right_ballpark": (
             0.5 * reference_total < predicted_total < 2.0 * reference_total
         ),
     }
-    bottleneck = (
-        "autoencoder"
-        if not findings["ae_roundtrip_is_intelligible"]
-        else "text side"
-        if not findings["predicted_duration_is_in_the_right_ballpark"]
-        else "none detected"
-    )
+    # walk the chain: the first stage that loses intelligibility is the bottleneck.  Saying "none
+    # detected" while a teacher-input path sits at WER 0.87 is how a bottleneck stays hidden -- the
+    # round-19 failure looked identical until the autoencoder was fixed and this seam appeared.
+    if not findings["ae_roundtrip_is_intelligible"]:
+        bottleneck = "autoencoder"
+    elif not findings["token_expansion_is_not_the_bottleneck"]:
+        bottleneck = "token expansion (per-token latents -> frame latents)"
+    elif not findings["student_is_competitive_with_the_token_path"]:
+        bottleneck = "text side (prediction error on top of an intelligible path)"
+    else:
+        bottleneck = "none detected"
     report = {
         "checkpoint": args.checkpoint,
         "checkpoint_step": payload.get("step"),

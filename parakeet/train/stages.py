@@ -21,6 +21,7 @@ which is what keeps the Tiny recipe cheap enough to run on rented GPU hours.
 
 from __future__ import annotations
 
+import json
 import warnings
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Tuple
@@ -373,7 +374,9 @@ def run_stage(
     }
     disc_opt = (
         build_optimizer(losses["adversarial"], cfg.train.lr, cfg.train.weight_decay)
-        if stage in {"autoencoder", "distill-decoder"}
+        # a reconstruction-only phase is legitimate (and 24x cheaper per step): with the adversarial
+        # weight at zero the discriminator would be trained against a generator that is not chasing it
+        if stage in {"autoencoder", "distill-decoder"} and cfg.train.loss.adversarial > 0.0
         else None
     )
     anneal = SpectralAnnealer()
@@ -382,6 +385,8 @@ def run_stage(
 
     # ------------------------------------------------------------------ resume
     start_step = 0
+    nonfinite_steps = 0
+    first_nonfinite_step: Optional[int] = None
     if resume_from:
         payload = load_checkpoint(
             resume_from,
@@ -424,19 +429,37 @@ def run_stage(
                 batch["wav"],
                 losses,
                 spectral_weight=spectral_weight,
-                adversarially=True,
+                adversarially=bool(cfg.train.loss.adversarial > 0.0),
                 decoder_only=(stage == "distill-decoder"),
                 latent=batch.get("latent"),
             )
+            if not torch.isfinite(loss):
+                # Divergence is a *finding*, not something to discover from NaNs in a final report.
+                # Round 20: a reconstruction-only run on real speech went mel 2.06 -> 0.50 and then
+                # to NaN somewhere between steps 1200 and 1800, and the only visible symptom was a
+                # report of all-NaN metrics at the end.  Skip the update, keep the schedule moving so
+                # the budget still maps to the LR curve, and record the step.
+                nonfinite_steps += 1
+                if first_nonfinite_step is None:
+                    first_nonfinite_step = step + 1
+                opt.zero_grad(set_to_none=True)
+                sched.step()
+                continue
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.train.grad_clip)
             opt.step()
             if disc_opt is not None:
                 disc_opt.zero_grad(set_to_none=True)
                 d_loss = discriminator_step(losses, batch["wav"], fake)
-                d_loss.backward()
-                disc_opt.step()
-                extra_logs["disc"] = float(d_loss.detach())
+                if not torch.isfinite(d_loss):
+                    nonfinite_steps += 1
+                    if first_nonfinite_step is None:
+                        first_nonfinite_step = step + 1
+                    disc_opt.zero_grad(set_to_none=True)
+                else:
+                    d_loss.backward()
+                    disc_opt.step()
+                    extra_logs["disc"] = float(d_loss.detach())
         elif stage == "flow":
             loss, step_logs = flow_step(cfg, model, batch)
             loss.backward()
@@ -483,6 +506,16 @@ def run_stage(
 
     final = meter.mean() or dict(logs)
     final["step"] = steps
+    if nonfinite_steps:
+        # surface divergence in the returned logs *and* in the provenance, so it cannot be missed
+        final["nonfinite_steps"] = float(nonfinite_steps)
+        final["first_nonfinite_step"] = float(first_nonfinite_step or 0)
+        print(
+            f"[stage {stage}] WARNING: {nonfinite_steps} of {steps} steps produced a non-finite loss "
+            f"(first at step {first_nonfinite_step}); those updates were skipped"
+        )
+    else:
+        final["nonfinite_steps"] = 0.0
     if resume_from:
         # carried through the *final* dict: the per-interval logs are replaced by meter.mean(),
         # so writing it into `logs` earlier silently disappeared
@@ -497,6 +530,20 @@ def run_stage(
         discriminator=losses["adversarial"] if disc_opt is not None else None,
         extra={"stage": stage, "batch_state": _batch_state(batches)},
     )
+    if nonfinite_steps:
+        (out_dir / "divergence.json").write_text(
+            json.dumps(
+                {
+                    "stage": stage,
+                    "steps": steps,
+                    "nonfinite_steps": nonfinite_steps,
+                    "first_nonfinite_step": first_nonfinite_step,
+                    "skipped_updates": True,
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
     return final
 
 
