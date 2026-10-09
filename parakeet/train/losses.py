@@ -337,24 +337,20 @@ class TextSideDistillLoss(nn.Module):
         pred: Dict[str, torch.Tensor],
         target: Dict[str, torch.Tensor],
         mask: Optional[torch.Tensor] = None,
+        sample_weight: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
-        def _masked(x: torch.Tensor) -> torch.Tensor:
-            if mask is None:
-                return x
-            m = mask.to(x.dtype)
-            while m.dim() < x.dim():
-                m = m.unsqueeze(-1)
-            return x * m
+        """``sample_weight`` is the per-sample teacher-mixture weight (see MultiTeacherMixer).
 
-        # durations: L1 in log space (Paradee trains on log durations for stability)
+        Every term is reduced **per sample** and then combined with the (batch-normalised) weight,
+        so changing the teacher mixture re-weights the gradient instead of being silently ignored.
+        """
         log_dur = torch.log(target["durations"].clamp_min(1).to(pred["log_duration"].dtype))
-        l_dur = F.l1_loss(_masked(pred["log_duration"]), _masked(log_dur))
-        # F0: L1 on the quantised-bin regression target (robust to teacher mis-voicing)
-        l_f0 = F.l1_loss(_masked(pred["f0"]), _masked(target["f0"]))
-        # energy: L1 in dB
-        l_en = F.l1_loss(_masked(pred["energy"]), _masked(target["energy"]))
-        # latent / phoneme features
-        l_lat = F.mse_loss(_masked(pred["latent_token"]), _masked(target["latent_token"]))
+        l_dur = weighted_mean(per_sample_l1(pred["log_duration"], log_dur, mask), sample_weight)
+        l_f0 = weighted_mean(per_sample_l1(pred["f0"], target["f0"], mask), sample_weight)
+        l_en = weighted_mean(per_sample_l1(pred["energy"], target["energy"], mask), sample_weight)
+        l_lat = weighted_mean(
+            per_sample_mse(pred["latent_token"], target["latent_token"], mask), sample_weight
+        )
 
         total = (
             self.w.duration * l_dur
@@ -374,17 +370,28 @@ class TextSideDistillLoss(nn.Module):
 # Multi-teacher mixing
 # --------------------------------------------------------------------------------------
 class MultiTeacherMixer:
-    """Weights per-sample losses when a batch mixes outputs from several teachers.
+    """Turns a teacher mixture into **per-sample weights that actually reach the loss**.
 
-    rationale (why a *mix* of teachers, not one):
-      * Orpheus   -> expressive, tag-controllable, but 3B and codec-limited fidelity.
-      * MiniMax   -> high fidelity prosody, but closed and (often) ToS-restricted.
-      * Kokoro    -> permissive, fast, but flat affect.
+    Why a *mix* of teachers rather than one:
 
-    We combine them on the *audio/latent* level (teacher-agnostic) and weight samples by
-    per-sample quality scores from the data pipeline (DNSMOS / UTMOS / WER), so a bad
-    synthesis cannot drag the student down.  ``balance`` additionally upweights the smaller
-    teacher so that no single teacher dominates the gradient.
+    * Orpheus -> expressive, tag-controllable, but 3B and codec-limited fidelity;
+    * MiniMax -> high-fidelity prosody, but closed and (often) ToS-restricted;
+    * Kokoro  -> permissive and fast, but flat affect.
+
+    They are combined at the *audio/latent* level (teacher-agnostic), and each sample carries a
+    weight from its teacher's mixture share multiplied by the data pipeline's quality score, so a
+    bad synthesis cannot drag the student down.
+
+    Two halves, deliberately separated:
+
+    * :meth:`weights` builds the raw per-sample weight when the **cache is written**
+      (:func:`parakeet.data.features.build_latent_cache`).  It is stored with the sample so the
+      provenance survives into training.
+    * :meth:`normalize` rescales a batch of weights to mean 1 **inside the loss**, so that changing
+      the mixture re-weights the gradient *without* changing the overall learning rate.
+
+    An important subtlety: normalising per item would make every weight 1.0, so normalisation must
+    happen at batch level -- which is why the loss takes a tensor and not the teacher ids.
     """
 
     def __init__(
@@ -395,21 +402,79 @@ class MultiTeacherMixer:
         self.teacher_weights = teacher_weights or {}
         self.min_weight = min_weight
 
-    def __call__(
+    def weights(
         self,
-        per_sample: torch.Tensor,
         teacher_ids: Sequence[str],
         quality: Optional[torch.Tensor] = None,
+        device=None,
+        dtype=torch.float32,
     ) -> torch.Tensor:
+        """Raw per-sample weight = mixture share x quality (clamped, never dropped entirely)."""
         w = torch.tensor(
-            [self.teacher_weights.get(t, 1.0) for t in teacher_ids],
-            device=per_sample.device,
-            dtype=per_sample.dtype,
+            [self.teacher_weights.get(t, 1.0) for t in teacher_ids], device=device, dtype=dtype
         )
-        w = w * (quality if quality is not None else torch.ones_like(w))
-        w = w.clamp_min(self.min_weight)
-        w = w / w.sum().clamp_min(1e-8) * w.numel()
-        return (per_sample * w).mean()
+        if quality is not None:
+            w = w * quality.to(device=device, dtype=dtype)
+        return w.clamp_min(self.min_weight)
+
+    def normalize(self, weight: Optional[torch.Tensor]) -> Optional[torch.Tensor]:
+        """Rescale a batch of weights to mean 1 (identity for ``None``)."""
+        if weight is None:
+            return None
+        w = weight.detach().to(dtype=torch.float32).clamp_min(self.min_weight)
+        return (w / w.mean().clamp_min(1e-8)).to(weight.dtype)
+
+
+def weighted_mean(per_sample: torch.Tensor, weight: Optional[torch.Tensor]) -> torch.Tensor:
+    """Mean of a per-sample tensor, optionally re-weighted (weights are normalised to mean 1)."""
+    if weight is None:
+        return per_sample.mean()
+    w = weight.detach().to(dtype=per_sample.dtype).clamp_min(1e-8)
+    w = w / w.mean().clamp_min(1e-8)
+    return (per_sample * w).mean()
+
+
+def _masked_count(mask: torch.Tensor, like: torch.Tensor) -> torch.Tensor:
+    """Number of valid elements per sample, broadcast to every non-batch dimension.
+
+    The mask must be expanded to the full shape before counting: a ``(B, T)`` mask against a
+    ``(B, T, C)`` tensor has to divide by ``T * C``, not ``T``.  Getting this wrong inflated the
+    latent term of the distillation loss by a factor of ``C`` (24x) and would have silently made it
+    dominate the prosody terms again.
+    """
+    m = mask.to(like.dtype)
+    while m.dim() < like.dim():
+        m = m.unsqueeze(-1)
+    return m.expand_as(like)
+
+
+def per_sample_l1(
+    pred: torch.Tensor, target: torch.Tensor, mask: Optional[torch.Tensor] = None
+) -> torch.Tensor:
+    """Mean absolute error **per sample** (masked positions excluded, not merely zeroed).
+
+    ``F.l1_loss`` averages over padded positions too, which silently dilutes the loss on short
+    samples; per-sample normalisation by the valid count is both correct and what per-sample
+    teacher weighting needs.
+    """
+    diff = (pred - target).abs()
+    dims = tuple(range(1, diff.dim()))
+    if mask is None:
+        return diff.mean(dim=dims)
+    m = _masked_count(mask, diff)
+    return (diff * m).sum(dim=dims) / m.sum(dim=dims).clamp_min(1.0)
+
+
+def per_sample_mse(
+    pred: torch.Tensor, target: torch.Tensor, mask: Optional[torch.Tensor] = None
+) -> torch.Tensor:
+    """Mean squared error **per sample** (see :func:`per_sample_l1`)."""
+    diff = (pred - target).pow(2)
+    dims = tuple(range(1, diff.dim()))
+    if mask is None:
+        return diff.mean(dim=dims)
+    m = _masked_count(mask, diff)
+    return (diff * m).sum(dim=dims) / m.sum(dim=dims).clamp_min(1.0)
 
 
 def consistency_distillation_loss(

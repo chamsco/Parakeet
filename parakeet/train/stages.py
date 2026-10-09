@@ -121,6 +121,7 @@ def flow_step(
         ref_mask=batch.get("ref_mask"),
         speaker_emb=batch.get("speaker_emb"),
         voice=batch.get("voice"),
+        sample_weight=batch.get("teacher_weight"),
     )
     text_mem = model.text(batch["ids"], batch.get("text_mask"))
     _, _, cond = model.conditions(
@@ -212,7 +213,9 @@ def tiny_text_step(
         "energy": batch["energy"],
         "latent_token": batch["latent_token"],
     }
-    total, logs = criterion(pred, target, batch.get("text_mask"))
+    total, logs = criterion(
+        pred, target, batch.get("text_mask"), sample_weight=batch.get("teacher_weight")
+    )
     return total, logs
 
 

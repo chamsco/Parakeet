@@ -17,8 +17,11 @@ from .losses import (  # noqa: F401
     MultiTeacherMixer,
     SpectralAnnealer,
     TextSideDistillLoss,
+    per_sample_l1,
+    per_sample_mse,
     phase_linearity_loss,
     phase_lock_loss,
+    weighted_mean,
 )
 from .stages import run_stage, train_all_stages  # noqa: F401
 
@@ -37,6 +40,9 @@ __all__ = [
     "SpectralAnnealer",
     "TextSideDistillLoss",
     "MultiTeacherMixer",
+    "weighted_mean",
+    "per_sample_l1",
+    "per_sample_mse",
     "phase_lock_loss",
     "phase_linearity_loss",
     "run_stage",

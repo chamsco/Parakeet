@@ -254,8 +254,14 @@ class ParakeetFlow(nn.Module):
         voice: Optional[torch.Tensor] = None,
         context_expansion: Optional[int] = None,
         reflow: bool = False,
+        sample_weight: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
-        """Conditional flow-matching MSE.  ``x1`` is the (normalised) latent ``(B, C, T)``."""
+        """Conditional flow-matching MSE.  ``x1`` is the (normalised) latent ``(B, C, T)``.
+
+        ``sample_weight`` carries the per-sample teacher-mixture weight (see
+        :class:`~parakeet.train.losses.MultiTeacherMixer`); it is repeated along with the batch when
+        context-sharing expansion is active, so the mixture re-weights the gradient exactly.
+        """
         ke = context_expansion or self.cfg.flow.context_expansion
         t_latent = x1.shape[-1]
         x1c = fold_time(x1, self.cfg.flow.compress)
@@ -268,6 +274,9 @@ class ParakeetFlow(nn.Module):
             speaker_emb = None if speaker_emb is None else speaker_emb.repeat_interleave(ke, dim=0)
             voice = None if voice is None else voice.repeat_interleave(ke, dim=0)
             x1c = x1c.repeat_interleave(ke, dim=0)
+            sample_weight = (
+                None if sample_weight is None else sample_weight.repeat_interleave(ke, dim=0)
+            )
         memory, memory_mask, _ = self.conditions(
             ids, mask, ref_mel, ref_mask, speaker_emb, voice
         )
@@ -277,7 +286,10 @@ class ParakeetFlow(nn.Module):
         v_target = x1c - x0
         drop = (torch.rand(x1c.shape[0], device=x1c.device) < 0.1) if self.training else None
         v_pred = self.vf(x_t, t, memory, memory_mask, drop_cond=drop)
-        loss = F.mse_loss(v_pred, v_target)
+        from ..train.losses import weighted_mean
+
+        per_sample = (v_pred - v_target).pow(2).mean(dim=tuple(range(1, v_pred.dim())))
+        loss = weighted_mean(per_sample, sample_weight)
         aux = {"t_latent": torch.tensor(float(t_latent)), "tc": torch.tensor(float(tc))}
         if reflow:
             loss = loss * 1.0  # reflow pairs are supplied by the caller as (x0, x1)

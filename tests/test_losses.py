@@ -1,5 +1,6 @@
 """Losses: reconstruction, adversarial, phase, distillation, multi-teacher mixing."""
 
+import pytest
 import torch
 import torch.nn.functional as F
 
@@ -17,6 +18,7 @@ from parakeet.train.losses import (
     generator_adversarial_loss,
     phase_linearity_loss,
     phase_lock_loss,
+    weighted_mean,
 )
 
 
@@ -133,14 +135,19 @@ def test_text_side_distill_loss(fast_cfg):
 def test_multi_teacher_mixer_normalises_weights():
     mixer = MultiTeacherMixer({"orpheus": 0.6, "kokoro": 0.4})
     per_sample = torch.ones(4)
-    out = mixer(per_sample, ["orpheus", "orpheus", "kokoro", "kokoro"])
-    assert torch.allclose(out, torch.ones(()), atol=1e-6)
+    weights = mixer.weights(["orpheus", "orpheus", "kokoro", "kokoro"])
+    # raw shares are preserved, and the loss-level mean is weight-invariant (mean-1 rescaling)
+    assert torch.allclose(weights, torch.tensor([0.6, 0.6, 0.4, 0.4]))
+    assert torch.allclose(weighted_mean(per_sample, weights), torch.ones(()))
 
     quality = torch.tensor([1.0, 0.0, 1.0, 1.0])
-    out2 = mixer(per_sample, ["orpheus", "orpheus", "kokoro", "kokoro"], quality)
+    out2 = weighted_mean(per_sample, mixer.weights(
+        ["orpheus", "orpheus", "kokoro", "kokoro"], quality=quality
+    ))
     assert torch.isfinite(out2)
 
     # a restricted/low-quality teacher is down-weighted, never dropped entirely
-    mixer2 = MultiTeacherMixer({"orpheus": 0.1, "minimax": 10.0})
-    out3 = mixer2(torch.ones(2), ["orpheus", "minimax"])
-    assert torch.isfinite(out3)
+    mixer2 = MultiTeacherMixer({"orpheus": 0.1, "minimax": 10.0}, min_weight=0.05)
+    w = mixer2.weights(["orpheus", "minimax"], quality=torch.tensor([1.0, 0.0001]))
+    assert float(w[0]) == pytest.approx(0.1)
+    assert float(w[1]) == pytest.approx(0.05), "the floor keeps it in the mixture"

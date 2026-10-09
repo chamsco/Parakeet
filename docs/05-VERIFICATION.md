@@ -12,14 +12,14 @@ python scripts/reflow_demo.py                               # validates NFE-2 sa
 python scripts/streaming_demo.py                            # blockwise streaming + TTFA (~7 min CPU)
 python scripts/export_onnx.py --pipeline                    # int8 ONNX + runtime benchmark
 python scripts/profile_pipeline.py                          # where does the time actually go
-python -m pytest -q                                         # 125 tests
+python -m pytest -q                                         # 135 tests
 python scripts/bench_rtf.py --config configs/parakeet_tiny.yaml
 ```
 
 ## 1. Test suite
 
 ```
-125 passed
+135 passed
 ```
 
 Coverage by area:
@@ -245,7 +245,48 @@ stream identical to the offline filter (cosine **0.9994**, max |diff| 6.7e-3, co
 `n_fft`, which is exactly what a final streamed chunk looks like — so `phase_lock` now pads, filters
 and trims.
 
-## 7. Smoke test output (measured)
+## 7. The teacher mixture is a mechanism, not a config value (measured)
+
+This section exists because the plumbing was **missing**: `MultiTeacherMixer` was implemented,
+exported and unit-tested, but nothing in the cache, the collation or the training stages ever read
+it. The objective's central claim — *mix training* of several teachers — was a documented config
+value. It is now wired end to end and demonstrated:
+
+```
+teacher corpus (manifest: teacher per record)
+  -> build_latent_cache(teacher_weights=...)   stores teacher_weight, teacher_index per sample
+  -> collate()                                 carries them into the batch
+  -> tiny_text_step / flow_step                 pass them to the loss
+  -> TextSideDistillLoss / flow_loss            per-sample reduction, weights rescaled to mean 1
+```
+
+Two synthetic teachers (**92 Hz** and **215 Hz**) provide the same text; the Tiny text side is
+trained from an **identical initialisation**, on identical data, for identical steps, with only the
+per-sample mixture weight changing (`scripts/mixture_demo.py`):
+
+| high-teacher share | predicted F0 | low-pitch probe loss (5.94 at init) |
+|---|---|---|
+| 0.00 | 87 Hz | 2.04 |
+| 0.25 | 97 Hz | 2.16 |
+| 0.50 | 136 Hz | 2.26 |
+| 0.75 | 170 Hz | 2.39 |
+| **1.00** | **200 Hz** | **2.55** |
+
+Two independent signals, not one restated: the student's predicted F0 tracks the mixture share
+monotonically across a **112.6 Hz span**, *and* the fit on the low-pitch teacher's own samples
+degrades in the same order — fitting one teacher costs fit on the other, which is what a weighted
+objective is supposed to do.
+
+`tests/test_mixture.py` pins every link in the chain individually: raw shares (not per-item
+normalised, which would make every weight 1.0), the quality multiplier and the 0.05 floor,
+mean-1 renormalisation being loss-scale invariant, masked per-sample reductions dividing by the
+valid count rather than the padded count **including the channel dimension** (getting that wrong
+inflated the latent term 24× — caught by `test_pipeline_learns_on_structured_synthetic_speech`
+regressing, and now pinned by `test_per_sample_masking_counts_channels`), the weight reaching both
+`tiny_text_step` and `flow_step`, weight repetition under `Ke>1` context expansion, and the cache
+preserving teacher provenance.
+
+## 8. Smoke test output (measured)
 
 ```
 parakeet-tiny [tiny] sr=24000 mel=80@93.8Hz latent=24 compress=1/6 voice=constant
@@ -296,7 +337,7 @@ overhead — it is not a valid throughput measurement until the model predicts s
 learning demo (§2) trains properly but on 15 seconds of *synthetic* audio, so it demonstrates that
 the machinery learns, not that the model is good.
 
-## 8. Deliberate engineering checks worth calling out
+## 9. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
@@ -332,7 +373,7 @@ the machinery learns, not that the model is good.
   `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
   else, rather than surfacing a cryptic `torch.stft` message.
 
-## 9. Environment notes
+## 10. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).

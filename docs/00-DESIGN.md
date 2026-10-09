@@ -64,14 +64,25 @@ following PilotTTS's use of teacher-generated parallel data for scarce capabilit
 | Pronunciation robustness | all teachers | Whisper-WER agreement filter; disagreement is logged as difficulty, not trained through |
 | Identity | frozen CAM++ speaker encoder (PilotTTS), **not** the teachers | cross-sample paired training |
 
-Teacher mixing is therefore a **data mixture with per-sample weighting**
-(`MultiTeacherMixer`), not an architectural fusion:
+Teacher mixing is therefore a **data mixture with per-sample weighting**, not an architectural
+fusion:
 
 * weights are capped so no teacher exceeds ~60 % of a shard (shard-local balance, implemented by
   interleaving with a golden-ratio sequence in `synthesize_corpus`);
 * each sample is additionally weighted by its quality score (DNSMOS/UTMOS/WER from the pipeline);
 * teachers that disagree (large WER spread on the same text) are *flagged*; the pipeline keeps
   both variants tagged, and the training weight falls.
+
+**Where the weight actually goes** (and how it is verified): `build_latent_cache(teacher_weights=…)`
+turns each sample's teacher into a raw weight (`share × quality`, floored at 0.05), stores it with
+the sample, `collate` carries it into the batch, and both `TextSideDistillLoss` and
+`ParakeetFlow.flow_loss` reduce **per sample** and rescale weights to mean 1 — so changing the
+mixture re-weights the gradient without changing the effective learning rate.
+`scripts/mixture_demo.py` demonstrates the effect: across a mixture sweep from 100 % low-pitched to
+100 % high-pitched teacher, the student's predicted F0 moves monotonically over a 112.6 Hz span
+(87 → 200 Hz) while the fit to the low-pitched teacher degrades in the same order.
+*This plumbing was absent until round 6 — the mixer existed and was tested but nothing read it, so
+the mixture was decoration. `tests/test_mixture.py` now pins every link.*
 
 ## 3. Why this architecture (and not something else)
 

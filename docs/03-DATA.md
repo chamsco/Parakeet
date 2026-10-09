@@ -63,6 +63,17 @@ prompts.txt ─► mixture scheduler ─► {Orpheus, Kokoro[, MiniMax]} ─► 
 * **Mixture scheduler** (`synthesize_corpus`): teachers are interleaved with a golden-ratio
   sequence so every shard contains the whole mixture. Shard-local balance matters — a shard that
   is 100 % one teacher produces a stretch of single-teacher gradient.
+* **The mixture reaches the loss.** Each corpus record's teacher is turned into a **per-sample
+  weight** when the latent cache is written (`build_latent_cache(..., teacher_weights=...)`), stored
+  alongside the sample (`teacher_weight`, `teacher_index`), carried through collation, and consumed
+  by the losses (`ParakeetFlow.flow_loss`, `TextSideDistillLoss`). The weight is
+  `mixture_share × quality`, floored at 0.05 so a poor sample is down-weighted but never dropped.
+  Losses rescale weights to mean 1 per batch, so changing the mixture re-weights the gradient
+  without changing the effective learning rate.
+  *Note: this plumbing was missing until round 6 — `MultiTeacherMixer` existed, was exported and was
+  unit-tested, but nothing in the cache, collation or training stages ever read it, so the mixture
+  was a config value rather than a mechanism. `scripts/mixture_demo.py` now demonstrates it end to
+  end and `tests/test_mixture.py` pins every link in the chain.*
 * **Voice assignment**: round-robin over each teacher's voice list (Orpheus's 8 English voices;
   Kokoro's voice set), so the student sees voice diversity even in the single-voice Tiny setup
   (useful for the speaker encoder and for the Small model).
