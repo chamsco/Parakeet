@@ -16,6 +16,7 @@ import torch.nn.functional as F
 
 from ..audio.mel import MelSpectrogram
 from ..config import ParakeetConfig
+from ..models.duration import normalized_to_durations
 
 
 def ae_reconstruction_l1(
@@ -96,7 +97,7 @@ def duration_error_frames(model, targets: Sequence[Mapping]) -> float:
         for t in targets:
             ids = t["ids"][None]
             side = model.text_side(ids)
-            pred = side["log_duration"].exp().round().clamp_min(1)
+            pred = normalized_to_durations(side["log_duration"])
             values.append(float((pred[0] - t["durations"].float()).abs().mean().item()))
     return sum(values) / max(1, len(values))
 

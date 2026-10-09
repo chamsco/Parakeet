@@ -1,0 +1,169 @@
+{
+  "checkpoint": "runs/real_train/distill-text_last.pt",
+  "checkpoint_step": 800,
+  "utterances": 79616,
+  "recogniser": "base.en",
+  "paths": [
+    {
+      "path": "reference (Kokoro, the ceiling)",
+      "wer": 0.0,
+      "wer_available": true,
+      "dnsmos": 2.6128619289535666,
+      "dnsmos_available": true
+    },
+    {
+      "path": "1. ae_roundtrip",
+      "wer": 1.0,
+      "wer_available": true,
+      "dnsmos": 1.2429092395834935,
+      "dnsmos_available": true
+    },
+    {
+      "path": "2. teacher_frame_latent",
+      "wer": 1.0,
+      "wer_available": true,
+      "dnsmos": 1.2429102255587259,
+      "dnsmos_available": true
+    },
+    {
+      "path": "3. teacher_token_expanded",
+      "wer": 1.0,
+      "wer_available": true,
+      "dnsmos": 1.3510186626931777,
+      "dnsmos_available": true
+    },
+    {
+      "path": "4. student (text in)",
+      "wer": 1.0,
+      "wer_available": true,
+      "dnsmos": 1.324827696151411,
+      "dnsmos_available": true
+    }
+  ],
+  "log_mel_cosine_vs_reference": {
+    "ae_roundtrip": 0.9277579387029012,
+    "teacher_frame_latent": 0.9277579585711161,
+    "teacher_token_expanded": 0.928715189297994,
+    "student": 0.9323009053866068
+  },
+  "fidelity": {
+    "ae_roundtrip": {
+      "snr_db": -0.09722374379634857,
+      "waveform_cosine": -0.00044315399524445337,
+      "log_mel_cosine": 0.9277579387029012
+    },
+    "teacher_frame_latent": {
+      "snr_db": -0.09722250451644261,
+      "waveform_cosine": -0.00044314264475057524,
+      "log_mel_cosine": 0.9277579585711161
+    },
+    "teacher_token_expanded": {
+      "snr_db": -0.09887185196081798,
+      "waveform_cosine": -4.627324718361099e-06,
+      "log_mel_cosine": 0.928715189297994
+    },
+    "student": {
+      "snr_db": -0.08981434628367424,
+      "waveform_cosine": 0.0007600511307828128,
+      "log_mel_cosine": 0.9323009053866068
+    }
+  },
+  "durations": [
+    {
+      "utt": "kokoro_0000001",
+      "reference_frames": 329,
+      "teacher_duration_frames": 329,
+      "predicted_frames": 273
+    },
+    {
+      "utt": "kokoro_0000004",
+      "reference_frames": 309,
+      "teacher_duration_frames": 309,
+      "predicted_frames": 297
+    },
+    {
+      "utt": "kokoro_0000005",
+      "reference_frames": 333,
+      "teacher_duration_frames": 333,
+      "predicted_frames": 297
+    },
+    {
+      "utt": "kokoro_0000006",
+      "reference_frames": 291,
+      "teacher_duration_frames": 291,
+      "predicted_frames": 297
+    },
+    {
+      "utt": "kokoro_0000008",
+      "reference_frames": 292,
+      "teacher_duration_frames": 292,
+      "predicted_frames": 313
+    },
+    {
+      "utt": "kokoro_0000009",
+      "reference_frames": 346,
+      "teacher_duration_frames": 346,
+      "predicted_frames": 313
+    }
+  ],
+  "durations_summary": {
+    "reference_frames_mean": 316.6666666666667,
+    "predicted_frames_mean": 298.3333333333333,
+    "ratio": 0.9421052631578947
+  },
+  "latents": [
+    {
+      "utt": "kokoro_0000001",
+      "teacher_latent_std": 0.9025457501411438,
+      "teacher_token_std": 0.6001811027526855,
+      "decoded_frames": 329
+    },
+    {
+      "utt": "kokoro_0000004",
+      "teacher_latent_std": 0.9901754260063171,
+      "teacher_token_std": 0.7813681960105896,
+      "decoded_frames": 309
+    },
+    {
+      "utt": "kokoro_0000005",
+      "teacher_latent_std": 0.889022171497345,
+      "teacher_token_std": 0.6102802753448486,
+      "decoded_frames": 333
+    },
+    {
+      "utt": "kokoro_0000006",
+      "teacher_latent_std": 0.9010691046714783,
+      "teacher_token_std": 0.671942412853241,
+      "decoded_frames": 291
+    },
+    {
+      "utt": "kokoro_0000008",
+      "teacher_latent_std": 1.0001970529556274,
+      "teacher_token_std": 0.8006253242492676,
+      "decoded_frames": 292
+    },
+    {
+      "utt": "kokoro_0000009",
+      "teacher_latent_std": 0.9219815731048584,
+      "teacher_token_std": 0.6686845421791077,
+      "decoded_frames": 346
+    }
+  ],
+  "diagnosis": {
+    "bottleneck": "autoencoder",
+    "ceiling": "the autoencoder round-trip is the best this system can do",
+    "ordering": "reference >= ae_roundtrip >= teacher_frame_latent >= teacher_token_expanded >= student",
+    "note": "Whichever step first loses intelligibility is the bottleneck: if ae_roundtrip is already bad, no text-side work helps; if only the student is bad, it is prediction error and capacity/data, not the seam."
+  },
+  "checks": {
+    "recogniser_works_on_the_reference": true,
+    "every_path_produced_audio": true,
+    "the_reference_scores_best": true
+  },
+  "findings": {
+    "ae_roundtrip_is_intelligible": false,
+    "ae_roundtrip_is_correlated_with_its_input": false,
+    "token_expansion_is_not_the_bottleneck": true,
+    "predicted_duration_is_in_the_right_ballpark": true
+  }
+}

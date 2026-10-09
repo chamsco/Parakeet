@@ -12,14 +12,14 @@ python scripts/reflow_demo.py                               # validates NFE-2 sa
 python scripts/streaming_demo.py                            # blockwise streaming + TTFA (~7 min CPU)
 python scripts/export_onnx.py --pipeline                    # int8 ONNX + runtime benchmark
 python scripts/profile_pipeline.py                          # where does the time actually go
-python -m pytest -q                                         # 233 tests
+python -m pytest -q                                         # 239 tests
 python scripts/bench_rtf.py --config configs/parakeet_tiny.yaml
 ```
 
 ## 1. Test suite
 
 ```
-233 passed
+239 passed
 ```
 
 Coverage by area:
@@ -36,7 +36,9 @@ Coverage by area:
 | `test_curate.py` | every curation gate fires on a constructed failure (too short/long, clipped, silent, low SNR, narrowband, low MOS, ASR disagreement); **all** reasons reported, not just the first; SNR correctly reported as *unevaluable* without a noise floor; WER and punctuation-gap maths; reject records are never dropped |
 | `test_learning.py` | synthetic fixture is structurally exact (frame counts, peak, F0 declination); latent normaliser fits and inverts; token targets are exact and normalised; decoder-latent alignment; supplied-latent path leaves the encoder gradient-free; **stage freezing does not leak between stages**; and the headline: 40 CPU steps measurably improve both the representation and the distilled text side |
 | `test_onnx.py` | ONNX decoder matches PyTorch to **<1e-4**; text side matches to **<1e-4 across token lengths 5/8/17** (the legacy exporter's baked-in length would fail this); dynamic time axis across 7/23/41 frames; int8 files are smaller and run on CPU; dtypes are validated at the wrapper boundary; external weight sidecars are counted in size; full int8 pipeline tracks PyTorch (cosine >0.95) and is smaller in total (skips if `onnx`/`onnxruntime`/`onnxscript` absent) |
+| `test_duration_scale.py` | durations round-trip through their normalisation exactly; zero on the normalised scale means the measured corpus mean (6 frames), not 1; a one-standard-deviation head output stretches the sequence by ~1.48× — not the ~2.7× that `log_duration.exp()` would give, so the trap is caught even though both produce audio; the loss term is ~zero against the normalised target and >0.5 against a raw-log one; and the diagnosis evidence carries its validity checks and a named bottleneck |
 | `test_real_audio.py` | the voicing threshold admits more frames as it rises **while the pitch estimate stays put** (the real-speech signature of a threshold that was too strict); an unvoiced token inherits the nearest voiced pitch instead of 0 Hz; the unaligned split neither collapses nor ignores the energy; the Kokoro runtime dispatch lands on an importable backend and rejects an unknown voice with the available list; the DNSMOS wrapper reads `ovrl_mos` rather than defaulting to 0.0 (the bug the teacher control caught); the real-audio, real-training and real-evaluation evidence all record their provenance, their controls and their caveats |
+| `test_duration_scale.py` | durations round-trip through their normalisation exactly; zero on the normalised scale means the measured corpus mean (6 frames), not 1; a one-standard-deviation head output stretches the sequence by ~1.48× — not the ~2.7× that `log_duration.exp()` would give, so the trap is caught even though both produce audio; the loss term is ~zero against the normalised target and >0.5 against a raw-log one; and the diagnosis evidence carries its validity checks and a named bottleneck |
 | `test_real_audio.py` | the voicing threshold admits more frames as it rises **while the pitch estimate stays put** (the real-speech signature of a threshold that was too strict); an unvoiced token inherits the nearest voiced pitch instead of 0 Hz; the unaligned split neither collapses nor ignores the energy; the Kokoro runtime dispatch lands on an importable backend and rejects an unknown voice with the available list; the real-audio evidence records its provenance and its duration caveat |
 | `test_ablation.py` | the offered lite config really is smaller and really trains and synthesizes; it **matches the geometry the ablation recommended** (read from the committed evidence, so it holds in a clone); and the evidence records its own limitations (a caveat, a held-out split of ≥ 3 items, both train and val fits) — a study without its caveat is an overclaim |
 | `test_model_card.py` | every claim cites **committed** evidence whose SHA-256 matches the manifest; a missing report comes back `unmeasured` and a corrupted value comes back `fail` (positive controls on the check itself); the rendered card states its limitations (no checkpoint, out-of-scope uses, no UTMOS) and its licence table is generated from the teacher specs |
@@ -851,7 +853,64 @@ Not claimed: that this is a usable model. The corpus is one voice set, the durat
 unaligned fallback, and the WER recogniser is `base.en` rather than the papers' `large-v3`, which
 makes the WER an upper bound. What changed is that these are now *measurements*.
 
-## 21. Smoke test output (measured)
+## 21. Where the text → audio chain breaks: the autoencoder, not the seam (measured)
+
+Round 18 ended with WER 1.00 and no idea why. "The model is bad" is not a diagnosis, so
+`scripts/real_diagnose.py` walks the chain with **teacher inputs** at every seam and scores each path
+with the same recogniser:
+
+| path | what it isolates | WER | DNSMOS | waveform cosine vs reference |
+|---|---|---|---|---|
+| reference (Kokoro) | the ceiling | **0.000** | 2.61 | 1.000 |
+| 1. autoencoder round-trip | encode real audio → decode it | **1.000** | 1.24 | **+0.000** |
+| 2. teacher frame latent | cached latent → decoder | 1.000 | 1.24 | +0.000 |
+| 3. teacher token expanded | per-token latents expanded exactly as inference does, with the teacher's own durations/F0/energy | 1.000 | 1.35 | +0.001 |
+| 4. student | the real thing | 1.000 | 1.32 | +0.001 |
+
+**The autoencoder is the bottleneck and nothing downstream can exceed it.** Its output is
+*uncorrelated* with its input: waveform cosine **+0.000**, SNR **−0.10 dB**, while the mel distance
+looks merely poor (log-mel L1 1.83). That combination is the important part — the mel proxy this
+project used for sixteen rounds cannot distinguish "slightly degraded" from "unrelated audio", which
+is why WER and the waveform-level fidelity measurement were needed. 300 steps at 4.8 s/step bought a
+31 % mel improvement and an autoencoder that still produces something else.
+
+The **seam is fine**, which is worth stating because it was the hypothesis: expanding per-token
+latents exactly as inference does costs 0.005 of mel cosine against the frame-level path, and all
+three teacher-input paths score the same as the round-trip. None of the text-side machinery is
+implicated.
+
+### The one real defect the diagnosis did find: durations were regressed in raw log space
+
+Durations were the **only** prosody target still un-normalised, while F0 and energy had been mapped to
+O(1) since round 2 — the same fix had simply never been applied to the third signal. The measured
+consequence was severe: with targets near log(6) = 1.79 and a head initialised near zero, the
+mean-absolute-error gradient on the head's *weights* is divided by the token count, so after 400
+steps the head had learned only a constant **1.75 frames per token** — a **0.29× duration collapse** —
+and that single term was 1.2 of the 2.6 total loss.
+
+Normalised to the measured corpus statistics (log-duration mean 1.728, std 0.390 over 1141 real
+tokens), the same head, same data:
+
+| | before | after |
+|---|---|---|
+| predicted total frames vs reference | 0.29× | **0.94×** (298 vs 317) |
+| text-side teacher-signal loss | 0.806 | **0.505** |
+
+That fix introduces a trap worth a regression test: **every** consumer of `log_duration` must
+de-normalise, and calling `.exp()` on the normalised output is off by `exp(1.728) ≈ 5.6`. My own
+diagnostic script and `profile_pipeline.py` had that bug within minutes of the change, which is why
+`normalized_to_durations()` exists as the single conversion point and why a test checks the *length
+ratio* that a one-standard-deviation change must produce.
+
+A reproducibility note, because it should not be quietly dropped: an earlier run of the same
+diagnostic printed DNSMOS 1.88 for the autoencoder round-trip where two subsequent runs print 1.24.
+The AE weights in both checkpoints are identical to 1.3e−05, DNSMOS is deterministic on a fixed input
+(three repeats in-process, plus 1.241 from re-scoring the saved wavs independently), and the two later
+runs agree to three decimals. The intervening state could not be reconstructed, so the numbers above
+are from the reproducible runs — and the diagnostic now reports its own validity checks separately
+from system health, so a future drift is visible instead of being averaged away.
+
+## 22. Smoke test output (measured)
 
 ```
 parakeet-tiny [tiny] sr=24000 mel=80@93.8Hz latent=24 compress=1/6 voice=constant
@@ -902,7 +961,7 @@ overhead — it is not a valid throughput measurement until the model predicts s
 learning demo (§2) trains properly but on 15 seconds of *synthetic* audio, so it demonstrates that
 the machinery learns, not that the model is good.
 
-## 22. Deliberate engineering checks worth calling out
+## 23. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
@@ -938,7 +997,7 @@ the machinery learns, not that the model is good.
   `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
   else, rather than surfacing a cryptic `torch.stft` message.
 
-## 23. Environment notes
+## 24. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).

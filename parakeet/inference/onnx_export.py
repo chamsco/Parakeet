@@ -29,6 +29,7 @@ import torch.nn.functional as F
 
 from ..audio.istft import OLAISTFT
 from ..config import AudioConfig
+from ..models.duration import normalized_to_durations
 
 
 def onnx_artifact_bytes(path: str | Path) -> int:
@@ -417,8 +418,7 @@ class OnnxTinyPipeline:
     def synthesize_ids(self, ids: np.ndarray | torch.Tensor) -> torch.Tensor:
         """``(B, T)`` token ids -> waveform ``(B, N)``."""
         side = self.text(ids)
-        log_duration = torch.from_numpy(side["log_duration"])
-        durations = log_duration.exp().round().clamp_min(1).long()
+        durations = normalized_to_durations(torch.from_numpy(side["log_duration"]))
         token_latent = torch.from_numpy(side["latent_token"])
         f0 = torch.from_numpy(side["f0"])
         energy = torch.from_numpy(side["energy"])
@@ -484,7 +484,7 @@ def compare_pipelines(
     with torch.no_grad():
         cal_ids = np.concatenate(cal_sequences, axis=1)
         side = OnnxTextSide(text_fp32)(cal_ids)
-        durations = torch.from_numpy(side["log_duration"]).exp().round().clamp_min(1).long()
+        durations = normalized_to_durations(torch.from_numpy(side["log_duration"]))
         cal_latents, _ = model.decoder_latent_from_tokens(
             torch.from_numpy(side["latent_token"]),
             durations,

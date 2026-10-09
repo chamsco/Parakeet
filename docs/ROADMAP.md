@@ -22,6 +22,8 @@ the engineering.
 ## P1 — Real representation (next; no teacher needed)
 
 * [x] Curation pipeline code (gates, WER agreement, punctuation gaps, ratio tails, keep-rejects)
+* [x] **Round 19, failure localisation** (`scripts/real_diagnose.py`): the **autoencoder is the bottleneck** -- its round-trip on real audio is *uncorrelated with its input* (waveform cosine +0.000, SNR -0.10 dB, WER 1.000) while the mel proxy looked merely poor (log-mel L1 1.83).  The per-token->frame seam costs 0.005 mel cosine, so no text-side machinery is implicated.  One real defect found en route: durations were the last prosody target still regressed in raw log space and collapsed to **0.29x**; normalised to the measured corpus statistics (mean 1.728, std 0.390) they predict **0.94x**.
+* [ ] **Autoencoder: a real training run** -- 300 CPU steps at 4.8 s/step is nowhere near converged, and it is now the *measured* bottleneck; nothing downstream can exceed its ceiling.
 * [ ] Run it over 100–300 h of *real* speech and freeze the manifest
       ([03-DATA.md](03-DATA.md)); inject DNSMOS and a real ASR ensemble
 * [ ] Train the autoencoder (with the speaker encoder) on it; publish the mel-reconstruction

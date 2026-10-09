@@ -106,3 +106,43 @@ class CausalDurationUpsampler(nn.Module):
     def forward(self, tokens: torch.Tensor, durations: torch.Tensor) -> torch.Tensor:
         x, _ = align_tokens_to_frames(tokens, durations)
         return self.smooth(x.transpose(1, 2)).transpose(1, 2)
+
+# --------------------------------------------------------------------------------------
+# duration-target normalisation
+# --------------------------------------------------------------------------------------
+#: log-duration statistics, **measured on the real Kokoro corpus** (round 19):
+#: 1141 tokens, mean 1.728, std 0.390 (median 1.609).  Durations were the one prosody target still
+#: regressed in raw log space while F0 and energy had been normalised to O(1) since round 2 -- the
+#: same fix simply had not been applied to the third signal.
+#:
+#: The consequence was measurable and severe: with targets around log(6) = 1.79 and a head whose
+#: random initialisation outputs near zero, the mean-absolute-error gradient on the head's *weights*
+#: is divided by the token count, so after 400 steps the head had learned only a constant ~1.75
+#: frames per token -- a 0.29x duration collapse on real speech, and 1.2 of the 2.6 total loss was
+#: this single term.  Normalising makes the target zero-mean and unit-variance, so the head starts
+#: near the answer and only has to learn the deviation.
+LOG_DURATION_MEAN = 1.728
+LOG_DURATION_STD = 0.390
+
+
+def durations_to_normalized(durations: torch.Tensor) -> torch.Tensor:
+    """Frame counts -> the normalised target the text side regresses."""
+    log_duration = torch.log(durations.clamp_min(1).float())
+    return (log_duration - LOG_DURATION_MEAN) / LOG_DURATION_STD
+
+
+def normalized_to_log_duration(pred: torch.Tensor) -> torch.Tensor:
+    """Inverse of :func:`durations_to_normalized` in log space."""
+    return pred * LOG_DURATION_STD + LOG_DURATION_MEAN
+
+
+def normalized_to_durations(
+    pred: torch.Tensor, duration_scale: float = 1.0, min_frames: int = 1
+) -> torch.Tensor:
+    """Normalised head output -> integer frame counts.  **Every** inference path must come here.
+
+    The `distill-text` stage regresses normalised log-durations, so any consumer that calls
+    ``log_duration.exp()`` directly is off by a factor of ``exp(LOG_DURATION_MEAN) ~ 5.6``.
+    """
+    frames = torch.exp(normalized_to_log_duration(pred)) * duration_scale
+    return frames.round().clamp_min(min_frames).long()

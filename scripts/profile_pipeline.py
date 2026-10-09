@@ -26,6 +26,7 @@ if str(ROOT) not in sys.path:
 from parakeet.config import load_config  # noqa: E402
 from parakeet.inference import Synthesizer, phase_lock  # noqa: E402
 from parakeet.models import build_model  # noqa: E402
+from parakeet.models.duration import normalized_to_durations  # noqa: E402
 
 TEXTS = [
     "the quick brown fox jumps over the lazy dog",
@@ -68,7 +69,7 @@ def main() -> int:
         for text in TEXTS:
             ids, mask, _ = synth.prepare_text(text)
             t_side, side = timeit(lambda: model.text_side(ids, mask), args.runs)
-            durations = side["log_duration"].exp().round().clamp_min(1).long()
+            durations = normalized_to_durations(side["log_duration"]).long()
             t_latent, lat_out = timeit(
                 lambda: model.decoder_latent_from_tokens(
                     side["latent_token"], durations, side["f0"], side["energy"]

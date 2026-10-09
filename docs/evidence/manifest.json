@@ -1,7 +1,7 @@
 {
-  "generated": "2026-10-09T13:06:03",
+  "generated": "2026-10-09T13:21:41",
   "git": {
-    "rev": "1c5a441",
+    "rev": "cdde60e",
     "dirty": true
   },
   "note": "Committed snapshots of the reports the model card cites.  Refresh with `python scripts/model_card.py --refresh-evidence` after re-running the demos; the hashes make a stale bundle visible.",
@@ -105,11 +105,18 @@
       "sha256": "073fd2790daefaec8127cd8a0b3933361d6ea10ce05b5418853318a261809eaf"
     },
     {
+      "claim": "real_diagnosis",
+      "status": "copied",
+      "source": "runs/real_diagnose/report.json",
+      "evidence": "docs/evidence/real_diagnosis.json",
+      "sha256": "9212527aa408047d9e153b9b3ed4a000edaf2fc276de246a959cbecfd8f3cef4"
+    },
+    {
       "claim": "real_training",
       "status": "copied",
       "source": "runs/real_train/report.json",
       "evidence": "docs/evidence/real_training.json",
-      "sha256": "03017ed58a0ed731ed312bcc041f9eda0971e4e6a7f6ad34d137b37e58129f1f"
+      "sha256": "5d96dfa46be38a65060dec1005a2c601a81c4c8bd907b36e4bc1ea29a5fd07b4"
     },
     {
       "claim": "real_evaluation",

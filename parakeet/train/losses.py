@@ -22,6 +22,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from ..audio.mel import MelSpectrogram
+from ..models.duration import durations_to_normalized
 
 
 # --------------------------------------------------------------------------------------
@@ -344,7 +345,7 @@ class TextSideDistillLoss(nn.Module):
         Every term is reduced **per sample** and then combined with the (batch-normalised) weight,
         so changing the teacher mixture re-weights the gradient instead of being silently ignored.
         """
-        log_dur = torch.log(target["durations"].clamp_min(1).to(pred["log_duration"].dtype))
+        log_dur = durations_to_normalized(target["durations"].to(pred["log_duration"].dtype))
         l_dur = weighted_mean(per_sample_l1(pred["log_duration"], log_dur, mask), sample_weight)
         l_f0 = weighted_mean(per_sample_l1(pred["f0"], target["f0"], mask), sample_weight)
         l_en = weighted_mean(per_sample_l1(pred["energy"], target["energy"], mask), sample_weight)

@@ -162,6 +162,15 @@ CLAIMS: List[Dict[str, Any]] = [
         "fmt": "{passed}/{total} checks",
     },
     {
+        "id": "real_diagnosis",
+        "statement": "the text→audio failure is **localised** (autoencoder round-trip vs the reference)",
+        "report": ["runs/real_diagnose/report.json"],
+        "field": "paths.0.wer",
+        "op": "lt_field",
+        "compare": "paths.1.wer",
+        "fmt": "reference WER {value:.2f} < autoencoder round-trip {other:.2f}",
+    },
+    {
         "id": "real_training",
         "statement": "the student **trains on real speech** (autoencoder + text side, Kokoro corpus)",
         "report": ["runs/real_train/report.json"],

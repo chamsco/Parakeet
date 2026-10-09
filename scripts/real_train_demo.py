@@ -59,6 +59,9 @@ def main() -> int:
     ap.add_argument("--steps-ae", type=int, default=300)
     ap.add_argument("--steps-text", type=int, default=400)
     ap.add_argument("--batch-size", type=int, default=4)
+    ap.add_argument("--reuse-ae", action="store_true",
+                    help="load the autoencoder checkpoint from --out instead of retraining it "
+                         "(the AE takes ~25 min on CPU; the text side takes ~20 s)")
     args = ap.parse_args()
 
     out = Path(args.out)
@@ -98,16 +101,28 @@ def main() -> int:
     ]
 
     # ---------------- 1. autoencoder on real speech ----------------
-    _banner(f"1/4 autoencoder on real speech | {args.steps_ae} steps")
-    ae_before = ae_reconstruction_l1(model, waves, cfg)
-    t0 = time.perf_counter()
-    run_stage("autoencoder", cfg, model=model, batches=source, max_steps=args.steps_ae,
-              out_dir=str(out))
-    ae_seconds = time.perf_counter() - t0
-    ae_after = ae_reconstruction_l1(model, waves, cfg)
+    ae_checkpoint = out / "autoencoder_last.pt"
+    reusing = bool(args.reuse_ae and ae_checkpoint.exists())
+    if reusing:
+        _banner(f"1/4 autoencoder: reusing {ae_checkpoint.name} (no retraining)")
+        payload = torch.load(ae_checkpoint, map_location="cpu", weights_only=False)
+        model.load_state_dict(payload.get("ema", {}).get("shadow", payload["model"]), strict=False)
+        # the comparison stays honest: the baseline is a freshly initialised model, so "improved"
+        # still means "better than untrained" even though no training happened this run
+        ae_before = ae_reconstruction_l1(build_model(cfg), waves, cfg)
+        ae_after = ae_reconstruction_l1(model, waves, cfg)
+        ae_seconds = 0.0
+    else:
+        _banner(f"1/4 autoencoder on real speech | {args.steps_ae} steps")
+        ae_before = ae_reconstruction_l1(model, waves, cfg)
+        t0 = time.perf_counter()
+        run_stage("autoencoder", cfg, model=model, batches=source, max_steps=args.steps_ae,
+                  out_dir=str(out))
+        ae_seconds = time.perf_counter() - t0
+        ae_after = ae_reconstruction_l1(model, waves, cfg)
     print(f"  reconstruction log-mel L1 {ae_before:.4f} -> {ae_after:.4f} "
-          f"({100 * (ae_before - ae_after) / ae_before:+.1f}%) in {ae_seconds:.0f}s "
-          f"({ae_seconds / args.steps_ae:.2f}s/step)")
+          f"({100 * (ae_before - ae_after) / ae_before:+.1f}%) "
+          f"{'(reused checkpoint, baseline is a fresh model)' if reusing else f'in {ae_seconds:.0f}s ({ae_seconds / max(1, args.steps_ae):.2f}s/step)'}")
     strict["autoencoder_improved_on_real_speech"] = ae_after < ae_before
     strict["autoencoder_materially_improved"] = ae_after < 0.95 * ae_before
 

@@ -27,7 +27,12 @@ import torch.nn.functional as F
 from ..config import ParakeetConfig
 from .autoencoder import LatentNormalizer, SpeechAutoencoder
 from .blocks import sequence_mask
-from .duration import DurationPredictor, UtteranceLengthPredictor, align_tokens_to_frames
+from .duration import (
+    DurationPredictor,
+    UtteranceLengthPredictor,
+    align_tokens_to_frames,
+    normalized_to_durations,
+)
 from .flow import (
     ConvNeXtVFEstimator,
     build_memory,
@@ -165,7 +170,7 @@ class ParakeetTiny(nn.Module):
     ) -> torch.Tensor:
         self.eval()
         side = self.text_side(ids, mask, voice)
-        durations = (side["log_duration"].exp() * duration_scale).round().clamp_min(1).long()
+        durations = normalized_to_durations(side["log_duration"], duration_scale)
         latent, _ = self.decoder_latent_from_tokens(
             side["latent_token"], durations, side["f0"], side["energy"], max_frames
         )

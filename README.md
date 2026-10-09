@@ -83,6 +83,7 @@ Two variants share every block:
 | **How light can it be?** | measured frontier: a **dim128-L4** text side (1.008 M vs 3.851 M) gives up **2.3 %** of held-out fixture fit for **35 % fewer total parameters** (6.23 M vs 9.62 M) and 2.6× the text-side speed. Offered as `configs/parakeet_tiny_lite.yaml`, not as the new default — the fixtures are repetitive | `ablate.py` |
 | **Real teacher speech?** | **yes** — Kokoro-82M (Apache-2.0) via sherpa-onnx runs at **0.53× real time on this CPU**; 16 real 24 kHz utterances went through corpus → curation → cache, and real speech exposed three fixture-hidden defects (pitch voicing threshold, 0 Hz targets from the unaligned split, and the published curation gates rejecting 7/16) | `real_corpus_demo.py` |
 | **Trained on real speech?** | **yes** — 21 curated Kokoro utterances (74.7 s): autoencoder reconstruction **−31.1 %**, text side **−79.8 %**, text→audio log-mel cosine **0.940** vs the real reference. Baseline metrics with controls: **DNSMOS 1.77 vs the teacher's 2.61**, **WER 1.00 vs the teacher's 0.00** (recogniser ase.en) — the student is **not yet intelligible**, and now we can say so with numbers | `real_train_demo.py`, `real_eval.py` |
+| **Why is it unintelligible?** | localised: the **autoencoder** is the bottleneck, not the text side. Its round-trip on real audio is **uncorrelated with its input** (waveform cosine +0.000, SNR −0.10 dB) while the mel proxy looked merely poor — and the per-token→frame seam costs only 0.005 mel cosine. One real defect found en route: durations were the last prosody target still in raw log space, collapsing to **0.29×**; normalised, they predict **0.94×** | `real_diagnose.py` |
 | Does the whole recipe run? | **yes, offline** — prompts → corpus → cache → distillation → synthesis, 6/6 checks pass with dependency-free fixture teachers | `recipe_dry_run.py` |
 | Int8 weights (simulated) | 12.0 MB Tiny / 56.3 MB Small | `smoke_test.py` |
 
@@ -103,7 +104,7 @@ python scripts/resume_demo.py --quick            # crash + resume is byte-for-by
 python scripts/recipe_dry_run.py --stage flow    # Small flow path + paired references
 python scripts/recipe_dry_run.py --quick        # the WHOLE recipe offline, no teachers needed
 python scripts/export_onnx.py                   # int8 ONNX vocoder + PyTorch/ONNX benchmark
-python -m pytest -q                            # 233 tests
+python -m pytest -q                            # 239 tests
 python scripts/bench_rtf.py --config configs/parakeet_tiny.yaml --steps 2
 ```
 
@@ -144,7 +145,7 @@ configs/      parakeet_tiny.yaml (9.6M) | parakeet_tiny_lite.yaml (6.2M, fixture
 scripts/      smoke_test.py | learn_demo.py | reflow_demo.py | streaming_demo.py |
               mixture_demo.py | voice_demo.py | recipe_dry_run.py | export_onnx.py | profile_pipeline.py |
               train.py | make_teacher_corpus.py | bench_rtf.py
-tests/        233 tests: config, audio DSP, models, losses, all five stages, inference,
+tests/        239 tests: config, audio DSP, models, losses, all five stages, inference,
               streaming, mixture weighting, data/corpus paths, curation, ONNX/int8, learning
 .github/      ci.yml -- suite + smoke test + fast demos on every push; benchmarks on demand
 ```
