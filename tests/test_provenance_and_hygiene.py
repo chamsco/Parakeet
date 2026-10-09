@@ -176,6 +176,54 @@ def test_config_fingerprint_changes_with_the_recipe(fast_cfg):
     assert config_fingerprint(a) != config_fingerprint(b), "a changed recipe must change the hash"
 
 
+def test_no_api_key_shaped_string_is_tracked():
+    """A credential must never reach a commit.
+
+    Round 26 added a hosted teacher whose key lives in `.secrets/speechify.key` (gitignored) and is
+    read from `SPEECHIFY_API_KEY`; the backend test asserts it does not reach a corpus file.  This is
+    the last line of defence: scan every tracked file for key-shaped strings, so a paste into a
+    script, a doc or a config fails the suite instead of leaking.
+    """
+    import re
+    import subprocess
+
+    patterns = [
+        re.compile(r"sk_[A-Za-z0-9]{24,}"),           # Speechify / OpenAI style
+        re.compile(r"eyJ[A-Za-z0-9_\-]{30,}\.[A-Za-z0-9_\-]{20,}"),  # a JWT
+    ]
+    tracked = subprocess.run(
+        ["git", "ls-files"], cwd=ROOT, capture_output=True, text=True, check=True
+    ).stdout.split()
+    offenders = []
+    for name in tracked:
+        path = ROOT / name
+        try:
+            text = path.read_text(encoding="utf-8", errors="ignore")
+        except (OSError, UnicodeDecodeError):
+            continue
+        for pattern in patterns:
+            match = pattern.search(text)
+            if match:
+                offenders.append(f"{name}: {match.group(0)[:12]}...")
+    assert not offenders, "key-shaped strings in tracked files: " + ", ".join(offenders)
+
+
+def test_teacher_registry_records_a_licence_for_every_teacher():
+    """Every teacher must state whether its *output* may train a student, and why."""
+    from parakeet.data.teacher import TEACHERS
+
+    assert "speechify" in TEACHERS, "the round-26 hosted teacher must stay registered"
+    for name, spec in TEACHERS.items():
+        assert spec.weights_license or spec.kind == "local_fixture", name
+        assert isinstance(spec.allows_training, bool), name
+        assert spec.notes or spec.kind == "local_fixture", f"{name} has no recorded rationale"
+    # the hosted service's permission is narrower than "train anything and publish it", and the spec
+    # is where that distinction has to live
+    speechify = TEACHERS["speechify"]
+    assert speechify.model_id == "simba-3.2"
+    assert "demonstration" in speechify.notes
+
+
 def test_file_fingerprint_is_content_addressed(tmp_path):
     path = tmp_path / "manifest.jsonl"
     path.write_text('{"a": 1}\n', encoding="utf-8")

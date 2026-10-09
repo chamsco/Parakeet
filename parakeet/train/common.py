@@ -276,6 +276,24 @@ def derive_n_voices_from_cache(cache_dir: Optional[str | Path]) -> Optional[int]
     return max(1, len(voices)) if voices else None
 
 
+def infer_model_geometry(state: Dict[str, Any]) -> Dict[str, int]:
+    """Read the *widths* a checkpoint implies, so a model can be built to match it.
+
+    Two scripts have now failed on this: a checkpoint knows how many voices it has and how wide its
+    latent head is, but the code built the model from the config first and then hit a shape mismatch
+    that ``strict=False`` does not tolerate.  Round 23 fixed it inline in ``real_eval.py`` and round 26
+    hit it again in ``real_diagnose.py``, which is exactly why it lives here now.
+    """
+    geometry: Dict[str, int] = {}
+    voice = state.get("voice_embed.weight")
+    if voice is not None and hasattr(voice, "shape") and len(voice.shape) == 2:
+        geometry["n_voices"] = max(1, int(voice.shape[0]))
+    head = state.get("latent_head.2.weight")
+    if head is not None and hasattr(head, "shape") and len(head.shape) == 2:
+        geometry["latent_head_width"] = int(head.shape[0])
+    return geometry
+
+
 def write_run_metadata(
     out_dir: str | Path,
     cfg: ParakeetConfig,

@@ -37,3 +37,8 @@ secrets.yaml
 Thumbs.db
 .idea/
 .vscode/
+
+# API keys and other local secrets -- never committed
+/.secrets/
+*.key
+

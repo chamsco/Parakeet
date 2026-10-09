@@ -49,6 +49,7 @@ from parakeet.data.dataset import LatentShardDataset  # noqa: E402
 from parakeet.eval.metrics import dnsmos_score, whisper_wer  # noqa: E402
 from parakeet.inference import Synthesizer, write_wav  # noqa: E402
 from parakeet.models import build_model  # noqa: E402
+from parakeet.train.common import infer_model_geometry  # noqa: E402
 from parakeet.models.duration import normalized_to_durations  # noqa: E402
 
 
@@ -111,9 +112,19 @@ def main() -> int:
     if getattr(args, "latent_rate", None):
         cfg.autoencoder.latent_rate = args.latent_rate
     cfg.n_voices = max(1, len(meta["voice_names"]))
-    model = build_model(cfg)
     payload = torch.load(args.checkpoint, map_location="cpu", weights_only=False)
-    model.load_state_dict(payload.get("ema", {}).get("shadow", payload["model"]), strict=False)
+    state = (payload.get("ema") or {}).get("shadow") or payload["model"]
+    # build the model to match the checkpoint, not the config: `strict=False` does not tolerate a
+    # shape mismatch, and this is the second script to fail on that (see infer_model_geometry)
+    geometry = infer_model_geometry(state)
+    if "n_voices" in geometry:
+        cfg.n_voices = geometry["n_voices"]
+    if "latent_head_width" in geometry and not getattr(args, "latent_rate", None):
+        cfg.autoencoder.latent_rate = max(
+            1, geometry["latent_head_width"] // int(cfg.autoencoder.latent_dim)
+        )
+    model = build_model(cfg)
+    model.load_state_dict(state, strict=False)
     model.eval()
     mel = MelSpectrogram(cfg.audio)
     synth = Synthesizer(model, cfg, device="cpu", apply_phase_lock=True)

@@ -11,6 +11,25 @@ lawyer, not an engineer.
 | **Orpheus** (Canopy Labs) | Apache-2.0 | `license: apache-2.0` but **gated** download, and the model card's base model is `meta-llama/Llama-3.2-3B-Instruct` | *Probably*, but the Llama-3.2 Community License conditions travel with derived weights | allowed (with attribution obligations) |
 | **Kokoro-82M** | Apache-2.0 | Apache-2.0 | Yes | allowed |
 | **MiniMax speech-2.8-turbo** | proprietary, API only | proprietary; you own the output but grant MiniMax a free worldwide licence to use it to improve the service | **No** — terms bar "developing foundation models using MiniMax Voice" without prior written permission; a separate platform clause bans "create derivative works of … our services" and "attempting to discover or decode … the algorithms" | **refused by default** (`TeacherLicenseError`) |
+| **Speechify speech API** (`simba-3.2`) | proprietary, API only | proprietary hosted service | **Scoped permission.** The operator obtained written permission from the provider, *stated to cover demonstration/quantization purposes for this task*. That is narrower than "train on the audio and publish derivative weights", which is why the distinction is recorded here and in the teacher spec rather than assumed away | allowed, with the permission recorded on every corpus record (`license`) and printed in the model card |
+
+### Speechify: what the permission does and does not establish
+
+The provider's permission was given (by email) for **demonstration and quantization** work on this
+project. Distilling a student from the audio is within that scope as *demonstration*; **publishing
+derivative weights** is a broader act, and this document does not claim the permission covers it.
+Before any release of a model trained on Speechify audio, get that in writing too.
+
+Two engineering consequences, both enforced in code:
+
+* the key lives in `.secrets/speechify.key` (gitignored) or `SPEECHIFY_API_KEY`, never in a corpus,
+  a config or a commit — a hygiene test scans every tracked file for key-shaped strings;
+* every corpus record keeps the `license` string from the spec, so provenance survives into the
+  manifest and into `cache_meta.json`.
+
+Speechify also returns **word-level speech marks** (character offsets + millisecond timings). Those are
+used as the *alignment* for duration targets — the first real alignment in this project — and the
+licence note above therefore covers the timings as well as the audio.
 
 ## 2. MiniMax: why it is refused by default
 

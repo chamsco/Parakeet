@@ -143,9 +143,40 @@ STUB_HIGH = TeacherSpec(
     ),
 )
 
+SPEECHIFY = TeacherSpec(
+    name="speechify",
+    kind="http_api",
+    code_license="proprietary service (HTTP API)",
+    weights_license=(
+        "proprietary hosted service.  Used under permission the operator obtained in writing from the "
+        "provider, stated to cover demonstration/quantization purposes for this task"
+    ),
+    allows_training=True,
+    sample_rate=48000,
+    notes=(
+        "Speechify speech API (`simba-3.2`), 48 kHz WAV, and -- uniquely among the teachers wired up "
+        "here -- it returns **speech marks**: per-word character offsets with millisecond timings.  "
+        "That is the alignment this project has otherwise never had: every duration target so far came "
+        "from the unaligned fallback, which rounds 19 and 22 measured to be a real quality limit.  "
+        "LICENCE DISTINCTION, recorded rather than smoothed over: the operator's written permission is "
+        "stated for *demonstration/quantization*; publishing derivative weights trained on this audio "
+        "is a broader use than that wording establishes, so the model card lists it explicitly and "
+        "docs/LEGAL.md should be revisited before any release.  Measured DNSMOS on one sample: 3.19 "
+        "(P.835 overall) against Kokoro's 2.86 corpus mean."
+    ),
+    model_id="simba-3.2",
+)
+
 TEACHERS: Dict[str, TeacherSpec] = {
-    t.name: t for t in (ORPHEUS, KOKORO, MINIMAX, STUB_LOW, STUB_HIGH)
+    t.name: t for t in (ORPHEUS, KOKORO, MINIMAX, SPEECHIFY, STUB_LOW, STUB_HIGH)
 }
+
+#: the English voices this workspace can reach, from ``GET /v1/voices`` (round 26).  Recorded rather
+#: than guessed: the API rejects an unknown id with ``voice_not_found`` and points at that endpoint.
+#: They are mixed-gender and two locales (en-GB + en-US), which the all-``af_*`` Kokoro bundle is not.
+SPEECHIFY_ENGLISH_VOICES: Sequence[str] = (
+    "alfonso", "alicia", "alec", "alton", "amon", "geffen",
+)
 
 #: fixtures are excluded from the default mixture on purpose
 DEFAULT_MIX: Dict[str, float] = {"orpheus": 0.6, "kokoro": 0.4}
@@ -385,6 +416,217 @@ class SherpaKokoroBackend(TeacherBackend):
         return None
 
 
+def marks_to_token_frames(
+    marks: Optional[Dict], text: str, sample_rate: int, hop_length: int, n_tokens: Optional[int] = None
+) -> Optional[List[int]]:
+    """Word timings from Speechify's ``speech_marks`` -> **per-token frame counts**.
+
+    This is the alignment the pipeline never had.  Every duration target before this came from
+    :func:`extract_signals`'s unaligned fallback (an even split, or an energy-weighted blend), which
+    rounds 19 and 22 both measured to be a real limit on quality -- the student was being taught
+    durations that had nothing to do with how the teacher pronounced the sentence.
+
+    ``marks`` carries word entries with character ``start``/``end`` offsets and millisecond
+    ``start_time``/``end_time``.  Each word's span is extended to the midpoint of the silence on either
+    side (so pauses belong to someone), then the word's frames are split across its characters in
+    proportion to how many of the *given* token positions fall inside it, so the counts always sum to
+    the true number of frames and the token axis keeps its length.
+    """
+    if not marks:
+        return None
+    words = marks.get("chunks") if isinstance(marks, dict) else None
+    if not words:
+        return None
+    frames_per_second = sample_rate / max(1, hop_length)
+    entries = []
+    for word in words:
+        try:
+            start_char, end_char = int(word["start"]), int(word["end"])
+            start_ms, end_ms = float(word["start_time"]), float(word["end_time"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if end_char <= start_char or end_ms <= start_ms:
+            continue
+        entries.append((start_char, end_char, start_ms, end_ms))
+    if not entries:
+        return None
+    entries.sort(key=lambda e: e[0])
+
+    # one duration per **character** of the text (spaces included): the char tokenizer produces exactly
+    # `len(text)` tokens, and a mismatch would silently mis-assign every duration after it
+    token_positions = list(range(min(len(text), n_tokens) if n_tokens is not None else len(text)))
+    if not token_positions:
+        return None
+
+    # boundaries between words: the midpoint of the gap between them
+    spans = []
+    for index, (start_char, end_char, start_ms, end_ms) in enumerate(entries):
+        previous_end = entries[index - 1][3] if index > 0 else 0.0
+        next_start = entries[index + 1][2] if index + 1 < len(entries) else end_ms
+        left = start_ms if index == 0 else 0.5 * (previous_end + start_ms)
+        right = end_ms if index == len(entries) - 1 else 0.5 * (end_ms + next_start)
+        spans.append((start_char, end_char, left, right))
+
+    counts: List[int] = []
+    for position in token_positions:
+        # a character (or the space after a word) belongs to the last word that starts at or before it
+        chosen = spans[0]
+        for span in spans:
+            if span[0] <= position:
+                chosen = span
+            else:
+                break
+        counts.append(chosen)
+    # convert each token's chosen (left, right) window to frames, sharing the word's frames across its
+    # characters so the total matches the audio
+    token_windows = [(span[2], span[3]) for span in counts]
+    per_word_totals: Dict[Tuple[float, float], int] = {}
+    for window in set(token_windows):
+        span_ms = max(1.0, window[1] - window[0])
+        per_word_totals[window] = max(1, int(round(span_ms / 1000.0 * frames_per_second)))
+    per_word_counts: Dict[Tuple[float, float], int] = {}
+    for window in token_windows:
+        per_word_counts[window] = per_word_counts.get(window, 0) + 1
+    token_frames: List[int] = []
+    for window in token_windows:
+        share = max(1, per_word_counts[window])
+        token_frames.append(max(1, int(round(per_word_totals[window] / share))))
+    if n_tokens is not None:
+        token_frames = token_frames[:n_tokens]
+        while len(token_frames) < n_tokens:
+            token_frames.append(1)
+    return token_frames
+
+
+class SpeechifyBackend(TeacherBackend):
+    """Speechify speech API (``simba-3.2``) -- 48 kHz WAV **plus word-level speech marks**.
+
+    The key is read from ``SPEECHIFY_API_KEY`` or ``.secrets/speechify.key``; it is never written into
+    a corpus, a config or a commit (the hygiene test scans tracked files for key-shaped strings).
+
+    Rate limiting and quota matter here: the service bills per character, so the backend records how
+    many characters it has sent and reports it, and transient failures are retried with backoff rather
+    than aborting a long corpus build.
+    """
+
+    spec = SPEECHIFY
+    DEFAULT_URL = "https://api.speechify.ai/v1/audio/speech"
+
+    def __init__(
+        self,
+        api_key: Optional[str] = None,
+        voice: str = "geffen_32",
+        model: str = "simba-3.2",
+        url: Optional[str] = None,
+        audio_format: str = "wav",
+        attempts: int = 3,
+        timeout: float = 120.0,
+    ) -> None:
+        self.api_key = api_key or os.environ.get("SPEECHIFY_API_KEY") or self._read_secret_file()
+        if not self.api_key:
+            raise RuntimeError(
+                "no Speechify key: set SPEECHIFY_API_KEY or write .secrets/speechify.key "
+                "(gitignored).  The service requires the operator's own permission."
+            )
+        self.default_voice = voice
+        self.model = model
+        self.url = url or self.DEFAULT_URL
+        self.audio_format = audio_format
+        self.attempts = max(1, int(attempts))
+        self.timeout = timeout
+        self.characters_sent = 0
+        self.requests = 0
+        self.failures = 0
+        #: marks for the most recent synthesis (`synthesize_with_marks` returns them explicitly)
+        self.last_marks: Optional[Dict] = None
+
+    @staticmethod
+    def _read_secret_file() -> Optional[str]:
+        path = Path(".secrets/speechify.key")
+        if path.exists():
+            return path.read_text(encoding="utf-8").strip() or None
+        return None
+
+    def _post(self, text: str, voice: Optional[str]) -> Dict:
+        import time
+        import urllib.error
+        import urllib.request
+
+        payload = {
+            "input": text,
+            "voice_id": voice or self.default_voice,
+            "model": self.model,
+            "audio_format": self.audio_format,
+        }
+        last_error: Optional[Exception] = None
+        for attempt in range(1, self.attempts + 1):
+            request = urllib.request.Request(
+                self.url,
+                data=json.dumps(payload).encode("utf-8"),
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {self.api_key}",
+                },
+            )
+            try:
+                with urllib.request.urlopen(request, timeout=self.timeout) as response:
+                    body = json.loads(response.read().decode("utf-8"))
+                self.requests += 1
+                self.characters_sent += int(body.get("billable_characters_count") or len(text))
+                return body
+            except urllib.error.HTTPError as exc:
+                detail = exc.read()[:200]
+                last_error = RuntimeError(f"HTTP {exc.code} from Speechify: {detail!r}")
+                # 4xx other than rate limiting will not improve by retrying
+                if exc.code < 500 and exc.code != 429:
+                    break
+            except Exception as exc:  # noqa: BLE001 - network flakes are expected on a long build
+                last_error = exc
+            self.failures += 1
+            if attempt < self.attempts:
+                time.sleep(min(8.0, 1.5 * attempt))
+        raise RuntimeError(f"Speechify request failed after {self.attempts} attempts: {last_error}")
+
+    def synthesize_with_marks(self, text: str, voice: Optional[str] = None) -> Tuple[np.ndarray, int, Optional[Dict]]:
+        """Like :meth:`synthesize`, but also returns the word timings when the service provides them."""
+        import base64
+        import io
+        import wave
+
+        body = self._post(text, voice)
+        encoded = body.get("audio_data") or body.get("audio")
+        if not encoded:
+            raise RuntimeError(f"Speechify returned no audio: {str(body)[:300]}")
+        raw = base64.b64decode(encoded)
+        marks = body.get("speech_marks")
+        self.last_marks = marks if isinstance(marks, dict) else None
+        fmt = str(body.get("audio_format") or self.audio_format).lower()
+        if raw[:4] == b"RIFF" or fmt.startswith("wav"):
+            with wave.open(io.BytesIO(raw), "rb") as handle:
+                channels = handle.getnchannels()
+                width = handle.getsampwidth()
+                rate = handle.getframerate()
+                frames = handle.readframes(handle.getnframes())
+            dtype = {1: np.int8, 2: np.int16, 4: np.int32}.get(width, np.int16)
+            data = np.frombuffer(frames, dtype=dtype).astype(np.float32)
+            scale = float(np.iinfo(np.int16).max if width <= 2 else np.iinfo(np.int32).max)
+            data = data / scale
+            if channels > 1:
+                data = data.reshape(-1, channels).mean(axis=1)
+            return data, rate, self.last_marks
+        raise RuntimeError(
+            f"unsupported Speechify audio format {fmt!r} (ask for wav; mp3 would need a decoder)"
+        )
+
+    def synthesize(self, text: str, voice: str = "geffen_32") -> Tuple[np.ndarray, int]:
+        wav, rate, _marks = self.synthesize_with_marks(text, voice)
+        return wav, rate
+
+    def durations(self, text: str, voice: str = "geffen_32") -> Optional[List[float]]:
+        """Not available without a synthesis; the timings come out of :meth:`synthesize_with_marks`."""
+        return None
+
+
 class OrpheusBackend(TeacherBackend):
     """Local Orpheus (Llama-3.2-3B + SNAC 24 kHz) inference.
 
@@ -574,6 +816,7 @@ def _kokoro_runtime() -> type:
 
 BACKENDS: Dict[str, type] = {
     "orpheus": OrpheusBackend,
+    "speechify": SpeechifyBackend,
     "kokoro": _kokoro_runtime(),
     "minimax": MiniMaxBackend,
     "stub_low": StubTeacherBackend,
@@ -615,6 +858,10 @@ class CorpusRecord:
     license: str = ""
     quality: Optional[float] = None
     hash: str = ""
+    #: per-character frame counts from the teacher's own timings (Speechify speech marks).  When
+    #: present, the cache uses them instead of the unaligned fallback -- the first real alignment in
+    #: this project.
+    token_frames: Optional[List[int]] = None
 
 
 def synthesize_corpus(
@@ -625,12 +872,20 @@ def synthesize_corpus(
     backends: Optional[Dict[str, TeacherBackend]] = None,
     acknowledge_restricted: bool = False,
     max_utts: Optional[int] = None,
+    token_sample_rate: int = 24000,
+    token_hop_length: int = 256,
 ) -> Path:
     """Render a paired teacher corpus and write ``manifest.jsonl`` + wavs.
 
     ``mix`` maps teacher -> weight; the mixture is realised deterministically by interleaving
     so that every shard of the corpus contains the full mixture (important: shard-local
     balance avoids long stretches of gradient from a single teacher).
+
+    When a backend can report **word timings** (Speechify speech marks), the record carries
+    ``token_frames`` -- per-character frame counts at the *student's* rate and hop.  The cache then
+    uses the teacher's own alignment instead of the unaligned fallback; ``token_sample_rate`` and
+    ``token_hop_length`` are parameters rather than derived from the teacher because the student
+    resamples everything to 24 kHz anyway.
     """
     import soundfile as sf
 
@@ -655,8 +910,16 @@ def synthesize_corpus(
             continue
         voice_list = (voices or {}).get(teacher) or [None]
         voice = voice_list[i % len(voice_list)]
+        marks: Optional[Dict] = None
         try:
-            wav, sr = backend.synthesize(text, voice) if voice else backend.synthesize(text)
+            if hasattr(backend, "synthesize_with_marks"):
+                # a backend that can align uses it: the timings are the point of asking this teacher
+                if voice:
+                    wav, sr, marks = backend.synthesize_with_marks(text, voice)
+                else:
+                    wav, sr, marks = backend.synthesize_with_marks(text)
+            else:
+                wav, sr = backend.synthesize(text, voice) if voice else backend.synthesize(text)
         except Exception as exc:  # keep the corpus build resumable
             print(f"[teacher] {teacher} failed on {i}: {exc}")
             continue
@@ -677,6 +940,9 @@ def synthesize_corpus(
             tags=tags,
             license=TEACHERS[teacher].weights_license,
             hash=sha1_of_array(wav),
+            token_frames=marks_to_token_frames(
+                marks, text, token_sample_rate, token_hop_length
+            ),
         )
         lines.append(json.dumps(asdict(rec), ensure_ascii=False))
         keep_cache[utt_id] = (wav, sr)

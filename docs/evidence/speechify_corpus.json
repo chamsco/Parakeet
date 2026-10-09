@@ -1,0 +1,35 @@
+{
+  "teacher": {
+    "name": "speechify",
+    "license": "proprietary hosted service.  Used under permission the operator obtained in writing from the provider, stated to cover demonstration/quantization purposes for this task",
+    "runtime": "SpeechifyBackend"
+  },
+  "prompts_source": "data\\prompts\\prompts.txt (450 prompts)",
+  "voices": [
+    "alfonso",
+    "alicia",
+    "alec"
+  ],
+  "prompts": 450,
+  "synthesised": 1350,
+  "kept": 964,
+  "curation_reasons": {
+    "narrowband": 372,
+    "too_short": 33
+  },
+  "audio_minutes": 132.25867777777776,
+  "synthesis_rtf": 0.0,
+  "split": {
+    "by": "prompt (text), so validation text is unseen",
+    "train_utterances": 865,
+    "train_prompts": 399,
+    "val_utterances": 99,
+    "val_prompts": 50,
+    "train_minutes": 87.27473333333334,
+    "val_minutes": 10.16068888888889
+  },
+  "caveats": [
+    "all 11 voices in this bundle are af_*: the corpus is single-gender",
+    "synthesised speech, so it inherits Kokoro's own artefacts as the ceiling"
+  ]
+}

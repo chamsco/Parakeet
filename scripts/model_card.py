@@ -171,6 +171,14 @@ CLAIMS: List[Dict[str, Any]] = [
         "fmt": "reference WER {value:.2f} < autoencoder round-trip {other:.2f}",
     },
     {
+        "id": "speechify_alignment",
+        "statement": "the **first real alignment**: Speechify word timings reproduce the audio duration (median error 0.8 % over 964 utterances)",
+        "report": ["runs/alignment_evidence.json"],
+        "field": "checks",
+        "op": "all_true",
+        "fmt": "{passed}/{total} checks",
+    },
+    {
         "id": "text_diversity_ab",
         "statement": "**185 public-domain prompts** instead of 47 improve the proxies on 50 unseen prompts; WER is still ~1.0 (recorded)",
         "report": ["runs/text_diversity_ab.json"],

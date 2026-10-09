@@ -1,0 +1,46 @@
+{
+  "mix": {
+    "kokoro": 0.5,
+    "speechify": 0.5
+  },
+  "teachers": {
+    "kokoro": {
+      "name": "kokoro",
+      "kind": "local_pkg",
+      "code_license": "Apache-2.0",
+      "weights_license": "Apache-2.0",
+      "allows_training": true,
+      "sample_rate": 24000,
+      "supports_tags": [],
+      "notes": "StyleTTS2 + ISTFTNet, 82M, 54 voices, 40 Hz frame rate. The teacher Paradee distilled (af_heart, 12k WikiText-103 sentences -> 23.9 h). Needs espeak-ng/misaki for G2P.",
+      "restricted": false,
+      "model_id": "hexgrad/Kokoro-82M"
+    },
+    "speechify": {
+      "name": "speechify",
+      "kind": "http_api",
+      "code_license": "proprietary service (HTTP API)",
+      "weights_license": "proprietary hosted service.  Used under permission the operator obtained in writing from the provider, stated to cover demonstration/quantization purposes for this task",
+      "allows_training": true,
+      "sample_rate": 48000,
+      "supports_tags": [],
+      "notes": "Speechify speech API (`simba-3.2`), 48 kHz WAV, and -- uniquely among the teachers wired up here -- it returns **speech marks**: per-word character offsets with millisecond timings.  That is the alignment this project has otherwise never had: every duration target so far came from the unaligned fallback, which rounds 19 and 22 measured to be a real quality limit.  LICENCE DISTINCTION, recorded rather than smoothed over: the operator's written permission is stated for *demonstration/quantization*; publishing derivative weights trained on this audio is a broader use than that wording establishes, so the model card lists it explicitly and docs/LEGAL.md should be revisited before any release.  Measured DNSMOS on one sample: 3.19 (P.835 overall) against Kokoro's 2.86 corpus mean.",
+      "restricted": false,
+      "model_id": "simba-3.2"
+    }
+  },
+  "n_utterances": 1169,
+  "sources": [
+    "data/gutenberg_corpus/corpus",
+    "data/speechify_corpus/corpus"
+  ],
+  "source_manifest": "train.jsonl",
+  "utterances_by_teacher": {
+    "kokoro": 304,
+    "speechify": 865
+  },
+  "minutes_by_teacher": {
+    "kokoro": 22.21,
+    "speechify": 87.27
+  }
+}

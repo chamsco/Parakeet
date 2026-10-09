@@ -91,7 +91,9 @@ Two variants share every block:
 | **Did the data scale?** | yes: **19.4 min** of Kokoro speech (236 utterances, 59 prompts) with a **prompt-disjoint** split — 129 train (10.9 min, 47 prompts) / 31 val (2.7 min, **12 unseen prompts**). Two borrowed thresholds broke on contact: the PilotTTS `min_dnsmos 3.5` keeps **1 of 160** utterances (Kokoro scores OVRL 2.86 mean; P.808 ~3.9), now calibrated to 2.0 from the measured distribution, and the 5 kHz `narrowband` gate rejects 32 % | `scale_corpus.py` |
 | **Does more data help?** | on a **prompt-disjoint hold-out**, 6× more audio improves both proxies (DNSMOS 1.441 → **1.537**, mel cosine 0.9391 → **0.9466**) — but **WER on unseen prompts stays 1.000 in both arms**. So round 23's 1.648 → 0.667 was measured on the corpus's own texts and was partly fitting. The hold-out exists to say that out loud | `data_scale_ab.py` |
 | **Is it a data problem?** | the round-24 hold-out said the model had seen only **47 distinct sentences**, so round 25 replaces them with **600 public-domain sentences** from five novels (provenance recorded) → after curation **185 training prompts / 50 unseen val prompts**, 22.2 min of audio. Curation's third borrowed threshold bites here: the 3 s minimum rejects **25 %** of ordinary prose. Phoneme input (the next lever if text alone is not enough) is **verified available**: `espeakng-loader` + `phonemizer` give correct IPA for unseen words over a 39-symbol vocabulary | `build_prompts.py` |
+| **A second real teacher?** | **yes — Speechify** (written permission for demonstration/quantization, recorded with the exact scope). It brings the project's **first real alignment**: word-level speech_marks → per-character duration targets, verified to reproduce the audio duration to **0.8 % median error** (964/964 utterances). 2.2 h generated in 43 min at DNSMOS **3.33** vs Kokoro's 2.86; re-curating with a *measured* 4 kHz bandwidth floor kept **964/1350** where the borrowed 5 kHz floor kept 383. Mixture: **1169 train utterances / 109.5 min / 2 teachers, 74 % aligned** | `mix_corpora.py`, `alignment_evidence.py` |
 | **Is it a data problem?** | **no, not by itself.** Two independent levers measured on prompt-disjoint hold-outs: 6× the audio moved DNSMOS 1.44 → 1.54 and WER 1.000 → 1.000; 4× the distinct text (47 → **185 public-domain prompts**, provenance recorded) moved DNSMOS 1.486 → **1.600**, mel cosine 0.9484 → **0.9525** and WER 1.000 → **0.997**. Both proxies improve; intelligibility on unseen sentences does not. The constraint is the text side's inductive bias/capacity, and **phoneme input is verified available** for the next attempt | `text_diversity_ab.py` |
+| **A second real teacher?** | **yes — Speechify** (written permission for demonstration/quantization, recorded with the exact scope). It brings the project's **first real alignment**: word-level speech_marks → per-character duration targets, verified to reproduce the audio duration to **0.8 % median error** (964/964 utterances). 2.2 h generated in 43 min at DNSMOS **3.33** vs Kokoro's 2.86; re-curating with a *measured* 4 kHz bandwidth floor kept **964/1350** where the borrowed 5 kHz floor kept 383. Mixture: **1169 train utterances / 109.5 min / 2 teachers, 74 % aligned** | `mix_corpora.py`, `alignment_evidence.py` |
 | Does the whole recipe run? | **yes, offline** — prompts → corpus → cache → distillation → synthesis, 6/6 checks pass with dependency-free fixture teachers | `recipe_dry_run.py` |
 | Int8 weights (simulated) | 12.0 MB Tiny / 56.3 MB Small | `smoke_test.py` |
 
@@ -112,7 +114,7 @@ python scripts/resume_demo.py --quick            # crash + resume is byte-for-by
 python scripts/recipe_dry_run.py --stage flow    # Small flow path + paired references
 python scripts/recipe_dry_run.py --quick        # the WHOLE recipe offline, no teachers needed
 python scripts/export_onnx.py                   # int8 ONNX vocoder + PyTorch/ONNX benchmark
-python -m pytest -q                            # 258 tests
+python -m pytest -q                            # 270 tests
 python scripts/bench_rtf.py --config configs/parakeet_tiny.yaml --steps 2
 ```
 
@@ -153,7 +155,7 @@ configs/      parakeet_tiny.yaml (9.6M) | parakeet_tiny_lite.yaml (6.2M, fixture
 scripts/      smoke_test.py | learn_demo.py | reflow_demo.py | streaming_demo.py |
               mixture_demo.py | voice_demo.py | recipe_dry_run.py | export_onnx.py | profile_pipeline.py |
               train.py | make_teacher_corpus.py | bench_rtf.py
-tests/        258 tests: config, audio DSP, models, losses, all five stages, inference,
+tests/        270 tests: config, audio DSP, models, losses, all five stages, inference,
               streaming, mixture weighting, data/corpus paths, curation, ONNX/int8, learning
 .github/      ci.yml -- suite + smoke test + fast demos on every push; benchmarks on demand
 ```

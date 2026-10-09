@@ -215,14 +215,26 @@ def whisper_wer(
         model = WhisperModel(model_size, device="cpu", compute_type="int8")
         total_err = total_ref = 0
         for w, ref in zip(audio, texts):
-            segments, _ = model.transcribe(w.reshape(-1).numpy(), language="en")
+            samples = w.reshape(-1).numpy()
+            # faster-whisper treats a numpy array as **16 kHz**: a 24 kHz teacher is read 1.5x too
+            # fast and a 48 kHz teacher 3x too fast.  Kokoro's 24 kHz audio survived that (WER 0.000)
+            # which hid the bug; Speechify's 48 kHz audio scored a *teacher* WER of 1.488 until this
+            # resample was added.  A metric that depends on the teacher's sample rate is not a metric.
+            if sample_rate and sample_rate != 16000:
+                target = max(1, int(samples.size * 16000 / sample_rate))
+                samples = np.interp(
+                    np.linspace(0.0, samples.size - 1, target, dtype=np.float64),
+                    np.arange(samples.size, dtype=np.float64),
+                    samples.astype(np.float64),
+                ).astype(np.float32)
+            segments, _ = model.transcribe(samples, language="en")
             hyp = " ".join(s.text for s in segments)
             norm = lambda s: re.sub(r"[^a-z0-9 ]", "", s.lower()).split()
             r, h = norm(ref), norm(hyp)
             err = sum(1 for a, b in zip(r, h) if a != b) + abs(len(r) - len(h))
             total_err += err
             total_ref += max(1, len(r))
-        return OptionalMetric(total_err / max(1, total_ref), True, detail=f"faster-whisper {model_size}")
+        return OptionalMetric(total_err / max(1, total_ref), True, detail=f"faster-whisper {model_size} @16k")
     except Exception as exc:  # pragma: no cover
         return OptionalMetric(None, False, str(exc))
 

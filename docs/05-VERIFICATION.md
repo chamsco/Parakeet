@@ -12,14 +12,14 @@ python scripts/reflow_demo.py                               # validates NFE-2 sa
 python scripts/streaming_demo.py                            # blockwise streaming + TTFA (~7 min CPU)
 python scripts/export_onnx.py --pipeline                    # int8 ONNX + runtime benchmark
 python scripts/profile_pipeline.py                          # where does the time actually go
-python -m pytest -q                                         # 258 tests
+python -m pytest -q                                         # 270 tests
 python scripts/bench_rtf.py --config configs/parakeet_tiny.yaml
 ```
 
 ## 1. Test suite
 
 ```
-258 passed
+270 passed
 ```
 
 Coverage by area:
@@ -36,7 +36,9 @@ Coverage by area:
 | `test_curate.py` | every curation gate fires on a constructed failure (too short/long, clipped, silent, low SNR, narrowband, low MOS, ASR disagreement); **all** reasons reported, not just the first; SNR correctly reported as *unevaluable* without a noise floor; WER and punctuation-gap maths; reject records are never dropped |
 | `test_learning.py` | synthetic fixture is structurally exact (frame counts, peak, F0 declination); latent normaliser fits and inverts; token targets are exact and normalised; decoder-latent alignment; supplied-latent path leaves the encoder gradient-free; **stage freezing does not leak between stages**; and the headline: 40 CPU steps measurably improve both the representation and the distilled text side |
 | `test_onnx.py` | ONNX decoder matches PyTorch to **<1e-4**; text side matches to **<1e-4 across token lengths 5/8/17** (the legacy exporter's baked-in length would fail this); dynamic time axis across 7/23/41 frames; int8 files are smaller and run on CPU; dtypes are validated at the wrapper boundary; external weight sidecars are counted in size; full int8 pipeline tracks PyTorch (cosine >0.95) and is smaller in total (skips if `onnx`/`onnxruntime`/`onnxscript` absent) |
+| `test_speechify_backend.py` | the hosted teacher against a **stubbed transport** (a suite that spends the operator's characters is a bug in itself): request shape, base64/WAV decoding and int16 scaling, character accounting, retry on a transient failure, **no retry on a 401**, the licence distinction in the spec, and that the key never reaches a corpus file.  `test_mix_corpora.py` covers the mixture: relative paths that resolve without copying, interleaving so no shard is one teacher, preserved `token_frames`, and weights that default to the utterance share.  `test_provenance_and_hygiene.py` gained the last line of defence — **no key-shaped string in any tracked file** |
 | `test_train_stages.py` (extended once more) | `distill-audio` really trains **through** the decoder: the text-side heads and `prosody_proj` move, the autoencoder does not, and the logs carry the audio objective and the auxiliary term |
+| `test_speechify_backend.py` | the hosted teacher against a **stubbed transport** (a suite that spends the operator's characters is a bug in itself): request shape, base64/WAV decoding and int16 scaling, character accounting, retry on a transient failure, **no retry on a 401**, the licence distinction in the spec, and that the key never reaches a corpus file.  `test_mix_corpora.py` covers the mixture: relative paths that resolve without copying, interleaving so no shard is one teacher, preserved `token_frames`, and weights that default to the utterance share.  `test_provenance_and_hygiene.py` gained the last line of defence — **no key-shaped string in any tracked file** |
 | `test_train_stages.py` (extended once more) | `distill-audio` really trains **through** the decoder: the text-side heads and `prosody_proj` move, the autoencoder does not, and the logs carry the audio objective and the auxiliary term |
 | `test_train_stages.py` (extended, again) | the decoder stage really consumes the **token-expanded** distribution when the flag is on (and the log records which was used, so a silent revert is visible); and `--set`/warm-start/frame-latent paths still behave |
 | `test_train_stages.py` (extended) | a reconstruction-only phase really is reconstruction-only (`adversarial` weight 0 ⇒ no `disc` loss and no discriminator step, while the generator still trains) — that option is 24× cheaper per step and is what fixed the autoencoder; and a non-finite loss is **skipped, counted, reported with its first step, written to `divergence.json`, and leaves the parameters finite**, so divergence is a finding instead of an all-NaN report |
@@ -44,7 +46,9 @@ Coverage by area:
 | `test_duration_scale.py` (extended) | the sub-token geometry is **shared**: a sub-vector index must land in the frame span its target was averaged over, so targets and expansion cannot drift apart; degenerate tokens (fewer frames than the rate) stay in bounds; and `latent_rate` widens the head without changing the frame count |
 | `test_duration_scale.py` | durations round-trip through their normalisation exactly; zero on the normalised scale means the measured corpus mean (6 frames), not 1; a one-standard-deviation head output stretches the sequence by ~1.48× — not the ~2.7× that `log_duration.exp()` would give, so the trap is caught even though both produce audio; the loss term is ~zero against the normalised target and >0.5 against a raw-log one; and the diagnosis evidence carries its validity checks and a named bottleneck |
 | `test_real_audio.py` | the voicing threshold admits more frames as it rises **while the pitch estimate stays put** (the real-speech signature of a threshold that was too strict); an unvoiced token inherits the nearest voiced pitch instead of 0 Hz; the unaligned split neither collapses nor ignores the energy; the Kokoro runtime dispatch lands on an importable backend and rejects an unknown voice with the available list; the DNSMOS wrapper reads `ovrl_mos` rather than defaulting to 0.0 (the bug the teacher control caught); the real-audio, real-training and real-evaluation evidence all record their provenance, their controls and their caveats |
+| `test_speechify_backend.py` | the hosted teacher against a **stubbed transport** (a suite that spends the operator's characters is a bug in itself): request shape, base64/WAV decoding and int16 scaling, character accounting, retry on a transient failure, **no retry on a 401**, the licence distinction in the spec, and that the key never reaches a corpus file.  `test_mix_corpora.py` covers the mixture: relative paths that resolve without copying, interleaving so no shard is one teacher, preserved `token_frames`, and weights that default to the utterance share.  `test_provenance_and_hygiene.py` gained the last line of defence — **no key-shaped string in any tracked file** |
 | `test_train_stages.py` (extended once more) | `distill-audio` really trains **through** the decoder: the text-side heads and `prosody_proj` move, the autoencoder does not, and the logs carry the audio objective and the auxiliary term |
+| `test_speechify_backend.py` | the hosted teacher against a **stubbed transport** (a suite that spends the operator's characters is a bug in itself): request shape, base64/WAV decoding and int16 scaling, character accounting, retry on a transient failure, **no retry on a 401**, the licence distinction in the spec, and that the key never reaches a corpus file.  `test_mix_corpora.py` covers the mixture: relative paths that resolve without copying, interleaving so no shard is one teacher, preserved `token_frames`, and weights that default to the utterance share.  `test_provenance_and_hygiene.py` gained the last line of defence — **no key-shaped string in any tracked file** |
 | `test_train_stages.py` (extended once more) | `distill-audio` really trains **through** the decoder: the text-side heads and `prosody_proj` move, the autoencoder does not, and the logs carry the audio objective and the auxiliary term |
 | `test_train_stages.py` (extended, again) | the decoder stage really consumes the **token-expanded** distribution when the flag is on (and the log records which was used, so a silent revert is visible); and `--set`/warm-start/frame-latent paths still behave |
 | `test_train_stages.py` (extended) | a reconstruction-only phase really is reconstruction-only (`adversarial` weight 0 ⇒ no `disc` loss and no discriminator step, while the generator still trains) — that option is 24× cheaper per step and is what fixed the autoencoder; and a non-finite loss is **skipped, counted, reported with its first step, written to `divergence.json`, and leaves the parameters finite**, so divergence is a finding instead of an all-NaN report |
@@ -1279,7 +1283,80 @@ including for words the corpus never contains (`quixotic → kwɪksɑːɾɪk`,
 `perspicacious → pɚspɪkeɪʃəs`) over a 39-symbol vocabulary. Recorded so the next round starts from a
 verified capability instead of a hope.
 
-## 28. Smoke test output (measured)
+## 28. A second real teacher: Speechify, and the first real alignment (measured)
+
+The objective asked for "mix training of both" teachers. Until now that was expressible only against
+fixtures: `synthesize_corpus` realises a mixture by *choosing* one teacher per prompt, so every corpus
+was single-teacher, and the one hosted teacher wired up (MiniMax) is refused by default for licence
+reasons. The operator obtained written permission from **Speechify** for this task, stated to cover
+demonstration/quantization, so a second real teacher is now in the pipeline.
+
+### The permission is narrower than "train and publish", and that is recorded
+
+`SPEECHIFY`'s spec says `allows_training=True` with the wording *"stated to cover demonstration and
+quantization purposes"*, and `docs/LEGAL.md` marks the boundary explicitly: distilling a student is
+demonstration, **publishing derivative weights is a broader act that this permission does not
+establish**. The licence string travels on every corpus record and appears in the model card's teacher
+table. The key lives in `.secrets/speechify.key` (gitignored) or `SPEECHIFY_API_KEY`; a hygiene test
+scans every tracked file for key-shaped strings, and the backend test asserts the key never reaches a
+corpus file.
+
+### The service brings word-level timings, which the project never had
+
+`speech_marks` returns, per word, the character offsets **and millisecond timings**. That is the
+alignment every duration target in this project has lacked — rounds 19 and 22 both measured the
+unaligned fallback as a real quality limit. `marks_to_token_frames()` turns the marks into one frame
+count per character (the char tokenizer emits exactly `len(text)` tokens, so a mismatch would mis-assign
+every duration), and the corpus builder writes `token_frames` into the record; the cache picks it up
+through the existing `use_teacher_durations` path. Verified rather than assumed:
+
+| check (964 curated Speechify utterances) | result |
+|---|---|
+| records carrying an alignment | **964 / 964** |
+| one frame count per character | every record |
+| **median relative error between the timings and the audio duration** | **0.008** (p90 0.019) |
+
+### A fourth borrowed threshold, and this one cost 60 % of a paid corpus
+
+Curation kept **383 of 1350** Speechify utterances. The reason was `narrowband` (965), not quality:
+the CosyVoice `min_bandwidth_hz = 5 kHz` floor was calibrated on a 24 kHz synthesiser, and at 48 kHz a
+5 kHz bandwidth is **0.21 of Nyquist** — right at the edge. Speechify's DNSMOS is *higher* than
+Kokoro's (mean 3.33 vs 2.86), so the gate was discarding the better teacher. Re-curating the same
+audio with a measured 4 kHz floor keeps **964 of 1350**; the choice is now a CLI parameter
+(`--min-bandwidth-hz`) with the measurement recorded, rather than a constant from another system.
+
+### Two teachers, mixed, with a prompt-disjoint hold-out
+
+`scripts/mix_corpora.py` joins finished corpora into one mixture manifest — referencing waveforms by
+relative path instead of copying them — and writes the `corpus_meta.json` that
+`cache_teacher_corpus` reads for the mixture weights. That is what makes mix training real:
+
+| | utterances | minutes | prompts | alignment |
+|---|---|---|---|---|
+| Kokoro (English, all `af_*`) | 304 | 22.2 | 185 | — |
+| Speechify (3 voices, 2 locales, mixed gender) | 865 | 87.3 | 399 | **yes** |
+| **mixture (train)** | **1169** | **109.5** | | 865/1169 (74 %) |
+| mixture (val, 50 unseen prompts) | 178 | 16.2 | 50 | |
+
+### A metric bug: WER depended on the teacher's sample rate
+
+Evaluating Speechify audio reported a **teacher** WER of 1.488 — impossible for a service scoring
+DNSMOS 3.33. The cause: faster-whisper treats a numpy array as **16 kHz**, so 24 kHz audio is read 1.5×
+too fast and 48 kHz audio 3× too fast. Kokoro's audio survived that (teacher WER 0.000), which is
+precisely why the bug hid for ten rounds. `whisper_wer` now resamples from the declared rate to 16 kHz:
+
+| | before | after |
+|---|---|---|
+| Speechify teacher WER | 1.488 | **0.268** (control valid) |
+| Kokoro teacher WER on the round-25 hold-out | 0.168 | 0.140 |
+| student WER on that hold-out | 0.997 | **0.994** |
+
+The last row is the one that matters: round 25's conclusion (*the student is at chance on unseen
+prompts*) was **re-checked under the fixed metric rather than assumed**, and it holds. Every earlier
+number was measured with a 1.5× speed-up fed to the recogniser; the ones that were fine were fine by
+luck of the robustness range, which is a reason to fix the metric and re-run rather than to trust it.
+
+## 29. Smoke test output (measured)
 
 ```
 parakeet-tiny [tiny] sr=24000 mel=80@93.8Hz latent=24 compress=1/6 voice=constant
@@ -1330,7 +1407,7 @@ overhead — it is not a valid throughput measurement until the model predicts s
 learning demo (§2) trains properly but on 15 seconds of *synthetic* audio, so it demonstrates that
 the machinery learns, not that the model is good.
 
-## 29. Deliberate engineering checks worth calling out
+## 30. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
@@ -1366,7 +1443,7 @@ the machinery learns, not that the model is good.
   `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
   else, rather than surfacing a cryptic `torch.stft` message.
 
-## 30. Environment notes
+## 31. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).

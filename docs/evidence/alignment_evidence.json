@@ -1,0 +1,28 @@
+{
+  "corpus": "data/speechify_corpus/corpus",
+  "manifest": "curated/kept.jsonl",
+  "records": 964,
+  "teachers": {
+    "speechify": 964
+  },
+  "alignment": {
+    "aligned_records": 964,
+    "coverage": 1.0,
+    "characters_per_record_median": 71.0,
+    "median_relative_duration_error": 0.00757575757575754,
+    "p90_relative_duration_error": 0.018556701030927852,
+    "seconds_per_frame": 0.010666666666666666
+  },
+  "dnsmos": {
+    "mean": 3.3348886764015564,
+    "median": 3.35115595074894,
+    "p10": 3.1787144342222353,
+    "p90": 3.479959502125002
+  },
+  "checks": {
+    "the_corpus_carries_an_alignment": true,
+    "every_aligned_record_has_one_frame_per_character": true,
+    "the_alignment_reproduces_the_audio_duration": true,
+    "every_utterance_kept_a_dnsmos_reading": true
+  }
+}

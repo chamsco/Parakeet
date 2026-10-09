@@ -26,12 +26,19 @@ import time
 from pathlib import Path
 from typing import Dict, List
 
+import os
+
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from parakeet.data.curate import CurateConfig, curate_manifest  # noqa: E402
-from parakeet.data.teacher import build_backend, check_teacher, synthesize_corpus  # noqa: E402
+from parakeet.data.teacher import (  # noqa: E402
+    SPEECHIFY_ENGLISH_VOICES,
+    build_backend,
+    check_teacher,
+    synthesize_corpus,
+)
 
 #: 60 prompts, deliberately varied: length (8-24 words), clause structure, punctuation, digit-heavy
 #: and consonant-heavy sentences.  All comfortably above the curation gate's 3 s minimum so the
@@ -101,7 +108,8 @@ PROMPTS: List[str] = [
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Build a larger prompt-disjoint Kokoro corpus")
-    ap.add_argument("--voices", type=int, default=4, help="how many of the 11 English voices to use")
+    ap.add_argument("--voices", type=int, default=4, help="how many voices to use")
+    ap.add_argument("--teacher", default="kokoro", help="teacher name (kokoro, speechify, ...)")
     ap.add_argument("--val-prompts", type=int, default=12, help="prompts held out for validation")
     ap.add_argument("--out", default="data/scaled_corpus")
     ap.add_argument("--prompt-limit", type=int, default=None)
@@ -109,11 +117,23 @@ def main() -> int:
                     help="one prompt per line (e.g. from scripts/build_prompts.py).  Text diversity is "
                          "the measured binding constraint, so a large public-domain list is preferred "
                          "over the built-in 60")
+    ap.add_argument("--reuse-audio", action="store_true",
+                    help="if the corpus already has a manifest, re-curate the existing wavs instead of "
+                         "synthesising again: curation is cheap and synthesis is not (and may be paid)")
+    ap.add_argument("--min-bandwidth-hz", type=float, default=None,
+                    help="override CurateConfig.min_bandwidth_hz.  Worth overriding with a "
+                         "*measurement*: the CosyVoice 5 kHz floor was calibrated on a 24 kHz "
+                         "synthesiser and rejects 71%% of a 48 kHz teacher whose DNSMOS is higher")
+    ap.add_argument("--min-dnsmos", type=float, default=None,
+                    help="override the calibrated DNSMOS floor (default 2.0, measured in round 24)")
     args = ap.parse_args()
 
-    spec = check_teacher("kokoro")
-    backend = build_backend("kokoro")
-    available = list(getattr(backend, "voices", ()))
+    spec = check_teacher(args.teacher)
+    backend = build_backend(args.teacher)
+    if args.teacher == "speechify":
+        available = list(SPEECHIFY_ENGLISH_VOICES)
+    else:
+        available = list(getattr(backend, "voices", ()))
     voices = available[: args.voices]
     out = Path(args.out)
     corpus = out / "corpus"
@@ -136,14 +156,21 @@ def main() -> int:
     print(f"{len(prompts)} prompts x {len(voices)} voices = {len(texts)} utterances "
           f"({len(set(voices))} voices, all-{voices[0][:2]}*)")
 
-    started = time.perf_counter()
-    manifest = synthesize_corpus(
-        texts, corpus,
-        mix={"kokoro": 1.0},
-        voices={"kokoro": voice_list},
-        backends={"kokoro": backend},
-    )
-    synth_seconds = time.perf_counter() - started
+    existing = out if os.path.isdir(corpus) else None
+    manifest_path = corpus / "manifest.jsonl"
+    if args.reuse_audio and manifest_path.exists():
+        print(f"reusing {manifest_path} (no synthesis; curation only)")
+        manifest = manifest_path
+        synth_seconds = 0.0
+    else:
+        started = time.perf_counter()
+        manifest = synthesize_corpus(
+            texts, corpus,
+            mix={args.teacher: 1.0},
+            voices={args.teacher: voice_list},
+            backends={args.teacher: backend},
+        )
+        synth_seconds = time.perf_counter() - started
     records = [json.loads(l) for l in manifest.read_text(encoding="utf-8").splitlines() if l.strip()]
     audio_seconds = sum(r["duration_s"] for r in records)
     print(f"  synthesised {len(records)} utterances, {audio_seconds / 60:.1f} min of audio "
@@ -155,7 +182,22 @@ def main() -> int:
         wav, sr = sf.read(str(corpus / rel), dtype="float32")
         return __import__("torch").from_numpy(wav), sr
 
-    report = curate_manifest(records, load_wav, corpus / "curated", CurateConfig(), normalize=True)
+    curate_cfg = CurateConfig()
+
+
+    if args.min_bandwidth_hz is not None:
+
+
+        curate_cfg.min_bandwidth_hz = args.min_bandwidth_hz
+
+
+    if args.min_dnsmos is not None:
+
+
+        curate_cfg.min_dnsmos = args.min_dnsmos
+
+
+    report = curate_manifest(records, load_wav, corpus / "curated", curate_cfg, normalize=True)
     kept = [
         json.loads(l)
         for l in (corpus / "curated" / "kept.jsonl").read_text(encoding="utf-8").splitlines()
