@@ -79,6 +79,7 @@ the engineering.
 * [x] End-to-end recipe dry run with dependency-free fixture teachers
       (`scripts/recipe_dry_run.py`) — it immediately found two bugs in the documented cache path
       that no per-part demo could see
+* [x] **Real teacher backends contract-tested with stubs** (no weights, network or API key, so they run in CI) -- which found that the Orpheus SNAC codebook-to-level mapping had been wrong all along: contiguous grouping instead of the published `{0}`/`{1,4}`/`{2,3,5,6}`, decoding every corpus to noise.  Verified against two independent copies of the published decoder.
 * [x] **Repository hygiene + provenance**: every package file must be tracked by git (an unanchored data/ ignore rule had hidden the whole data pipeline for ten commits — verified by cloning and running the tests from the clone); un_stage writes un.json with git revision, config hash, versions and the trainable/frozen report; no-dead-public-API test.
 * [x] **Entry-point wiring**: `make_batch_source` and `cache_teacher_corpus` moved the batch-source
       and cache decisions out of the scripts, which had been bypassing cross-sample pairing, the

@@ -60,6 +60,15 @@ prompts.txt ─► mixture scheduler ─► {Orpheus, Kokoro[, MiniMax]} ─► 
                             latent shards: ids, durations, F0, energy, latent_token, latent, log_mel
 ```
 
+* **Orpheus decode layout (fixed in round 12).** The 7 SNAC codes per super-frame are assigned to the three
+  SNAC levels as `{0}`, `{1, 4}`, `{2, 3, 5, 6}` (one, two and four per super-frame), flattened
+  frame-major, with `int32` codes -- matching the published Orpheus decoder.  Grouping the
+  codebooks contiguously (`{1,2}`, `{3..6}`) passes every shape check and decodes to noise; the
+  `OrpheusBackend` path had never been executed, so nothing could catch it.  The mapping is now
+  asserted element-wise against a reimplementation of the reference in
+  `tests/test_teacher_backends.py`, alongside contract tests for the Kokoro and MiniMax backends
+  that need no weights, network or API key.
+
 * **Mixture scheduler** (`synthesize_corpus`): teachers are interleaved with a golden-ratio
   sequence so every shard contains the whole mixture. Shard-local balance matters — a shard that
   is 100 % one teacher produces a stretch of single-teacher gradient.

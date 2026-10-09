@@ -349,17 +349,24 @@ class OrpheusBackend(TeacherBackend):
             for t in out[0].tolist()
             if self.AUDIO_BASE <= t < self.AUDIO_BASE + self.N_CODEBOOKS * self.CODEBOOK_SIZE
         ]
-        # 7 codes per super-frame; SNAC expects the hierarchical [4,2,1] layout
+        # 7 codes per super-frame.  The codebook -> SNAC-level mapping is NOT contiguous: the
+        # published Orpheus decoder assigns codebooks {0}, {1, 4}, {2, 3, 5, 6} to levels 1, 2, 3
+        # (one, two and four codes per super-frame).  Grouping them contiguously ({1,2}, {3..6})
+        # looks right and decodes to noise, and nothing in this repo could catch it: the real
+        # backend needs a 3B checkpoint, so the path had never been executed.
         n = (len(audio_tokens) // self.N_CODEBOOKS) * self.N_CODEBOOKS
         codes = np.array(audio_tokens[:n], dtype=np.int64).reshape(-1, self.N_CODEBOOKS) - self.AUDIO_BASE
         by_level = [
-            torch.tensor(codes[:, i] % self.CODEBOOK_SIZE, device=self.device)[None]
+            torch.tensor(
+                codes[:, i] % self.CODEBOOK_SIZE, device=self.device, dtype=torch.int32
+            )
             for i in range(self.N_CODEBOOKS)
         ]
-        # level sizes for snac_24khz are (4, 2, 1) codes per super-frame at 12/23/47 Hz
-        l1, l2, l3 = by_level[0], by_level[1:3], by_level[3:]
-        l2 = torch.stack(l2, dim=-1).reshape(1, -1)
-        l3 = torch.stack(l3, dim=-1).reshape(1, -1)
+        l1 = by_level[0][None]
+        l2 = torch.stack([by_level[1], by_level[4]], dim=-1).reshape(1, -1)
+        l3 = torch.stack(
+            [by_level[2], by_level[3], by_level[5], by_level[6]], dim=-1
+        ).reshape(1, -1)
         wav = self.snac.decode([l1, l2, l3])[0].squeeze().float().cpu().numpy()
         return wav, self.spec.sample_rate
 

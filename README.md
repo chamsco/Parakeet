@@ -76,6 +76,7 @@ Two variants share every block:
 | **Does speaker/style conditioning reach the model?** | with the pre-fix cached path the identity/style encoders get **exactly zero gradient**; wired, the reference changes the conditioning by 0.2254 (1.74 vs null) and a same-text/different-reference check shows conditioning is live | `recipe_dry_run.py --stage flow` |
 | **Does the documented pipeline actually run?** | yes — prompts -> synthesis -> **P1 curation** -> cache from the curated manifest -> training -> synthesis, 10/10 checks on both the Tiny and Small paths, offline | `recipe_dry_run.py` |
 | **Does the repository actually contain the project?** | verified by cloning the pushed repo and running its tests there — an unanchored .gitignore rule (data/) had kept the entire parakeet/data package out of GitHub for ten commits; a hygiene test now fails if any package file is untracked | 	est_provenance_and_hygiene.py |
+| **Is the real teacher path correct?** | it had never been executed (weights/API needed) and **was wrong**: Orpheus codebooks were grouped contiguously instead of the published `{0}`/`{1,4}`/`{2,3,5,6}`, which decodes to noise. Now verified element-wise against a reimplementation of the published decoder, with a positive control | `test_teacher_backends.py` |
 | Does the whole recipe run? | **yes, offline** — prompts → corpus → cache → distillation → synthesis, 6/6 checks pass with dependency-free fixture teachers | `recipe_dry_run.py` |
 | Int8 weights (simulated) | 12.0 MB Tiny / 56.3 MB Small | `smoke_test.py` |
 
@@ -94,7 +95,7 @@ python scripts/voice_demo.py --quick            # multi-voice conditioning vs a 
 python scripts/recipe_dry_run.py --stage flow    # Small flow path + paired references
 python scripts/recipe_dry_run.py --quick        # the WHOLE recipe offline, no teachers needed
 python scripts/export_onnx.py                   # int8 ONNX vocoder + PyTorch/ONNX benchmark
-python -m pytest -q                            # 181 tests
+python -m pytest -q                            # 194 tests
 python scripts/bench_rtf.py --config configs/parakeet_tiny.yaml --steps 2
 ```
 
@@ -134,7 +135,7 @@ configs/      parakeet_tiny.yaml (9.6M) | parakeet_small.yaml (45M) | parakeet_s
 scripts/      smoke_test.py | learn_demo.py | reflow_demo.py | streaming_demo.py |
               mixture_demo.py | voice_demo.py | recipe_dry_run.py | export_onnx.py | profile_pipeline.py |
               train.py | make_teacher_corpus.py | bench_rtf.py
-tests/        181 tests: config, audio DSP, models, losses, all five stages, inference,
+tests/        194 tests: config, audio DSP, models, losses, all five stages, inference,
               streaming, mixture weighting, data/corpus paths, curation, ONNX/int8, learning
 .github/      ci.yml -- suite + smoke test + fast demos on every push; benchmarks on demand
 ```
@@ -144,6 +145,7 @@ tests/        181 tests: config, audio DSP, models, losses, all five stages, inf
 * **No trained weights yet.** Every quality number in the papers (UTMOS 4.41, WER 5.7 %, RTF 0.02
 * **The CLI entry points were bypassing the library.** Round 10 found 	rain.py building its batch source without cross-sample pairing, make_teacher_corpus.py building the cache with no teacher mixture, and curate_manifest (the entire documented P1 pipeline) never called at all.  Fixed structurally: the decisions moved into make_batch_source / cache_teacher_corpus, which are unit-tested.  Wiring curation also exposed two gate defects: digital silence passed the gates, and silence_ratio scored 0.0 for it.
 * **The published repository was missing the data package.**  An unanchored .gitignore rule (data/, meant for the corpus directory) also matched the Python package parakeet/data/, so 7 of 33 source files were absent from GitHub for ten commits — everything passed locally, and a fresh clone could not import.  Anchored to /data/, and now guarded by a test that every package file is tracked, verified by cloning and running the tests *from the clone*.
+* **The real teacher backends had never been executed — and Orpheus was wrong.**  No demo, test or CI job could run them (a 3B checkpoint, an 82M model, a paid API), so the one path that turns a real teacher's output into training audio was unverified.  Its SNAC codebook-to-level mapping grouped the 7 codes contiguously instead of the published {0}/{1,4}/{2,3,5,6}: every Orpheus corpus would have decoded to noise.  Fixed, cross-checked against two independent copies of the published decoder, and pinned element-wise by contract tests with injected stubs (plus a positive control showing the old grouping fails).
   on a 4090) is a target, not a Parakeet result.
 * **MiniMax distillation is legally blocked by default.** The framework supports it; the licence
   gate refuses it. Default mixture is Orpheus 60 / Kokoro 40.

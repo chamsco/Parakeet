@@ -12,14 +12,14 @@ python scripts/reflow_demo.py                               # validates NFE-2 sa
 python scripts/streaming_demo.py                            # blockwise streaming + TTFA (~7 min CPU)
 python scripts/export_onnx.py --pipeline                    # int8 ONNX + runtime benchmark
 python scripts/profile_pipeline.py                          # where does the time actually go
-python -m pytest -q                                         # 181 tests
+python -m pytest -q                                         # 194 tests
 python scripts/bench_rtf.py --config configs/parakeet_tiny.yaml
 ```
 
 ## 1. Test suite
 
 ```
-181 passed
+194 passed
 ```
 
 Coverage by area:
@@ -36,6 +36,7 @@ Coverage by area:
 | `test_curate.py` | every curation gate fires on a constructed failure (too short/long, clipped, silent, low SNR, narrowband, low MOS, ASR disagreement); **all** reasons reported, not just the first; SNR correctly reported as *unevaluable* without a noise floor; WER and punctuation-gap maths; reject records are never dropped |
 | `test_learning.py` | synthetic fixture is structurally exact (frame counts, peak, F0 declination); latent normaliser fits and inverts; token targets are exact and normalised; decoder-latent alignment; supplied-latent path leaves the encoder gradient-free; **stage freezing does not leak between stages**; and the headline: 40 CPU steps measurably improve both the representation and the distilled text side |
 | `test_onnx.py` | ONNX decoder matches PyTorch to **<1e-4**; text side matches to **<1e-4 across token lengths 5/8/17** (the legacy exporter's baked-in length would fail this); dynamic time axis across 7/23/41 frames; int8 files are smaller and run on CPU; dtypes are validated at the wrapper boundary; external weight sidecars are counted in size; full int8 pipeline tracks PyTorch (cosine >0.95) and is smaller in total (skips if `onnx`/`onnxruntime`/`onnxscript` absent) |
+| `test_teacher_backends.py` | the three **real** teacher backends (the only code that had never been executed) verified with injected stubs: the Orpheus codebook-to-SNAC-level mapping asserted element-wise against a reimplementation of the published decoder — with a positive control proving the old contiguous grouping fails it — plus level shapes, partial-frame dropping, token filtering, prompt wrapping and sampling settings; Kokoro chunk concatenation, empty output and durations fallback; MiniMax request payload/headers, hex WAV decode, missing-audio error and the licence gate |
 | `test_provenance_and_hygiene.py` | **every `.py` under `parakeet/` is tracked by git** (the unanchored `data/` ignore rule hid the whole data package for ten commits), plus scripts/CI/configs ship; no public name in the package is referenced nowhere (with an explicit allowlist escape hatch); `run_stage` writes `run.json` with git revision, config SHA-256, versions, and the trainable/frozen report, and merges caller provenance; `SpeakerConfig.freeze` really freezes the identity encoder while the Q-Former adapts; a saved checkpoint round-trips from both a raw encoder state dict and a full-model state dict, and a mismatched one raises |
 | `test_pipeline_wiring.py` | `make_batch_source` pairs references for the flow stage only (and honours the config cap, and falls back to synthetic batches); `cache_teacher_corpus` takes the mixture from `corpus_meta.json` (the CLI used to pass none), prefers a curated `kept.jsonl` including in `curated/`, and errors without a manifest; the P1 gates discriminate, **reject digital silence even with duration/bandwidth/SNR relaxed** (`min_rms_dbfs`), and score `silence_ratio` 1.0 for it; a curated manifest round-trips into a valid cache |
 | `test_conditioning.py` | the cache batch carries a padded, masked reference (and legacy caches without `log_mel` still collate); pairing never uses the target utterance and takes the positive from the same voice and the negative from a different one; `max_ref_frames` truncates like PilotTTS's 15 s cap; **with no reference the identity/style encoders receive exactly zero gradient** (the control for the pre-fix cached path) while with one they receive gradient and the separation term is active; the separation loss pushes different speakers apart and the consistency term is off by default |
@@ -373,7 +374,7 @@ increase with the voice's pitch multiplier — it fails if any of the three regr
 `test_yin_is_used_by_default_and_is_no_worse_than_autocorrelation`, and
 `test_aggregate_to_tokens_ignores_unvoiced_zeros`.
 
-## 11. The CLI entry points were bypassing all of it (measured)
+## 10. The CLI entry points were bypassing all of it (measured)
 
 Rounds 6-9 wired the mixture, multi-voice conditioning and cross-sample pairing into the *library*.
 Round 10 checked the two entry points a user actually runs, and found the features unreachable from
@@ -418,7 +419,7 @@ about what the fixture can demonstrate.
 cache from the curated manifest → training → synthesis — passing 10/10 checks on both the Tiny and
 the Small/flow stage.
 
-## 12. The published repository was missing the data package (found by cloning, not inspecting)
+## 11. The published repository was missing the data package (found by cloning, not inspecting)
 
 The most serious defect in this project so far, and the one no test in the working tree could see.
 
@@ -472,7 +473,7 @@ remainder:
 * **`test_no_dead_public_api_in_the_package`** now fails if any public name becomes unreferenced
   again, with an explicit allowlist escape hatch, so the finding cannot silently return.
 
-## 13. Speaker/style conditioning from a latent cache (measured)
+## 12. Speaker/style conditioning from a latent cache (measured)
 
 The third instance of the same class of bug, this time in the **flagship** path. `collate` dropped
 `log_mel` entirely, so the Small/flow model trained from a latent cache received `ref_mel=None`:
@@ -514,6 +515,47 @@ estimator's residual branches start at `layer_scale_init = 1e-6`, so an untraine
 dominated by `x0` and two different references give near-identical audio (cosine 0.999980). That is
 the same degeneracy found in round 5; measuring it would have been a fake control, so the structural
 measurement is the meaningful one at this stage.
+
+## 13. The real teacher path had never been executed — and was wrong (measured)
+
+Every other measurement in this file uses the synthetic fixtures or the stub teachers, because the
+real ones need a 3B checkpoint, an 82M model or a paid API. That meant the **only** code that turns a
+real teacher's output into training audio had never run a single line, in any demo, test or CI job.
+It was wrong.
+
+`OrpheusBackend` maps the 7 SNAC codebooks per super-frame onto the three SNAC levels by grouping
+them **contiguously** — `{0}`, `{1, 2}`, `{3, 4, 5, 6}`. The published Orpheus decoder uses
+`{0}`, `{1, 4}`, `{2, 3, 5, 6}`. Contiguous grouping passes every shape check, looks entirely
+plausible, and decodes to noise: **every corpus built from Orpheus would have been garbage**, and
+nothing in the repository could have noticed.
+
+The mapping was verified against two independent copies of the published decoder before changing it
+([CrispTTS `decoder.py`](https://github.com/CrispStrobe/CrispTTS/blob/main/decoder.py), which
+matches the canopyai Orpheus-TTS decoder — see
+[DeepWiki: audio decoding](https://deepwiki.com/canopyai/Orpheus-TTS/2.2-audio-decoding)); both
+assign `codes_1 = {i+1, i+4}` and `codes_2 = {i+2, i+3, i+5, i+6}`, flattened frame-major, with
+`int32` codes. The implementation now matches, and the codes are cast to `int32` as the reference
+does rather than the `int64` this repo happened to produce.
+
+`tests/test_teacher_backends.py` (13 tests) pins the contract of all three real backends with
+injected stubs — no weights, no network, no API key, so it runs in CI:
+
+* **Orpheus**: the level mapping is asserted **element-wise against a reimplementation of the
+  published algorithm** on a token stream with distinguishable codes, plus level shapes (1/2/4 codes
+  per super-frame), partial-super-frame dropping, out-of-range token filtering, the chat wrapper
+  tokens, and the sampling settings. A **positive control** asserts that the old contiguous grouping
+  *cannot* satisfy the mapping, so the test provably has teeth.
+* **Kokoro**: chunks are concatenated (not stacked or dropped), the voice and speed reach the
+  pipeline, empty output yields an empty array rather than an exception, and `durations()` passes
+  teacher timings through while degrading to `None` when the installed pipeline has no such option.
+* **MiniMax** (legally gated, but the code still has to be correct): the request payload, URL and
+  `Authorization` header are asserted, the hex-encoded WAV response is decoded to `[-1, 1]` float at
+  the right rate, a response with no audio raises with the body in the message, and the backend stays
+  refused without an explicit acknowledgement.
+
+The lesson is the same one as round 11, one level up: *unexecuted code is unverified code, and its
+looks are not evidence.* The fixtures made ten demos possible and, in doing so, hid the only path
+that matters for the real corpus.
 
 ## 14. Smoke test output (measured)
 
