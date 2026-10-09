@@ -344,6 +344,64 @@ def _parameter_table() -> str:
     return "\n".join(lines)
 
 
+def _capacity_study() -> str:
+    """The size/capacity frontier, read from the committed ablation evidence.
+
+    This is a *study*, not a claim: its numbers come from synthetic fixtures with an untrained
+    autoencoder, so the card must present it with that caveat rather than as quality evidence.
+    """
+    path = ROOT / "docs" / "evidence" / "capacity_ablation.json"
+    if not path.exists():
+        return ""
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    rows = payload.get("rows") or []
+    if not rows:
+        return ""
+    lines = [
+        "Measured by `scripts/ablate.py` -- same cache, same step budget, same seed for every "
+        "variant, scored on a held-out split:",
+        "",
+        "| text dim / layers | text params | total params | held-out fit | text latency |",
+        "|---|---|---|---|---|",
+    ]
+    for r in rows:
+        lines.append(
+            f"| dim{r['text_dim']}-L{r['text_layers']} | {r['text_params'] / 1e6:.3f} M | "
+            f"{r['total_params'] / 1e6:.3f} M | {r['val_fit']:.4f} | {r['text_latency_ms']:.1f} ms |"
+        )
+    efficient = payload.get("half_size_best")
+    lines.append("")
+    lines.append(f"**Caveat, stated in the report**: {payload.get('caveat', '')}")
+    if efficient:
+        lines.append("")
+        lines.append(
+            f"Fixture-derived recommendation: `{efficient['label']}` at "
+            f"{efficient['text_params'] / 1e6:.3f} M text parameters is within "
+            f"{efficient['fit_penalty_pct']:.1f} % of the best held-out fit -- offered as "
+            "`configs/parakeet_tiny_lite.yaml` for comparison on a real corpus, **not** as a new "
+            "default, because the fixtures are repetitive and a real corpus plausibly needs more "
+            "capacity."
+        )
+    return "\n".join(lines)
+
+
+def _component_table() -> str:
+    """Where the parameters actually are -- the first question when making a model lighter."""
+    path = ROOT / "configs" / "parakeet_tiny.yaml"
+    if not path.exists():
+        return ""
+    cfg = load_config(str(path))
+    model = build_model(cfg)
+    total = sum(p.numel() for p in model.parameters())
+    lines = ["| component (Tiny) | parameters | share |", "|---|---|---|"]
+    for name, child in model.named_children():
+        n = sum(p.numel() for p in child.parameters())
+        if n:
+            lines.append(f"| `{name}` | {n / 1e6:.3f} M | {100.0 * n / total:.1f} % |")
+    lines.append(f"| **total** | **{total / 1e6:.3f} M** | 100 % |")
+    return "\n".join(lines)
+
+
 def _checkpoints() -> List[str]:
     """Trained-weight artifacts present in the workspace (none are committed).
 
@@ -435,6 +493,24 @@ def render(results: List[Dict[str, Any]], args) -> str:
     out.append("")
     out.append(_parameter_table())
     out.append("")
+    out.append(
+        "Where the parameters are, because that is the first question when making a model lighter:"
+    )
+    out.append("")
+    out.append(_component_table())
+    out.append("")
+    out.append(
+        "`scripts/ablate.py` measures the size/fit/latency frontier on fixtures; its result is a "
+        "*fixture* result (synthetic audio, untrained autoencoder, short budget) and must be revisited "
+        "with real data before the shipped geometry is changed."
+    )
+    out.append("")
+    study = _capacity_study()
+    if study:
+        out.append("### Capacity study (fixture-derived, not a quality claim)")
+        out.append("")
+        out.append(study)
+        out.append("")
     out.append("See `docs/01-ARCHITECTURE.md` for module-level detail.")
     out.append("")
     out.append("## Measured results")

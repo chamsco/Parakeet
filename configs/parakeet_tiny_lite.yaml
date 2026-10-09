@@ -1,0 +1,87 @@
+# Parakeet-Tiny-Lite -- a 6.2 M variant of Tiny, offered for comparison on real data.
+#
+# scripts/ablate.py measured the text-side capacity frontier on cached fixture signals (same cache,
+# same 400-step budget, same seed, 12/6 train/held-out split):
+#
+#   text dim/layers   text params   total     held-out fit   text latency
+#   dim256-L4 (Tiny)      3.851 M   9.616 M   0.3860         20.9 ms
+#   dim128-L4 (here)      1.008 M   6.228 M   0.3949 (+2.3%)  7.9 ms      <- 35% smaller, 2.6x faster
+#   dim96-L2              0.360 M   5.500 M   0.3976 (+3.0%)  3.6 ms
+#
+# So Tiny's text side looks ~4x oversized *for repetitive synthetic fixtures*.  That is not evidence
+# for real speech, where the data is far richer and the capacity requirement is plausibly higher --
+# hence this file exists as a documented alternative rather than as the new default.  Compare it
+# against configs/parakeet_tiny.yaml on a real corpus before switching.
+name: parakeet-tiny-lite
+variant: tiny
+voice_mode: constant
+n_voices: 1
+
+audio:
+  sample_rate: 24000        # matched to the teachers (Orpheus/SNAC 24k, Kokoro 24k)
+  n_fft: 1024
+  hop_length: 256           # 93.75 mel frames/s
+  win_length: 1024
+  n_mels: 80
+  fmax: 12000.0
+
+autoencoder:
+  latent_dim: 24
+  encoder_dims: [64, 96, 128]
+  encoder_blocks: [1, 2, 2]
+  decoder_dim: 256
+  decoder_blocks: 5
+  decoder_expansion: 4
+  decoder_dilations: [1, 2, 4, 8, 16]
+  causal_decoder: true       # streaming-capable
+
+text:
+  vocab_size: 128
+  dim: 128
+  n_layers: 4
+  n_heads: 4
+  mode: char                 # char (SupertonicTTS) or phoneme (Kokoro-style G2P)
+
+duration:
+  hidden: 128
+  n_layers: 2
+  predict_token_durations: true
+  predict_utterance_length: false
+
+speaker:
+  n_mels: 80
+  emb_dim: 192
+  n_query: 8
+  style_dim: 128
+  freeze: true
+
+flow:
+  latent_dim: 24
+  compress: 6
+  dim: 384
+  depth: 6
+  n_heads: 6
+  text_dim: 128
+  cond_dim: 128
+  nfe: 32
+  distilled_nfe: 4
+
+train:
+  batch_size: 16
+  lr: 0.0002
+  max_steps: 50000
+  ema_decay: 0.999
+  save_every: 5000
+  log_every: 50
+  loss:
+    mel: 1.0
+    spectral: 3.0            # Paradee: 3.0 -> UTMOS 4.37; 45 -> 3.02.  Balance, not size.
+    adversarial: 1.0
+    feature_match: 2.0
+    duration: 1.0
+    f0: 1.0
+    energy: 1.0
+    latent_feature: 1.0
+    phase_lock: 0.05
+
+

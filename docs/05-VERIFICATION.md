@@ -12,14 +12,14 @@ python scripts/reflow_demo.py                               # validates NFE-2 sa
 python scripts/streaming_demo.py                            # blockwise streaming + TTFA (~7 min CPU)
 python scripts/export_onnx.py --pipeline                    # int8 ONNX + runtime benchmark
 python scripts/profile_pipeline.py                          # where does the time actually go
-python -m pytest -q                                         # 215 tests
+python -m pytest -q                                         # 219 tests
 python scripts/bench_rtf.py --config configs/parakeet_tiny.yaml
 ```
 
 ## 1. Test suite
 
 ```
-215 passed
+219 passed
 ```
 
 Coverage by area:
@@ -36,6 +36,7 @@ Coverage by area:
 | `test_curate.py` | every curation gate fires on a constructed failure (too short/long, clipped, silent, low SNR, narrowband, low MOS, ASR disagreement); **all** reasons reported, not just the first; SNR correctly reported as *unevaluable* without a noise floor; WER and punctuation-gap maths; reject records are never dropped |
 | `test_learning.py` | synthetic fixture is structurally exact (frame counts, peak, F0 declination); latent normaliser fits and inverts; token targets are exact and normalised; decoder-latent alignment; supplied-latent path leaves the encoder gradient-free; **stage freezing does not leak between stages**; and the headline: 40 CPU steps measurably improve both the representation and the distilled text side |
 | `test_onnx.py` | ONNX decoder matches PyTorch to **<1e-4**; text side matches to **<1e-4 across token lengths 5/8/17** (the legacy exporter's baked-in length would fail this); dynamic time axis across 7/23/41 frames; int8 files are smaller and run on CPU; dtypes are validated at the wrapper boundary; external weight sidecars are counted in size; full int8 pipeline tracks PyTorch (cosine >0.95) and is smaller in total (skips if `onnx`/`onnxruntime`/`onnxscript` absent) |
+| `test_ablation.py` | the offered lite config really is smaller and really trains and synthesizes; it **matches the geometry the ablation recommended** (read from the committed evidence, so it holds in a clone); and the evidence records its own limitations (a caveat, a held-out split of ≥ 3 items, both train and val fits) — a study without its caveat is an overclaim |
 | `test_model_card.py` | every claim cites **committed** evidence whose SHA-256 matches the manifest; a missing report comes back `unmeasured` and a corrupted value comes back `fail` (positive controls on the check itself); the rendered card states its limitations (no checkpoint, out-of-scope uses, no UTMOS) and its licence table is generated from the teacher specs |
 | `test_resume.py` | **an interrupted-then-resumed run is bit-identical to an uninterrupted one** (max parameter difference exactly 0); checkpoints carry model + optimizer + EMA + discriminator + step + RNG; the RNG stream is restored (and can be opted out); the LR schedule continues instead of restarting; batch-order state round-trips; the step resumed from is reported; a missing checkpoint raises |
 | `test_teacher_backends.py` | the three **real** teacher backends (the only code that had never been executed) verified with injected stubs: the Orpheus codebook-to-SNAC-level mapping asserted element-wise against a reimplementation of the published decoder — with a positive control proving the old contiguous grouping fails it — plus level shapes, partial-frame dropping, token filtering, prompt wrapping and sampling settings; Kokoro chunk concatenation, empty output and durations fallback; MiniMax request payload/headers, hex WAV decode, missing-audio error and the licence gate |
@@ -718,7 +719,47 @@ int8-vs-PyTorch fidelity figure moved from run to run and the cited number could
 `scripts/export_onnx.py` now seeds before `build_model` (a checkpoint makes the seed irrelevant), and
 the seeded report reads `mel L1 0.0174, cosine 0.9981`.
 
-## 18. Smoke test output (measured)
+## 18. Capacity ablation: how light can the student be? (measured, fixture-derived)
+
+"Make it as light as possible" is the objective and the text side is the largest component of
+Parakeet-Tiny, so `scripts/ablate.py` measures the frontier instead of guessing. Seven text-side
+geometries train for the **same 400 steps**, from the **same seed**, on the **same cached teacher
+signals**, and are scored on a **held-out split** (12 train / 6 validation items):
+
+| text dim / layers | text params | total params | held-out fit | train fit | text latency | 1-thread synth |
+|---|---|---|---|---|---|---|
+| **dim256-L4 (shipped)** | 3.851 M | 9.616 M | **0.3860** | 0.1509 | 20.9 ms | 53.5 ms |
+| dim256-L2 | 2.272 M | 8.037 M | 0.4440 | 0.1500 | 13.5 ms | 51.3 ms |
+| dim160-L3 | 1.238 M | 6.560 M | 0.4596 | 0.1439 | 8.5 ms | 47.9 ms |
+| **dim128-L4** | **1.008 M** | **6.228 M** | **0.3949** (+2.3 %) | 0.1580 | **7.9 ms** | 47.9 ms |
+| dim128-L2 | 0.612 M | 5.831 M | 0.4480 | 0.1522 | 4.6 ms | 47.1 ms |
+| dim96-L2 | 0.360 M | 5.500 M | 0.3976 (+3.0 %) | 0.2037 | 3.6 ms | 45.8 ms |
+| dim64-L2 | 0.175 M | 5.257 M | 0.4452 | 0.2151 | 2.4 ms | 46.1 ms |
+
+Three things this shows, and one it deliberately does not:
+
+1. **The shipped text side looks ~4× oversized.** `dim128-L4` gives up 2.3 % of held-out fit for
+   **26 % of the text parameters**, **35 % fewer total parameters** (9.616 → 6.228 M) and 2.6× the
+   text-side speed. `dim96-L2` gets within 3.0 % on an 11× smaller text side.
+2. **Depth beats width at matched budget** (dim128-L4 0.3949 vs dim128-L2 0.4480; dim256-L4 0.3860 vs
+   dim256-L2 0.4440), while the smallest variants plateau — 0.175 M, 0.360 M and 0.612 M are
+   indistinguishable from each other, which is also the noise floor of a 6-item validation split.
+3. **The held-out split changed the answer.** Scored on the *training* items, `dim128-L2` looked best
+   (0.0823 vs the shipped 0.0805) and `dim128-L4` looked worst (0.1249). On held-out items the order
+   inverts. The first version of this script had no split and would have recommended a configuration
+   that is the worst of the seven on unseen data — a reminder that "fits as well" and "generalises as
+   well" are different claims. `LatentShardDataset` gained an `indices` argument for exactly this.
+4. **Not shown: that the lite geometry is right for real speech.** The fixtures are repetitive
+   synthetic stacks, the autoencoder is untrained, and 400 steps is a short budget. So
+   `configs/parakeet_tiny_lite.yaml` is offered as a **documented alternative** — with the table above
+   in its header — not as the new default. A real corpus plausibly needs more capacity; the point is
+   that the current geometry is not *justified* by measurement, and there is now a measured candidate
+   to compare against.
+
+A side effect worth noting: the `n_voices` guard added in round 8 rejected this script twice while it
+was being developed (a 3-voice corpus with a 2-voice config), i.e. the cheap check keeps paying.
+
+## 19. Smoke test output (measured)
 
 ```
 parakeet-tiny [tiny] sr=24000 mel=80@93.8Hz latent=24 compress=1/6 voice=constant
@@ -769,7 +810,7 @@ overhead — it is not a valid throughput measurement until the model predicts s
 learning demo (§2) trains properly but on 15 seconds of *synthetic* audio, so it demonstrates that
 the machinery learns, not that the model is good.
 
-## 19. Deliberate engineering checks worth calling out
+## 20. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
@@ -805,7 +846,7 @@ the machinery learns, not that the model is good.
   `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
   else, rather than surfacing a cryptic `torch.stft` message.
 
-## 20. Environment notes
+## 21. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).

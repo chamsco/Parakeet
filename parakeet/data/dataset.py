@@ -88,7 +88,18 @@ def collate(
 
 
 class LatentShardDataset(Dataset):
-    def __init__(self, cache_dir: str | Path, max_frames: Optional[int] = None) -> None:
+    def __init__(
+        self,
+        cache_dir: str | Path,
+        max_frames: Optional[int] = None,
+        indices: Optional[Sequence[int]] = None,
+    ) -> None:
+        """Latent-shard dataset.
+
+        ``indices`` selects a subset (train/val splits).  Without it there is no held-out
+        evaluation anywhere in the project, which is how a capacity comparison can appear to show
+        that a smaller model "fits as well" when it is merely overfitting less.
+        """
         self.cache_dir = Path(cache_dir)
         index = json.loads((self.cache_dir / "index.json").read_text(encoding="utf-8"))
         self.shards = [index[i : i + 1] for i in range(len(index))]
@@ -97,12 +108,14 @@ class LatentShardDataset(Dataset):
             payload = torch.load(self.cache_dir / entry["path"], map_location="cpu", weights_only=False)
             self._items.extend(payload["items"])
         self.max_frames = max_frames
+        self.indices = list(indices) if indices is not None else None
 
     def __len__(self) -> int:
-        return len(self._items)
+        return len(self._items) if self.indices is None else len(self.indices)
 
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
-        item = dict(self._items[idx])
+        real = self._items[idx] if self.indices is None else self._items[self.indices[idx]]
+        item = dict(real)
         if self.max_frames is not None:
             item["latent"] = item["latent"][:, : self.max_frames]
             # NOTE: log_mel is the *reference prompt*, not a target, so it is deliberately not

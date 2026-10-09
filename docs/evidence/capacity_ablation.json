@@ -1,0 +1,132 @@
+{
+  "config": "configs/parakeet_tiny.yaml",
+  "steps": 400,
+  "n_items": 18,
+  "split": {
+    "train": 12,
+    "val": 6,
+    "note": "the batch source only sees the training split"
+  },
+  "caveat": "Synthetic fixtures: absolute losses are not speech quality and an untrained autoencoder is in the loop.  Only the relative trend across variants is meaningful, the step budget is short (so deeper variants may simply be undertrained), and a real run must revisit this with real data and a real evaluation.",
+  "rows": [
+    {
+      "label": "dim256-L4 (shipped)",
+      "text_dim": 256,
+      "text_layers": 4,
+      "text_params": 3851264,
+      "total_params": 9616429,
+      "train_fit": 0.15088997897692025,
+      "val_fit": 0.3860301226377487,
+      "generalisation_gap": 0.23514014366082847,
+      "duration_mae_frames": 0.5045454502105713,
+      "text_latency_ms": 20.867699990049005,
+      "synth_latency_ms": 53.5027000005357,
+      "train_seconds": 33.7038069999835
+    },
+    {
+      "label": "dim256-L2",
+      "text_dim": 256,
+      "text_layers": 2,
+      "text_params": 2271744,
+      "total_params": 8036909,
+      "train_fit": 0.15004978080590567,
+      "val_fit": 0.4440138985713323,
+      "generalisation_gap": 0.29396411776542664,
+      "duration_mae_frames": 0.4628787785768509,
+      "text_latency_ms": 13.459099995088764,
+      "synth_latency_ms": 51.33960000239313,
+      "train_seconds": 22.440586899989285
+    },
+    {
+      "label": "dim160-L3",
+      "text_dim": 160,
+      "text_layers": 3,
+      "text_params": 1237600,
+      "total_params": 6559917,
+      "train_fit": 0.14394785688879588,
+      "val_fit": 0.4596327443917592,
+      "generalisation_gap": 0.3156848875029633,
+      "duration_mae_frames": 0.5604166686534882,
+      "text_latency_ms": 8.517950001987629,
+      "synth_latency_ms": 47.85319999791682,
+      "train_seconds": 14.548460799996974
+    },
+    {
+      "label": "dim128-L4",
+      "text_dim": 128,
+      "text_layers": 4,
+      "text_params": 1008128,
+      "total_params": 6227885,
+      "train_fit": 0.15799455950036645,
+      "val_fit": 0.3948856070637703,
+      "generalisation_gap": 0.23689104756340384,
+      "duration_mae_frames": 0.5227272808551788,
+      "text_latency_ms": 7.942150012240745,
+      "synth_latency_ms": 47.91180000756867,
+      "train_seconds": 13.377114800008712
+    },
+    {
+      "label": "dim128-L2",
+      "text_dim": 128,
+      "text_layers": 2,
+      "text_params": 611584,
+      "total_params": 5831341,
+      "train_fit": 0.15220610549052557,
+      "val_fit": 0.44803788264592487,
+      "generalisation_gap": 0.2958317771553993,
+      "duration_mae_frames": 0.616287887096405,
+      "text_latency_ms": 4.636500001652166,
+      "synth_latency_ms": 47.13709998759441,
+      "train_seconds": 9.157521200017072
+    },
+    {
+      "label": "dim96-L2",
+      "text_dim": 96,
+      "text_layers": 2,
+      "text_params": 360384,
+      "total_params": 5500109,
+      "train_fit": 0.2036878246193131,
+      "val_fit": 0.39763106405735016,
+      "generalisation_gap": 0.19394323943803707,
+      "duration_mae_frames": 0.5630681812763214,
+      "text_latency_ms": 3.5453999880701303,
+      "synth_latency_ms": 45.80799999530427,
+      "train_seconds": 7.230871900013881
+    },
+    {
+      "label": "dim64-L2",
+      "text_dim": 64,
+      "text_layers": 2,
+      "text_params": 174720,
+      "total_params": 5256941,
+      "train_fit": 0.21512068125108877,
+      "val_fit": 0.44520143667856854,
+      "generalisation_gap": 0.23008075542747977,
+      "duration_mae_frames": 0.5695075690746307,
+      "text_latency_ms": 2.435449991025962,
+      "synth_latency_ms": 46.059399988735095,
+      "train_seconds": 5.809617499995511
+    }
+  ],
+  "best_val_fit": "dim256-L4 (shipped)",
+  "shipped": {
+    "label": "dim256-L4 (shipped)",
+    "text_params": 3851264,
+    "val_fit": 0.3860301226377487,
+    "synth_latency_ms": 53.5027000005357
+  },
+  "half_size_best": {
+    "label": "dim128-L4",
+    "text_params": 1008128,
+    "val_fit": 0.3948856070637703,
+    "fit_penalty_pct": 2.293987931696091,
+    "text_latency_ms": 7.942150012240745,
+    "synth_latency_ms": 47.91180000756867
+  },
+  "checks": {
+    "capacity_is_detectable": true,
+    "text_latency_tracks_size": true,
+    "every_variant_trained": true,
+    "no_variant_degenerates": true
+  }
+}

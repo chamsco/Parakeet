@@ -71,7 +71,8 @@ the engineering.
       blockwise output 50–100× closer to the one-shot result than an independent draw, interior
       streaming audio matching the offline filter at cosine 0.9994.  Cost is explicit: 2.81× total
       compute at block 16, 1.07× at block 128
-* [ ] Attack the 13 % python/dispatch overhead measured by `scripts/profile_pipeline.py`
+* [x] Attack the python/dispatch overhead: cProfile found the phase-lock rebuilding its per-call constants (grid construction 0.386 ms -> 0.4 us cached); a controlled A/B measured 7.101 -> 6.458 ms and the shipped report went 70.6 -> 74.0x real time
+* [x] **Capacity ablation** (scripts/ablate.py, fixture-derived): a dim128-L4 text side (1.008 M) is within 2.3 % of the shipped dim256-L4 held-out fit for 35 % fewer total parameters and 2.6x the text-side speed; offered as `configs/parakeet_tiny_lite.yaml`.  The first version had no held-out split and would have recommended the *worst* variant on unseen data
 * [x] A/B the two phase-lock references (`ramp` vs `smooth`) in `scripts/phase_lock_ab.py`. The
       delay grid was **under-configured**: 64 points over [0, 1/60 s] is 260 µs, more than two
       periods of phase error at 8 kHz. At matched strength 64 → 256 triples the coherence the filter
