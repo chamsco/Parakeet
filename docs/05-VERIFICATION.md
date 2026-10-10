@@ -2788,7 +2788,44 @@ The warm start also reported exactly what it should: `1 missing key` — `voice_
 512)` — the new voice has no pretrained embedding and gets a fresh one, which is the correct behaviour and
 visible rather than silent.
 
-## 68. Deliberate engineering checks worth calling out
+## 68. The validation split was measuring a *source*, not generalisation (round 57)
+
+Comparing the expanded run against the base one produced a result that looked decisive — train cosine 0.873,
+**validation cosine −0.366** — and the obvious reading was "the expansion hurts". It was wrong, and the
+reason is in `fit_diagnosis`:
+
+```python
+validation_indices = list(range(max(0, len(dataset) - n), len(dataset)))   # the cache's TAIL
+```
+
+The caches are written in manifest order, so the tail is **whatever source was concatenated last**. For the
+expanded cache that is the entire 770-item expansion: one low-scale voice (token std 0.643 against the base
+half's 1.096). So "validation" was a source comparison, and a negative cosine was the expected outcome of
+asking a base-scale model about a different-scale voice — not evidence about generalisation at all.
+
+The split is now **shuffled** (`--split-seed`, default 0), the report carries the voice composition of both
+sides so a source-shaped split stays visible, and both checkpoints were re-measured through it:
+
+| step 5 000 | train ρ | **validation ρ** | validation cosine |
+|---|---|---|---|
+| base cache (1 207 items) | 0.375 | **0.388** | 0.868 |
+| expanded cache (1 977 items) | 0.352 | **0.291** | 0.392 |
+
+Three things follow, and only one of them is about the expansion:
+
+* the **decision point still stands, and is better than reported**: 0.388 against the 0.1896 baseline. The
+  baseline was measured with the same biased tail split, so that comparison was apples-to-apples; the
+  absolute numbers were not;
+* the **expansion genuinely hurts** once the split is fair (0.291 against 0.388, cosine 0.392 against 0.868).
+  The pre-registered plan from round 57 applies — a per-source level match, with that paragraph as the
+  justification for the work;
+* the CPU went back to the base corpus, continuing from the step-5 000 checkpoint.
+
+The general lesson is the one this project keeps paying for: a metric whose *split* is not examined can look
+like a result about the model. This is the third instrumentation correction in five rounds, and the cheapest
+kind of bug to fix — provided the split is looked at before the conclusion is written.
+
+## 69. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero

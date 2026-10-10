@@ -81,6 +81,16 @@ def collect(
     return {key: sum(r[key] for r in rows) / len(rows) for key in rows[0]}
 
 
+def _voice_counts(dataset, indices) -> dict:
+    """Voice histogram of a sample, so a split that is really a source comparison stays visible."""
+    counts: dict = {}
+    for index in indices:
+        voice = dataset[index].get("voice")
+        key = int(voice) if voice is not None else -1
+        counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Fit diagnosis for the text side")
     ap.add_argument("--checkpoint", default="runs/mixed_audio/distill-audio_last.pt")
@@ -88,6 +98,9 @@ def main() -> int:
     ap.add_argument("--config", default="configs/parakeet_tiny.yaml")
     ap.add_argument("--text-mode", default=None, choices=["char", "phoneme"])
     ap.add_argument("--samples", type=int, default=24)
+    ap.add_argument("--split-seed", type=int, default=0,
+                    help="seed for the shuffled train/validation split.  The old tail split was really a "
+                         "source comparison whenever the cache has several corpora concatenated")
     ap.add_argument("--out", default="runs/fit_diagnosis.json")
     args = ap.parse_args()
 
@@ -114,12 +127,20 @@ def main() -> int:
     tokenizer = TextTokenizer(mode=cfg.text.mode)
 
     n = min(args.samples, len(dataset))
-    # the cache is written in manifest order, so the first entries are training items; hold out the
-    # tail as a proxy for unseen text when there is no val cache at hand
-    train_indices = list(range(n))
-    validation_indices = list(range(max(0, len(dataset) - n), len(dataset)))
+    # A *shuffled* split, not the cache's tail.  The tail is whatever source was concatenated last: in the
+    # expanded cache that is the whole 770-item expansion, one low-scale voice, so "validation" was
+    # measuring a different source rather than unseen text from the same distribution -- which is how a run
+    # can show train cosine 0.873 and validation cosine -0.366 at the same time.
+    generator = torch.Generator().manual_seed(args.split_seed)
+    order = torch.randperm(len(dataset), generator=generator).tolist()
+    validation_indices = order[:n]
+    train_indices = order[n : 2 * n] or order[:n]
     train = collect(model, dataset, train_indices, tokenizer, cfg)
     validation = collect(model, dataset, validation_indices, tokenizer, cfg)
+    composition = {
+        "train_voices": _voice_counts(dataset, train_indices),
+        "validation_voices": _voice_counts(dataset, validation_indices),
+    }
 
     checks = {
         "durations_are_not_collapsed": 0.6 < train["duration_ratio"] < 1.6,
@@ -134,6 +155,7 @@ def main() -> int:
         "samples": n,
         "train_items": train,
         "validation_items": validation,
+        "composition": composition,
         "gap": {
             key: train[key] - validation[key] for key in train
         },
