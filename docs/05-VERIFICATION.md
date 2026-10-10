@@ -2862,7 +2862,36 @@ consequences:
   per-voice scale the text cannot predict) or leaving them out. Both are decisions, neither is a bug fix;
 * training continues on the base corpus, which measures better.
 
-## 70. Deliberate engineering checks worth calling out
+## 70. The free teacher does what the paid one could not (round 59)
+
+The first expansion cost 100k Speechify characters and produced audio at a scale the model could not absorb.
+The corpus has a **second** teacher, and it is local, Apache-2.0, and already represented in the corpus:
+Kokoro (`data/teachers/kokoro-en-v0_19`), whose items measure token std **1.07–1.12** against the Speechify
+voices' 1.07–1.29.
+
+So the same 771 new prompts — the ones already built from four public-domain books, with validation leakage
+excluded — are being rendered through Kokoro instead:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\make_teacher_corpus.py --texts data\prompts\prompts_v2.txt `
+    --teachers kokoro --out data\kokoro_v2 --no-curate
+```
+
+No API call, no allowance, no permission question, and — on the evidence available — **a scale that matches
+the corpus**, which is the one property the paid expansion lacked. It is slower per utterance on CPU, which
+costs nothing but wall clock.
+
+The validation plan is already-tested tooling, in order:
+
+1. `--cache-only --latent-rate 3` on the new corpus, so the token width matches (the merge now **refuses** a
+   mismatch, so this cannot silently go wrong the way it nearly did in round 56);
+2. `merge_caches.py` into `runs/expanded_v2`, which remaps voices and keeps the base normaliser;
+3. **measure the two halves' token std before training anything** — if they match, the expansion is usable on
+   the same basis as the paid one was rejected; if not, it is the same trap and gets the same treatment;
+4. retrain warm-started from the best checkpoint and compare validation ρ through the **shuffled** split
+   (0.388 baseline), not the tail split that misled round 57.
+
+## 71. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
