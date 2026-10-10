@@ -2758,7 +2758,37 @@ The merged cache: **1 977 items** (1 207 + 770), **13 voices** (the expansion's 
 appended), token widths `{72}` throughout, and the base cache's latent normaliser preserved — verified by
 loading it, not by reading the merge's own output.
 
-## 67. Deliberate engineering checks worth calling out
+## 67. The expansion is at a different scale, and the run continues on it anyway (round 57)
+
+Training resumed on the merged cache, warm-started from the 0.3043 checkpoint. Two things the log and a
+per-voice breakdown reveal, both worth recording before a curve is read:
+
+* **the latent-head calibration moved**: predicted std 0.9533 → target **0.6717** on the merged cache against
+  **0.9113** on the base cache, i.e. the merged target is 26 % narrower;
+* **per voice**, the reason is clear: the ten base Speechify voices and the Kokoro voices all sit at token
+  std 1.07–1.29, while the expansion's single unlabelled API voice sits at **0.643** (frame std 0.686 against
+  1.077), with **1.5× longer utterances** (746 frames against ~500).
+
+| half | items | token std | frame std |
+|---|---|---|---|
+| base | 1 207 | 1.096 | 1.077 |
+| expansion | 770 | **0.643** | **0.686** |
+
+So the expansion is not simply "more of the same": it is one new voice, quieter or less dynamic, speaking
+longer sentences. That is a legitimate thing for a multi-voice corpus to contain — and it is a **confound
+for the training curve**, because a single shared output scale must serve two halves 41 % apart.
+
+Pre-emptive "fixes" (per-voice normalisation, regenerating at another level) are not obviously right, so the
+disciplined move is the one already scheduled: read validation ρ at the 5 000-step checkpoint and compare it
+with **0.3043**, measured at the same step count on the base cache alone. If the expansion helps, the scale
+difference is tolerable; if it hurts, the fix is a per-source level match and this paragraph is the
+justification for it.
+
+The warm start also reported exactly what it should: `1 missing key` — `voice_embed.weight (12, 512) -> (13,
+512)` — the new voice has no pretrained embedding and gets a fresh one, which is the correct behaviour and
+visible rather than silent.
+
+## 68. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
