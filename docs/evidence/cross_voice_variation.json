@@ -1,0 +1,10 @@
+{
+  "segments": 38,
+  "distinct_texts": 16,
+  "texts_with_multiple_voices": 8,
+  "cross_voice_correlation": 0.17232450378842493,
+  "cross_voice_n": 52,
+  "different_text_correlation": 0.02785835323543353,
+  "target": 0.75,
+  "reading": "the correlation between two voices reading the SAME text is the part of the latent that text cannot determine, so a text-only predictor cannot exceed it for that text"
+}

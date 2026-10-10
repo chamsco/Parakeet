@@ -1986,7 +1986,31 @@ A 12 000-step `distill-text` run with **text.dim 512 / 6 layers (22.6M trainable
 stage and steps as the 0.375 run, to separate capacity from step budget. Its first checkpoint had not
 landed by the end of the round.
 
-## 43. Smoke test output (measured)
+## 43. Is ρ ≥ 0.75 attainable? What the target actually contains (round 38)
+
+Before blaming capacity for the 0.39 plateau, the *target* has to be checked: text does not determine
+acoustics uniquely. The operator's eight takes are ideal material — the same paragraph read by eight
+voices — so `scripts/cross_voice_variation.py` encodes them with the trained autoencoder and, for pairs of
+voices carrying the same text, measures the per-dimension correlation between their latents:
+
+| comparison | per-dim correlation |
+|---|---|
+| **same text, different voice** | **+0.172** (n=52, range −0.13…+0.53) |
+| different text, same voice (control) | +0.028 (n=53) |
+
+The control confirms the encoder's latents are content-driven (unrelated text ⇒ ≈0), and the first row
+says most of the per-*frame* latent structure is **voice and rendition, not text**. Two consequences:
+
+* a single text→latent predictor serving *many* voices is being asked for a one-to-many mapping, and the
+  measured cross-voice agreement (0.17) is far below the 0.75 that intelligibility needs. That is an
+  argument for the architecture the papers use — predict the text-determined part, **sample** the rest —
+  rather than for a bigger regressor;
+* the *within*-voice ceiling is **not** measured here, and the honest reading is bounded by that: the
+  corpus contains no repeated renditions by one voice (Kokoro 1 voice, Speechify 3 voices, the takes 8
+  voices of one paragraph), so "how well could a fixed-voice model do" remains open. What is measured is
+  that *cross-voice* generalisation of the fine structure is ~0.17.
+
+## 44. Smoke test output (measured)
 
 ```
 parakeet-tiny [tiny] sr=24000 mel=80@93.8Hz latent=24 compress=1/6 voice=constant
@@ -2037,7 +2061,7 @@ overhead — it is not a valid throughput measurement until the model predicts s
 learning demo (§2) trains properly but on 15 seconds of *synthetic* audio, so it demonstrates that
 the machinery learns, not that the model is good.
 
-## 44. Deliberate engineering checks worth calling out
+## 45. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
@@ -2073,7 +2097,7 @@ the machinery learns, not that the model is good.
   `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
   else, rather than surfacing a cryptic `torch.stft` message.
 
-## 45. Environment notes
+## 46. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
