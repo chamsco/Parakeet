@@ -2693,7 +2693,34 @@ timing error is excluded as a cause: the content is wrong, which is the ρ ≈ 0
 The flag is kept: it is the right thing for a *report* to be able to separate timing from content, and a
 future checkpoint whose latents are right will still want its durations calibrated.
 
-## 64. Deliberate engineering checks worth calling out
+## 64. Corpus expansion: the curation gate would have eaten the whole allowance (round 55)
+
+The operator approved spending ~100k Speechify characters (of ~397k remaining) on more teacher audio, so the
+pipeline was exercised end to end **before** spending anything:
+
+* **New text, no leakage.** The local Gutenberg records are exhausted — with the existing 600 prompts and the
+  validation set excluded, only ~155 new characters remain, and barely 5k across every local corpus.
+  `scripts/expansion_prompts.py` therefore draws from freshly downloaded public-domain books, with a
+  per-book quota so the budget spreads across sources rather than exhausting the first alphabetically, and
+  skips any sentence whose text appears in validation. Result: **771 prompts, 100 025 characters**, balanced
+  ~25k per book, filtered to real prose (no front matter, headings, markup or all-caps).
+* **The curation gate rejects the teacher it is meant to protect.** A 3-prompt smoke test spent ~200
+  characters and every record was rejected — `narrowband(4292Hz)` — against
+  `min_bandwidth_hz: float = 5000.0  # [proposed]`. The **already-kept** Speechify records in the corpus have
+  `bandwidth99` **median 4 799 Hz** (min 4 000, max 7 289): the proposed threshold is stricter than the
+  corpus it guards. The existing 903 records never faced it because `curate_manifest()` was dead code when
+  they were built (the docstring says so); wiring it in later made the pipeline reject its own training data.
+  So the expansion runs with `--no-curate`, consistent with how the corpus was actually built — and the
+  default is left alone, because changing a quality gate is a decision for the operator, not a side effect
+  of a data run.
+
+The full generation is running (771 prompts) concurrently with training, since API calls are I/O-bound.
+
+Two lessons worth keeping, both cheap: a smoke test that costs 200 characters can save 100 000, and a gate
+marked `[proposed]` in the source should be checked against the data before it is trusted to accept or
+reject it.
+
+## 65. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
