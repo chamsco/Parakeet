@@ -2593,7 +2593,42 @@ Two bugs produced the retracted number, and both are worth naming because they a
   probe — not at the model — showed it was wrong. The lesson is now attached to the tool itself, including
   a comment on the layout, so the next person measuring this cannot repeat it silently.
 
-## 60. Deliberate engineering checks worth calling out
+## 60. Reallocating the CPU: the cheap route is the better bet (round 53)
+
+Round 52's correction — the token bottleneck is nearly lossless (ρ 0.95) — unblocked a comparison the
+project could not make before, and it does not favour the flow:
+
+| route | measured ρ | cost |
+|---|---|---|
+| flow (frame latents from text) | **≈ 0.00 – 0.06** (6 750 steps at 200 utterances; ≈ 0 at 1 175) | ~2 s/step → 200 000 steps ≈ **50 CPU-hours** |
+| token route (token latents from text) | **0.190 validation / 0.321 training** per-dim correlation, and the bottleneck carries it at ρ 0.95 | ~0.8 s/step → 50 000 steps ≈ **11 CPU-hours** |
+
+The token route is **20× closer to the 0.75 target and 4.5× cheaper**, and its generalisation gap is a
+capacity story that already improved once (val 0.118 → 0.190 when the text side grew from 4.6M to 22.6M,
+round 38). So the CPU was moved to it:
+
+```powershell
+.\.venv\Scripts\python.exe -u scripts\train.py --config configs\parakeet_tiny.yaml --stage distill-text `
+  --cache runs\mixed_v2\latent_cache --warm-start runs\text_big\distill-text_step3000.pt `
+  --steps 50000 --batch-size 16 --device cpu `
+  --set text.dim=512 --set text.n_layers=6 --set flow.text_dim=512 --set flow.cond_dim=512 `
+  --set train.save_every=5000 --out runs\text_long > runs\text_long.log 2>&1
+```
+
+* **22.64M trainable**, warm-started from the step-3 000 model with **0 missing / 0 unexpected keys** and a
+  fresh optimiser and schedule (verified in the log, not assumed);
+* checkpoint every 5 000 steps, so `fit_diagnosis.py` can be run at each and compared with the recorded
+  baseline: **train 0.3212 / validation 0.1896** (`docs/evidence/fit_diagnosis_text_big_3000.json`);
+* the flow's run is paused with its log and checkpoints kept as a reference point
+  (`docs/evidence/flow_long_plan_advisory_baseline.log`), not deleted — if the token route stalls at ~0.2
+  while the flow eventually moves, that is worth knowing.
+
+What would make this the right call rather than a hopeful one: **validation ρ climbing past 0.190** at the
+5 000/10 000/… checkpoints. If it does not move in 15 000 steps of a 22.6M model, then the text→acoustics
+mapping itself is the wall — not the architecture, the bottleneck, the plan or the schedule, all of which
+have now been measured and excluded one by one.
+
+## 61. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
@@ -2629,7 +2664,7 @@ Two bugs produced the retracted number, and both are worth naming because they a
   `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
   else, rather than surfacing a cryptic `torch.stft` message.
 
-## 61. Environment notes
+## 62. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
