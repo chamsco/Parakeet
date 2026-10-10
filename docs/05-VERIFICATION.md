@@ -2255,18 +2255,30 @@ the whole corpus, so nothing said whether ρ *generalises*. `overfit_flow.py --h
 `[0, items)` and scores a range that is never trained on, and `rho_curve.py` walks a run's checkpoints to
 produce ρ against steps for both.
 
-First datapoint (200 trained utterances, 32 held out, 160-frame aligned crops, batch 16, lr 5e-4,
-step 2 250):
+First datapoint (200 trained utterances, 32 held out, 160-frame aligned crops, batch 16, lr 5e-4):
 
 | step | ρ trained | ρ held-out |
 |---|---|---|
-| 2 250 | **−0.0405** | **+0.0264** |
+| 2 250 | **−0.0405** | +0.0264 |
+| 4 500 | **+0.0098** | **+0.0381** |
 
-Both at zero: no text-to-latent mapping yet at this scale. That is consistent with the two-utterance curve
-(600 steps → −0.013, 3 000 steps → +0.25) — ρ appears only after a few thousand steps, and here the
-objective is spread over 200 utterances rather than two, so it takes longer still. The run continues with
-checkpoints every 2 250 steps, and the curve is the artifact the GPU decision needs: it is the difference
-between "buy 40 000 steps" being a guess and being an extrapolation.
+Both at zero at 2 250, both rising by 4 500 — and the **held-out ρ is higher than the trained one**, which
+says the flow is *underfitting*, not overfitting: there is no memorisation to generalise from yet. That is
+consistent with the two-utterance curve (600 steps → −0.013, 3 000 steps → +0.25), where ρ also only
+appears after a few thousand steps.
+
+### What the curve implies for CPU-only training
+
+This is the first quantitative estimate of the run length the objective needs on this machine. Reading the
+two points as roughly linear (they are not necessarily — the two-utterance curve took off late), ρ_trained
+moves about **+0.05 per 2 250 steps**, so:
+0.75 would need on the order of **150 000 steps**, which at the measured ~1.1 steps/s with crops is about
+**38 hours of continuous CPU**. If the curve is instead superlinear, as the two-utterance run suggests, it
+is less; if it saturates below 0.75 at this capacity, no amount of time helps. Either way the honest
+statement is: *a usable model on this machine is a multi-day CPU run, not an evening*, and the next two
+checkpoints (6 750 and 9 000) will show which shape the curve has.
+
+The run continues with checkpoints every 2 250 steps.
 
 ## 53. Smoke test output (measured)
 
