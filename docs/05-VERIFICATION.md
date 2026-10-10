@@ -2175,7 +2175,27 @@ is the more informative sample and a 160-frame window is not. The efficiency arg
 convenient one — the feature stays (tested, off by default, and the right thing for a full-corpus run),
 with no claim the measurement does not support.
 
-## 50. Smoke test output (measured)
+## 50. "Light and fast", measured (round 42)
+
+The objective asks for a small, lightning-fast model. Those two properties can be measured even while the
+speech quality is unresolved, and they are:
+
+| Tiny (9.63M params) | storage | synthesis speed | output |
+|---|---|---|---|
+| fp32 | 38.5 MB (36.8 MB state dict) | **42× real time** (74 ms for 2.9 s) | — |
+| int8 dynamic (`quantize_dynamic_int8`) | **20.3 MB** (55 %) | **85× real time** (34 ms) | waveform cosine **0.9952** vs fp32 |
+| int8 weights + fp16 scales (export grid) | 12.0 MB (`size_report`'s own accounting) | — | — |
+
+Two honest notes: `quantize_weights_` is **simulated** quantisation (it snaps fp32 values to the int8 grid
+for quality studies, which is why a naive state-dict size check shows no saving — real storage needs
+`quantize_dynamic_int8`, as measured above); and every number here describes a model whose **speech is not
+yet intelligible**, so this demonstrates the deployment path, not a usable system.
+
+**Speed reference for the flow path**: the sampler runs at **27–37× real time** at NFE 4 on this CPU
+(`flow_trajectory`'s `x_realtime`), which satisfies "lightning fast" — the missing piece is quality, not
+latency.
+
+## 51. Smoke test output (measured)
 
 ```
 parakeet-tiny [tiny] sr=24000 mel=80@93.8Hz latent=24 compress=1/6 voice=constant
