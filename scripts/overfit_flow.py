@@ -100,6 +100,10 @@ def main() -> int:
                     help="evaluate rho on this many cache items *after* the training range, giving the "
                          "flow's first train/held-out comparison -- memorisation on the training items "
                          "says nothing about generalisation to unseen text")
+    ap.add_argument("--save-every", type=int, default=0,
+                    help="checkpoint interval.  Default is a quarter of the run, which is useless for a "
+                         "multi-day run: a long run needs regular checkpoints so rho can be read as it "
+                         "goes and so an interruption does not lose hours")
     args = ap.parse_args()
 
     cfg = load_config(args.config)
@@ -162,7 +166,7 @@ def main() -> int:
     # had barely been trained, not one that could not learn).
     cfg.train.max_steps = args.steps
     cfg.train.warmup_steps = max(10, min(cfg.train.warmup_steps, args.steps // 20))
-    cfg.train.save_every = max(1, args.steps // 4)  # checkpoints, so rho can be tracked and resumed
+    cfg.train.save_every = args.save_every or max(1, args.steps // 4)
     if args.lr is not None:
         cfg.train.lr = args.lr
     print(f"schedule: {args.steps} steps with {cfg.train.warmup_steps} warmup at lr {cfg.train.lr}")

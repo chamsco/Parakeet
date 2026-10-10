@@ -2261,24 +2261,29 @@ First datapoint (200 trained utterances, 32 held out, 160-frame aligned crops, b
 |---|---|---|
 | 2 250 | **−0.0405** | +0.0264 |
 | 4 500 | **+0.0098** | **+0.0381** |
+| 6 750 | **+0.0616** | −0.0144 |
 
-Both at zero at 2 250, both rising by 4 500 — and the **held-out ρ is higher than the trained one**, which
-says the flow is *underfitting*, not overfitting: there is no memorisation to generalise from yet. That is
-consistent with the two-utterance curve (600 steps → −0.013, 3 000 steps → +0.25), where ρ also only
-appears after a few thousand steps.
+ρ_trained rises steadily — **+0.05 per 2 250 steps, close to linear** — while ρ_held-out stays at zero
+within noise (12 probe items put the noise at roughly ±0.03, so +0.026 / +0.038 / −0.014 is one flat line).
+Read together: the flow is beginning to **fit the training utterances without generalising to unseen
+text**. That is the phenomenon the cross-voice measurement predicted (0.172 agreement for the same text
+across voices): most frame-latent detail is not determined by the text, so fitting specific utterances is
+easier than predicting new ones.
 
 ### What the curve implies for CPU-only training
 
-This is the first quantitative estimate of the run length the objective needs on this machine. Reading the
-two points as roughly linear (they are not necessarily — the two-utterance curve took off late), ρ_trained
-moves about **+0.05 per 2 250 steps**, so:
-0.75 would need on the order of **150 000 steps**, which at the measured ~1.1 steps/s with crops is about
-**38 hours of continuous CPU**. If the curve is instead superlinear, as the two-utterance run suggests, it
-is less; if it saturates below 0.75 at this capacity, no amount of time helps. Either way the honest
-statement is: *a usable model on this machine is a multi-day CPU run, not an evening*, and the next two
-checkpoints (6 750 and 9 000) will show which shape the curve has.
+Reading ρ_trained as linear, 0.75 would need on the order of **150 000 steps ≈ 38 hours** of continuous CPU
+at the measured ~1.1 steps/s with crops. But the number that matters is ρ_held-out, and it is not moving —
+so the honest position is that **more time on this data scale buys memorisation, not generalisation**. Two
+things could change that, and both are cheap to test relative to a 40-hour run:
 
-The run continues with checkpoints every 2 250 steps.
+* **more data per step** — 200 utterances can be memorised; 1 175 cannot, which is the standard remedy for
+  exactly this shape of curve;
+* **the target itself** — if the frame-latent detail is not text-determined (the 0.172 cross-voice result),
+  then the flow can only learn the text-determined part, and ρ would saturate well below 0.75 no matter how
+  long it trains.
+
+The 9 000-step point and then a long full-corpus run are what separate those.
 
 ## 53. Smoke test output (measured)
 
