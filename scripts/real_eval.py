@@ -72,6 +72,14 @@ def main() -> int:
 
                              "words ('CHAPTER IV' is read as 'chapter four'), which inflates every WER")
     ap.add_argument("--whisper", default="base.en", help="faster-whisper model size")
+    ap.add_argument("--reference", action="store_true",
+                    help="condition on a *reference mel* from another utterance of the same voice.  The "
+                         "flow is trained that way (`pair_references` default for that stage): without a "
+                         "reference its speaker conditioner receives zeros, which training never showed "
+                         "it.  The Tiny path ignores this -- it conditions on a voice embedding.")
+    ap.add_argument("--cfg-scale", type=float, default=None,
+                        help="classifier-free guidance for the flow sampler; the config's 1.5 can over-shoot on a partly"
+                             " trained model")
     ap.add_argument("--steps", type=int, default=None,
                     help="flow-matching sampling steps (NFE).  The flow variant defaults to "
                          "cfg.flow.nfe (32), which is 3x *slower than real time* on the CPU: a "
@@ -154,12 +162,40 @@ def main() -> int:
     texts: List[str] = []
     cosine: List[float] = []
     coherence: List[float] = []
+    clipped_peaks: List[float] = []
+
     synth_seconds = 0.0
     audio_seconds = 0.0
     for i, record in enumerate(records):
         t0 = time.perf_counter()
-        wav = synth.synthesize(record["text"], seed=0, steps=args.steps)
+        ref_wav = None
+        if args.reference:
+            # another utterance of the *same* voice: exactly the conditioning the flow saw in training
+            partner = next(
+                (r for r in records if r is not record and r.get("voice") == record.get("voice")), None
+            ) or next((r for r in records if r is not record), None)
+            if partner is not None:
+                partner_wav, partner_rate = sf.read(
+                    str(corpus / partner["wav_path"]), dtype="float32"
+                )
+                ref_wav = torch.from_numpy(partner_wav).reshape(1, -1)
+                if partner_rate != cfg.audio.sample_rate:
+                    size = int(ref_wav.shape[-1] * cfg.audio.sample_rate / partner_rate)
+                    ref_wav = torch.nn.functional.interpolate(
+                        ref_wav[:, None, :], size=size, mode="linear", align_corners=False
+                    )[:, 0, :]
+        wav = synth.synthesize(record["text"], seed=0, steps=args.steps,
+                               cfg_scale=args.cfg_scale, ref_wav=ref_wav)
         synth_seconds += time.perf_counter() - t0
+        # Level matching.  The curated references are peak-normalised, and the autoencoder's output is
+        # not bounded: the flow clipped 14.6% of its samples, which both the recogniser and DNSMOS read
+        # as distortion.  Comparing a clipped candidate against normalised references measures the
+        # clipping rather than the model, so the candidate is peak-normalised the same way and the gain
+        # is recorded instead of hidden.
+        peak = float(wav.abs().max()) if wav.numel() else 0.0
+        if peak > 1.0:
+            wav = wav * (0.99 / peak)
+            clipped_peaks.append(peak)
         reference, ref_rate = sf.read(str(corpus / record["wav_path"]), dtype="float32")
         ref_t = torch.from_numpy(reference).reshape(-1)
         if ref_rate != cfg.audio.sample_rate:
@@ -195,6 +231,9 @@ def main() -> int:
     print(f"  {len(records)} utterances in {synth_seconds:.1f}s "
           f"(RTF {rtf:.2f}, {1 / max(rtf, 1e-9):.1f}x real time) | log-mel cosine "
           f"{cosine_text} | phase coherence {coherence_text}")
+    if clipped_peaks:
+        print(f"  level: {len(clipped_peaks)}/{len(records)} outputs peaked above 1.0 "
+              f"(max {max(clipped_peaks):.2f}); peak-normalised to 0.99 before the metrics")
     print(f"  length: generated {generated_seconds:.1f}s vs reference {reference_seconds:.1f}s "
           f"(ratio {length_ratio:.2f})")
 
@@ -244,6 +283,8 @@ def main() -> int:
         "checkpoint_step": payload.get("step"),
         "weights": "ema" if "ema" in payload else "raw",
         "corpus": {"manifest": manifest.name, "utterances": len(records)},
+        "level_correction": {"outputs_over_full_scale": len(clipped_peaks),
+                              "max_peak": max(clipped_peaks) if clipped_peaks else None},
         "synthesis": {"rtf": rtf, "x_realtime": 1 / max(rtf, 1e-9),
                       "log_mel_cosine_vs_reference": (
                           statistics.mean(cosine) if cosine else None

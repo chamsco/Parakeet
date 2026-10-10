@@ -132,6 +132,8 @@ class Synthesizer:
         self.phase_lock_strength = phase_lock_strength
         self.phase_lock_method = phase_lock_method
         self.variant = getattr(model, "variant", cfg.variant)
+        #: gain applied to the last synthesis to bring it inside full scale (1.0 = untouched)
+        self.last_level_gain = 1.0
 
     # ------------------------------------------------------------------ construction
     @classmethod
@@ -218,6 +220,16 @@ class Synthesizer:
                 n_latent_frames=n_latent_frames,
             )
         wav = wav.reshape(1, -1)
+        # The autoencoder's magnitude head exponentiates (`exp(log_mag)`, clamped at 8), so decoding a
+        # perfectly reasonable latent can leave the waveform tens of times over full scale -- measured at
+        # up to 55x on the flow's samples, whose latents were in-distribution (std 0.79 against the
+        # teacher's 1.08).  Every consumer wants sane audio, so the level is matched here rather than in
+        # each evaluation script and the gain is remembered for reporting.
+        peak = float(wav.abs().max()) if wav.numel() else 0.0
+        self.last_level_gain = 1.0
+        if peak > 1.0:
+            self.last_level_gain = 0.99 / peak
+            wav = wav * self.last_level_gain
         if self.apply_phase_lock:
             wav = phase_lock(
                 wav,
