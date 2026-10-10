@@ -2120,7 +2120,38 @@ papers use. That is the case for the operator's WSL2/ROCm work, and the code is 
 `resolve_device` already selects CUDA/ROCm, the training path is plain fp32 with no CUDA-specific AMP
 assumptions, and the per-utterance host round-trip that existed for DirectML is now conditional.
 
-## 48. Smoke test output (measured)
+## 48. Correction: the architecture *can* learn the mapping — it needs the steps (round 41)
+
+Round 40 concluded from the overfit tests that the flow optimises its objective without learning the
+mapping, resting on the sharpest test (2 utterances, 600 steps). Extending that same test to **3 000
+steps** with a higher learning rate changes the conclusion:
+
+| 2 utterances | flow loss | sampled-latent ρ |
+|---|---|---|
+| 600 steps, lr 2e-4 | 2.00 → 0.455 | **−0.013** |
+| **3 000 steps, lr 1e-3** | 2.00 → **0.064** | **+0.2495** |
+
+The conditioned solution *does* emerge — the model first fits the marginal velocity field, which dominates
+the early loss, and only later encodes *which* latent belongs to *which* text. Round 40's reading ("it does
+not learn, even when memorising") was an artefact of the step budget, not of the architecture.
+
+Two negative checks in this round make that trustworthy, and both are worth recording:
+
+* **the ρ measurement is not an alignment artefact**: forcing the sample to the target's length gives
+  ρ = −0.021, and a shift search over ±60 frames gives +0.030 at the best offset, against −0.000 as
+  measured. A time shift is not hiding a correct mapping;
+* **conditioning strength is not the lever**: a cross-attention gain of 60 produced ρ = −0.005 at 400
+  steps, no better than the default.
+
+### What this changes about the plan
+
+The requirement is now quantified rather than asserted: **2 utterances reach ρ 0.25 after 3 000 steps**
+against the **0.75** intelligibility needs, so the full corpus (1 207 utterances, 12 voices) needs a
+training scale beyond what this CPU can reach — which is the case for the operator's ROCm work.
+`docs/GPU.md` carries the commands and the four criteria to judge it by (ρ ≥ 0.75 first, then
+speech-likeness, then WER with its control, then fit on the training prompts).
+
+## 49. Smoke test output (measured)
 
 ```
 parakeet-tiny [tiny] sr=24000 mel=80@93.8Hz latent=24 compress=1/6 voice=constant
