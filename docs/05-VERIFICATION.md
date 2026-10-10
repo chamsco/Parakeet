@@ -2628,7 +2628,53 @@ What would make this the right call rather than a hopeful one: **validation ρ c
 mapping itself is the wall — not the architecture, the bottleneck, the plan or the schedule, all of which
 have now been measured and excluded one by one.
 
-## 61. Deliberate engineering checks worth calling out
+## 61. The speech-likeness gate has a false negative on *perfect* audio (round 54)
+
+Measuring the token expansion's quality required decoding a real latent, and the result exposed the metric
+rather than the model. Same utterance, three decodes:
+
+| decode | intelligibility | voiced | median F0 | flatness | gate |
+|---|---|---|---|---|---|
+| direct AE round trip of a real latent | **WER 0.000** | 0.994 | 93.8 Hz | 0.591 | **NO** |
+| through the token expansion | — | 1.000 | 93.8 Hz | 0.631 | NO |
+| the Tiny model's own output | WER 1.000 | 1.000 | 93.7 Hz | 0.603 | NO |
+
+**The gate rejects audio that transcribes perfectly.** The `voiced ≤ 0.9` bound fails on the autoencoder's
+own reconstruction (0.99), and the components overlap almost completely between the intelligible round trip
+and the unintelligible model output — so *no threshold on these three numbers separates them*. The gate is a
+sanity check on voicing and spectral shape, not a quality verdict, and it now says so in
+`speechlikeness`'s own comment (with these numbers), in `real_eval.py`'s output, and here.
+
+Two consequences, one of which is a correction to how this project has been reporting:
+
+* several earlier rounds used "speech_like: NO" as a headline for the Tiny and flow outputs. For the flow's
+  *noise* that was informative (voiced 0.07), but for the Tiny path's buzz it was **not evidence of
+  anything**, because the round trip gets the same verdict. **WER with its teacher control** was always the
+  sound metric, and it remains the one to lead with;
+* the token expansion is **not** a quality bottleneck: it matches the direct round trip on every component
+  here, consistent with the piecewise-constant design being the deliberate fix for the round-22 seam that
+  the code's own docstring describes.
+
+Two refuted hypotheses from this round are recorded rather than dropped: the expansion was suspected of
+causing the 93.7 Hz periodicity (it is in both the direct round trip *and* both model routes, so it is the
+decoder's response to latents that are smooth but wrong), and a first version of the probe decoded a
+**normalised** cache latent without denormalising — the convention that has its own test file, and the third
+probe-side error in two rounds. The lesson each time is the same: when a measurement says something
+dramatic, check the measurement first.
+
+## 62. The checkpoint-loading class is closed (round 54)
+
+`real_eval.py` built the model from the config and applied only *two* of the four geometry values, so the
+22.6M text side (dim 512) failed to load with `size mismatch for latent_head.2.weight` — the **seventh**
+occurrence of this class (`n_voices`, `latent_rate`, `text.dim`, `text.n_layers`). Six scripts still had
+partial or missing inference.
+
+Rather than patch the seventh one-off, `train.common.load_checkpoint_into(cfg, path, model=None)` now does
+the whole load in one place: read the payload, apply the checkpoint's own geometry, build if needed, and
+load only shape-compatible tensors. `real_eval.py` and `fit_diagnosis.py` use it; the remaining scripts
+that build from a config are listed in the round's notes so they can be migrated the same way.
+
+## 63. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero

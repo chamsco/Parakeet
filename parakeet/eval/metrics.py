@@ -194,6 +194,17 @@ def speechlikeness(
     # The round-trip anchor matters most: a first version used flatness < 0.5 and rejected *perfectly
     # intelligible* decoded audio, because the autoencoder's output is spectrally flatter than the
     # original recording.
+    #
+    # Round 54 found the same failure on the voicing bound, and worse.  Measured on the same utterance:
+    #
+    #   direct AE round trip of a real latent (WER 0.000, intelligible)  voiced 0.994  f0 93.8  flat 0.59
+    #   the Tiny model's output               (WER 1.000, unintelligible) voiced 1.000  f0 93.7  flat 0.60
+    #
+    # The components overlap almost completely, so *no threshold on these three numbers separates
+    # intelligible audio from this model's buzz*.  `speech_like` is therefore a sanity check on voicing and
+    # spectral shape, NOT a quality verdict: a False here does not mean the audio is not speech (the
+    # known-good round trip gets one), and the metric that does discriminate is WER reported with its
+    # teacher control.
     report["speech_like"] = bool(
         0.25 <= report["voiced_fraction"] <= 0.9
         and 70.0 <= report["median_f0_hz"] <= 350.0

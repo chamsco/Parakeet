@@ -408,6 +408,31 @@ def apply_checkpoint_geometry(cfg, state: Dict[str, Any]) -> Dict[str, Any]:
     return applied
 
 
+def load_checkpoint_into(cfg, path, model=None):
+    """Build or fill a model from a checkpoint, applying the checkpoint's own geometry first.
+
+    This is the seventh time the same mismatch has appeared in this project -- a script builds a model from
+    a *config* and loads a checkpoint with different widths (voice table, latent rate, text width, text
+    depth).  The first six were patched one at a time; this is the single place that does the load, so the
+    class can only be got wrong once.  Returns ``(model, applied_geometry, payload)``.
+    """
+    from ..models import build_model
+
+    payload = torch.load(path, map_location="cpu", weights_only=False)
+    state = (payload.get("ema") or {}).get("shadow") or payload.get("model") or payload
+    applied = apply_checkpoint_geometry(cfg, state)
+    if model is None:
+        model = build_model(cfg)
+    current = model.state_dict()
+    usable = {
+        key: value
+        for key, value in state.items()
+        if key in current and tuple(current[key].shape) == tuple(value.shape)
+    }
+    model.load_state_dict(usable, strict=False)
+    return model, applied, payload
+
+
 def infer_model_geometry(state: Dict[str, Any]) -> Dict[str, int]:
     """Read the *widths* a checkpoint implies, so a model can be built to match it.
 

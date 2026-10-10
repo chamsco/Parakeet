@@ -147,8 +147,15 @@ def main() -> int:
         if key in state and dim is None:
             width = int(state[key].shape[0])
             cfg.autoencoder.latent_rate = max(1, width // int(cfg.autoencoder.latent_dim))
-    model = build_model(cfg)
-    model.load_state_dict(state, strict=False)
+    # the checkpoint knows its own widths -- all four of them (voices, latent rate, text width, text depth).
+    # The ad-hoc version here covered only the first two, which is why a dim-512 text side failed to load
+    # with "size mismatch for latent_head.2.weight" in round 54.
+    from parakeet.train.common import load_checkpoint_into
+
+    model, applied, payload = load_checkpoint_into(cfg, args.checkpoint)
+    for key, value in applied.items():
+        if key in ("text_dim", "text_layers"):
+            print(f"[real_eval] {key} {value} (from the checkpoint)")
     model.eval()
     if args.cache:
         from parakeet.train.common import load_latent_norm_from_cache
@@ -255,6 +262,9 @@ def main() -> int:
           f"(ratio {length_ratio:.2f})")
 
     _banner("is it speech at all?  (voiced fraction, pitch, spectral flatness vs the teacher)")
+    print("  NB this is a sanity check, not a quality verdict: the autoencoder's own round trip --")
+    print("     intelligible, WER 0.000 -- also reports speech_like NO (voiced 0.99).  WER with its")
+    print("     control is the metric that discriminates.")
     likeness = speechlikeness(generated, cfg.audio.sample_rate, reference=references)
     likeness_teacher = likeness.pop("reference", {})
     print(f"  student: voiced {likeness['voiced_fraction']:.2f} | f0 {likeness['median_f0_hz']:.0f} Hz "
