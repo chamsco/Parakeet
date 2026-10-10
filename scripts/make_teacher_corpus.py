@@ -69,6 +69,9 @@ def main() -> int:
     ap.add_argument("--i-have-written-permission", action="store_true")
     # cache-only mode
     ap.add_argument("--cache-only", action="store_true")
+    ap.add_argument("--latent-rate", type=int, default=None,
+                    help="latents per text token for the cache.  MUST match the cache this one will be "
+                         "merged with: a width mismatch merges silently and the model cannot read the items")
     ap.add_argument("--corpus", default=None, help="corpus dir containing manifest.jsonl")
     ap.add_argument("--config", default="configs/parakeet_tiny.yaml")
     ap.add_argument("--ae-checkpoint", default=None)
@@ -96,14 +99,25 @@ def main() -> int:
     if args.cache_only:
         corpus = Path(args.corpus or args.out)
         cfg = load_config(args.config)
-        model = build_model(cfg)
         if args.ae_checkpoint:
-            payload = torch.load(args.ae_checkpoint, map_location="cpu", weights_only=False)
-            state = payload.get("ema", {}).get("shadow", payload["model"])
-            model.load_state_dict(state, strict=False)
-            print(f"loaded autoencoder from {args.ae_checkpoint}")
+            # the checkpoint's own geometry first (voice table, latent rate, text width/depth): building
+            # from the config alone is the class of mismatch that has now bitten eight times, and here it
+            # showed up as `voice_embed.weight` [4, 256] against a config that declares one voice
+            from parakeet.train.common import load_checkpoint_into
+
+            model, applied, _payload = load_checkpoint_into(cfg, args.ae_checkpoint)
+            print(f"loaded autoencoder from {args.ae_checkpoint} | geometry from the checkpoint: {applied}")
         else:
+            model = build_model(cfg)
             print("WARNING: no --ae-checkpoint, latents come from a randomly-initialised encoder")
+        if args.latent_rate:
+            # the token width is `latent_dim * latent_rate`, and it must MATCH the cache this one will be
+            # merged with or the merge silently produces items the model cannot read (24 vs 72 wide).  The
+            # autoencoder checkpoint predates the rate change and still carries rate 1, so the explicit
+            # value has to be applied after the geometry load.
+            cfg.autoencoder.latent_rate = int(args.latent_rate)
+            print(f"latent rate overridden to {cfg.autoencoder.latent_rate} (token width "
+                  f"{cfg.autoencoder.latent_dim * cfg.autoencoder.latent_rate})")
         # the mixture is read from the corpus provenance, so the cache cannot silently lose it
         out = cache_teacher_corpus(
             corpus,

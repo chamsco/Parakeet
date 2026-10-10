@@ -65,6 +65,25 @@ def test_voice_indices_are_remapped_so_speakers_keep_their_identity(tmp_path: Pa
     assert by_value[3.0] == 2, "the extra speaker must get a new index, not reuse voice 0"
 
 
+def test_a_token_width_mismatch_is_refused_rather_than_merged(tmp_path: Path):
+    """The expansion's cache was first built at latent_rate 1 against this cache's 3.
+
+    A silent merge would have produced 770 items with 24-wide token targets among 1207 items with 72-wide
+    ones -- a corruption that surfaces as a shape error somewhere else entirely, or as a model that trains
+    on garbage.
+    """
+    import pytest
+    import torch as _torch
+
+    _write_cache(tmp_path / "base", [_item(0, 1.0)], ["alice"], None)
+    wide = _item(0, 2.0)
+    wide["latent_token"] = _torch.full((3, 24), 2.0)
+    _write_cache(tmp_path / "extra", [wide], ["alice"], None)
+    with pytest.raises(ValueError, match="token width mismatch"):
+        merge_caches(tmp_path / "base", tmp_path / "extra", tmp_path / "merged")
+    assert not (tmp_path / "merged" / "index.json").exists(), "nothing should be written on a mismatch"
+
+
 def test_the_base_normaliser_wins(tmp_path: Path):
     """Refitting it would move the latent space under a resumed checkpoint."""
     _write_cache(tmp_path / "base", [_item(0, 1.0)], ["alice"], {"mean": [0.1], "var": [0.5]})

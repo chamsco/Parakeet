@@ -55,12 +55,30 @@ def merge_caches(base: Path, extra: Path, out: Path, shard_size: int = 500) -> D
         buffer = []
 
     counts = {"base": 0, "extra": 0, "voices_added": 0}
+    widths: Dict[str, int] = {}
     for cache, names, label in ((base, base_voices, "base"), (extra, None, "extra")):
         extra_names = list(extra_meta.get("voice_names") or []) if label == "extra" else names
         for entry in _shard_entries(cache):
             payload = torch.load(cache / entry["path"], map_location="cpu", weights_only=False)
             for item in payload["items"]:
                 item = dict(item)
+                # A width mismatch merges silently and produces items the model cannot read: the expansion's
+                # cache was first built at latent_rate 1 (24-wide tokens) against this cache's 3 (72-wide).
+                # Refusing loudly is the only safe behaviour.
+                token = item.get("latent_token")
+                if token is not None:
+                    width = int(token.shape[-1])
+                    if label not in widths:
+                        widths[label] = width
+                    elif widths[label] != width:
+                        raise ValueError(
+                            f"{label} cache mixes token widths {widths[label]} and {width}"
+                        )
+                    if "base" in widths and widths[label] != widths["base"]:
+                        raise ValueError(
+                            f"token width mismatch: base {widths['base']} vs {label} {width}.  The caches "
+                            "were built at different latent rates and cannot be merged."
+                        )
                 voice = item.get("voice")
                 if voice is not None and extra_names:
                     position = int(voice)

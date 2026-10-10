@@ -2720,7 +2720,45 @@ Two lessons worth keeping, both cheap: a smoke test that costs 200 characters ca
 marked `[proposed]` in the source should be checked against the data before it is trusted to accept or
 reject it.
 
-## 65. Deliberate engineering checks worth calling out
+## 65. The decision point answered YES: validation ρ is climbing (round 56)
+
+Round 53 moved the CPU to the cheap token route on the strength of a comparison, and named the measurement
+that would make the call right or wrong: **does validation ρ pass the 0.1896 baseline?** At the 5 000-step
+checkpoint, measured with the same tool and the same cache as the baseline:
+
+| | step 3 000 (warm start) | **step 5 000** |
+|---|---|---|
+| train dim correlation | 0.3212 | **0.4640** |
+| **validation dim correlation** | 0.1896 | **0.3043** |
+| duration ratio | 0.764 | **0.822** |
+| latent cosine | 0.847 | 0.844 |
+
+**+60 % on validation and +44 % on training in 2 000 steps**, with the duration ratio improving too. This is
+the first route in this project whose *held-out* number moves at all, and it moved the moment it was given
+the CPU. For a coarse extrapolation: another ~16 000 steps at that rate would reach 0.75 — a few CPU-hours,
+against the flow's 50+ with no signal. The curve will saturate before that, and the next checkpoints will
+show where; the point here is that the cheap route is no longer a hypothesis.
+
+## 66. The corpus expansion is in the cache, merged and consistent (round 56)
+
+The 100k-character allowance produced **770 utterances / 1.54 h** of new teacher audio, and getting it into
+training exposed two more instances of known traps:
+
+* **the eighth checkpoint-geometry mismatch**: `make_teacher_corpus.py` built from the config (`n_voices: 1`)
+  and loaded a checkpoint with four voices. Fixed by routing it through `load_checkpoint_into`, the helper
+  added for exactly this in round 54 — which is the argument for having centralised it;
+* **a token-width trap that would have corrupted the merge silently**: the expansion's cache was first built
+  at `latent_rate 1` (24-wide token targets) against the base cache's 3 (72-wide). The merge would have
+  produced 770 items the model cannot read among 1 207 it can. `make_teacher_corpus.py` gained
+  `--latent-rate` (applied *after* the geometry load, because the autoencoder checkpoint predates the rate
+  change and still carries 1), and `merge_caches.py` now **refuses** a width mismatch instead of merging it,
+  with a test that pins the refusal.
+
+The merged cache: **1 977 items** (1 207 + 770), **13 voices** (the expansion's single unlabelled API voice
+appended), token widths `{72}` throughout, and the base cache's latent normaliser preserved — verified by
+loading it, not by reading the merge's own output.
+
+## 67. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
