@@ -2825,7 +2825,44 @@ The general lesson is the one this project keeps paying for: a metric whose *spl
 like a result about the model. This is the third instrumentation correction in five rounds, and the cheapest
 kind of bug to fix — provided the split is looked at before the conclusion is written.
 
-## 69. Deliberate engineering checks worth calling out
+## 69. Why the expansion is at a different scale: a partial answer, and a refuted fix (round 58)
+
+Round 57 pre-registered "a per-source level match" as the fix if the expansion hurt. Measuring it refutes
+that fix and finds a partial cause — both worth having in writing before anyone spends the rest of the
+allowance.
+
+**It is not a level difference.** Reading the audio directly (`scripts/expansion_levels.py`, which resolves
+the corpus's wavs through their manifest because they are not under the manifest itself):
+
+| | rms | peak | crest |
+|---|---|---|---|
+| base corpus (Speechify) | −18.29 dB | −1.28 dB | 16.89 dB |
+| expansion | −19.97 dB | −3.02 dB | 17.00 dB |
+
+A **1.68 dB** level difference with a **0.11 dB** crest difference. The latent-scale gap is 0.643 against
+1.096, i.e. **4.6 dB worth** — so gain cannot account for it, and the "level match" fix would not have
+worked.
+
+**The voice was part of it, not all of it.** `DEFAULT_VOICES` had no `"speechify"` entry, so the teacher's
+`synthesize(text, voice=None)` fell back to the API's default speaker, and the manifest recorded an empty
+voice. That is now wired to the corpus's own ten voices and a generated `alec` utterance records
+`voice: 'alec'` — verified with a single prompt (~130 characters) rather than by re-running 771. But the
+same utterance still encodes at **0.798** against the corpus's `alec` items at **1.041**, i.e. naming the
+voice closes only about a quarter of the gap.
+
+So the remaining cause is something else — the expansion's utterances are 1.5× longer (746 frames against
+~500), which lowers within-utterance variance by construction, and the API's own output may differ from
+whatever configuration produced the corpus. **Not diagnosed**, and stated as such. The practical
+consequences:
+
+* **do not spend more of the allowance on this shape of expansion**: with the cause only partly identified, a
+  second 100k characters is a gamble, not a fix;
+* the 770 utterances are a *distinct voice* with a smaller latent scale. The honest options are per-voice
+  latent normalisation (a design change, and arguably right for a multi-voice corpus: it removes a
+  per-voice scale the text cannot predict) or leaving them out. Both are decisions, neither is a bug fix;
+* training continues on the base corpus, which measures better.
+
+## 70. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero

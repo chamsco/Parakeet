@@ -48,6 +48,15 @@ DEFAULT_VOICES = {
         "af_river", "af_alloy", "af_aoede", "af_jessica", "af_kore",
     ],
     "minimax": ["English_expressive_narrator"],
+    # The voices the *existing* corpus was built with (read off its manifest).  Without this entry the
+    # builder passes no voice, the teacher calls the API's default, and the resulting audio is a different
+    # speaker whose latents sit at a 41 % smaller scale -- which measurably hurt validation rho (0.291
+    # against 0.388) when it was merged in.  A voice list is not a detail here; it is what makes the extra
+    # data compatible with what the model already learned.
+    "speechify": [
+        "alec", "alfonso", "alicia", "archie", "beatrice",
+        "belinda", "benjamin", "byronagent", "elijah", "rob",
+    ],
     # fixtures: distinct pitches, so a multi-voice fixture corpus exercises voice conditioning
     "stub_low": ["low", "mid", "high"],
     "stub_high": ["mid", "high"],
