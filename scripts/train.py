@@ -112,6 +112,16 @@ def main() -> int:
         cfg.train.batch_size = args.batch_size
     if args.steps:
         cfg.train.max_steps = args.steps
+        # Align the learning-rate schedule with the run.  The configs carry max_steps 50 000 (their
+        # intended long-run value) while experiments run for a few thousand steps, so the cosine never
+        # annealed and `warmup_steps: 1000` consumed a third of a 4 000-step run -- leaving the model at
+        # a learning rate far below anything useful for the whole run (the flow's length head was
+        # measured at 0.35 against a 6.75 target after 400 steps with an effective lr near 1e-5).
+        if cfg.train.warmup_steps > max(50, args.steps // 20):
+            previous = cfg.train.warmup_steps
+            cfg.train.warmup_steps = max(50, args.steps // 20)
+            print(f"[train] warmup {previous} -> {cfg.train.warmup_steps} steps "
+                  f"(5% of the {args.steps}-step run, so the schedule fits the run)")
     if args.out:
         cfg.train.out_dir = args.out
     if args.max_ref_frames:

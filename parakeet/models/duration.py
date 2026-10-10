@@ -51,9 +51,20 @@ class DurationPredictor(nn.Module):
 
 
 class UtteranceLengthPredictor(nn.Module):
-    """Predicts total latent length (in compressed frames) from pooled text+speaker."""
+    """Predicts total latent length (in compressed frames) from pooled text+speaker.
 
-    def __init__(self, cfg: DurationConfig, text_dim: int, cond_dim: int) -> None:
+    The output bias is initialised to a sensible log-length instead of zero (round 32).  AdamW moves a
+    parameter by roughly the learning rate per step regardless of gradient size, so a head whose output
+    starts **6.4** away from its target in log space — the measured gap between an untrained prediction
+    (0.35) and the corpus's ~850 frames (6.75) — needs ~32 000 steps at lr 2e-4 just to travel there.
+    Runs of 1 600-6 000 steps therefore never reached the target region, which is exactly the duration
+    collapse measured in round 30 (predicted/true length 0.77 train, 0.58 validation) — and training
+    *only* this head at lr 1e-2 reaches loss 0.006 in 60 steps, so the head and its gradients were fine.
+    """
+
+    def __init__(
+        self, cfg: DurationConfig, text_dim: int, cond_dim: int, log_length_init: Optional[float] = None
+    ) -> None:
         super().__init__()
         self.cfg = cfg
         d = text_dim + cond_dim
@@ -64,6 +75,10 @@ class UtteranceLengthPredictor(nn.Module):
             nn.SiLU(),
             nn.Linear(cfg.hidden, 1),
         )
+        init = getattr(cfg, "log_length_init", None) if log_length_init is None else log_length_init
+        if init is not None:
+            with torch.no_grad():
+                self.net[-1].bias.fill_(float(init))
 
     def forward(
         self,

@@ -94,6 +94,11 @@ class DurationConfig:
     #: per-token durations (Tiny path) and/or utterance length (Small path)
     predict_token_durations: bool = True
     predict_utterance_length: bool = True
+    #: initial value for the utterance-length head's output bias, in log latent frames.  Zero leaves the
+    #: head ~6.4 away from a typical target (log 600 ~= 6.4) and AdamW closes about one learning rate
+    #: per step, so short runs never arrive -- the measured duration collapse of round 30.  See
+    #: UtteranceLengthPredictor.  Set to `null` to leave the default initialisation alone.
+    log_length_init: Optional[float] = 6.5
 
 
 @dataclass

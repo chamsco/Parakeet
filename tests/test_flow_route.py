@@ -65,3 +65,31 @@ def test_the_flow_model_can_synthesize_through_the_shared_wrapper():
     assert wav.dim() == 2 and wav.shape[0] == 1
     assert wav.numel() > 0, "sampling produced no audio at all"
     assert bool(torch.isfinite(wav).all())
+
+
+def test_the_length_head_starts_near_a_plausible_length():
+    """Round 32's measured bug: the head started 6.4 away from its target in log space.
+
+    AdamW moves a parameter by roughly the learning rate per step, so an untrained head predicting 0.35
+    (about one frame) against a corpus of ~850 (log 6.75) needs ~32 000 steps at lr 2e-4 just to travel
+    there.  Runs of 1 600-6 000 steps never arrived -- the duration collapse measured in round 30 -- and
+    training this head alone at lr 1e-2 reaches loss 0.006 in 60 steps, so the head was never the
+    problem.  The bias initialisation is what closes the gap for free.
+    """
+    import math
+
+    from parakeet.models.duration import UtteranceLengthPredictor
+
+    cfg = load_config("configs/parakeet_flow.yaml")
+    predictor = UtteranceLengthPredictor(cfg.duration, 64, 32)
+    memory = torch.randn(2, 10, 64)
+    cond = torch.randn(2, 32)
+    mask = torch.ones(2, 10, dtype=torch.bool)
+    with torch.no_grad():
+        predicted = predictor(memory, cond, mask)
+    frames = predicted.exp()
+    assert bool((frames > 200).all()), (
+        f"the head starts at {frames.tolist()} frames; a short run cannot travel to the target region"
+    )
+    assert bool((frames < 2000).all()), f"the head starts absurdly long: {frames.tolist()}"
+    assert abs(float(predicted.mean()) - cfg.duration.log_length_init) < 0.5
