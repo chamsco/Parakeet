@@ -2554,7 +2554,35 @@ predictor**, which is an artefact of the probe calling `flow_loss` directly — 
 `stage_flow`, not in `flow_loss`. It is not a finding about the model, and the script says so where it
 matters rather than leaving a misleading zero in a table.
 
-## 59. Deliberate engineering checks worth calling out
+## 59. The token bottleneck is provably lossy: the Tiny route can never be intelligible (round 52)
+
+The intelligibility threshold is ρ ≥ 0.75 against the **frame** latent. Any route that goes
+`text → token latents → frame latents` inherits whatever the token latents preserve, and that can be
+measured *without* any prediction: feed the pipeline the **true** token latents, spread them over the
+utterance's frames, and correlate against the true frame latents. `scripts/bottleneck_ceiling.py`:
+
+| per item | oracle ρ | different utterance's tokens | token order shuffled |
+|---|---|---|---|
+| mean of 8 | **+0.1175** | +0.0134 | −0.0132 |
+| range | 0.076 … 0.231 | | |
+
+**The oracle is 0.118 — an order of magnitude below the 0.75 threshold, with controls at ~0.** The token
+bottleneck (24 dims mean-pooled per token, 72 dims at ~12 Hz) discards ~88 % of the frame-level
+information, so:
+
+* **the Tiny one-shot route is capped at ρ ≈ 0.12 in principle, no matter how well it is trained.** That is
+  a definitive answer to a question rounds 1–35 circled: its measured 0.39 against *token* latents and ~0.2
+  against *frame* latents are consistent with a hard architectural ceiling of `0.39 × 0.12 ≈ 0.05`, and no
+  amount of capacity, curriculum or corpus work could have lifted it;
+* **the flow route is the right one for a reason no measurement had isolated before**: it generates frame
+  latents directly from text and never passes through the token bottleneck. The plan is auxiliary
+  conditioning, not a route.
+
+This does not tell us the *flow's* ceiling — that is still text → frame predictability, which remains the
+open question the long run is asking. It does say that the project's earlier dead ends were dead for a
+structural reason, and that the current architecture is the one that is not pre-excluded.
+
+## 60. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
@@ -2590,7 +2618,7 @@ matters rather than leaving a misleading zero in a table.
   `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
   else, rather than surfacing a cryptic `torch.stft` message.
 
-## 60. Environment notes
+## 61. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
