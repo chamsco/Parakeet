@@ -2195,7 +2195,43 @@ yet intelligible**, so this demonstrates the deployment path, not a usable syste
 (`flow_trajectory`'s `x_realtime`), which satisfies "lightning fast" — the missing piece is quality, not
 latency.
 
-## 51. Smoke test output (measured)
+## 51. Optimisation levers tested — and one piece of de-risking that worked (round 43)
+
+The flow learns the marginal velocity field first and the conditioning later (round 41), so levers that
+speed up the *conditional* part are worth testing, and CPU-sized tests exist for them.
+
+**1. Warm-starting the text encoder — no effect.** The text encoder (dim 256, 4 layers) is shared between
+the Tiny variant and the flow, so the text side already trained to regress latents (`runs/text_only`,
+12 000 steps) can be loaded into the flow, giving its cross-attention a meaningful memory from step 0:
+
+| 2 utterances, 3 000 steps, lr 1e-3 | flow loss | sampled-latent ρ |
+|---|---|---|
+| baseline (random text encoder) | 0.064 | **+0.2495** |
+| text encoder warm-started | 0.065 | **+0.2466** |
+
+Identical within noise. On a two-item task the objective is dominated by fitting the two latent sequences
+rather than by the quality of the text representation, so this test *cannot* show a benefit — and claiming
+one would be dishonest.
+
+**2. Logit-normal timestep sampling — exposed, running.** Uniform t spends most samples near the noise end
+where the conditional information is weakest; SD3's logit-normal concentrates t around 0.5.
+`sample_timesteps` already implemented the mode, but `flow_loss` hard-coded `"uniform"` so it had never
+been used; it is now wired through `FlowConfig.t_sampling`, default unchanged, and A/B-able via
+`overfit_flow.py --t-sampling logit_normal`.
+
+**3. De-risking that worked: the flow stage verifiably resumes.** A long GPU run must survive
+interruption, so this was tested rather than assumed — 40 steps with checkpoints every 20, then
+`--resume flow_step20.pt` to step 80:
+
+```
+[stage flow] resumed from runs/resume_check/flow_step20.pt at step 20 (lr 8.400e-05)
+final log: step 80, resumed_from 20.0, nonfinite_steps 0
+checkpoints: flow_step20.pt, flow_step40.pt, flow_step80.pt
+```
+
+Optimizer, EMA, schedule position and the step counter all continue correctly.
+
+## 52. Smoke test output (measured)
 
 ```
 parakeet-tiny [tiny] sr=24000 mel=80@93.8Hz latent=24 compress=1/6 voice=constant
