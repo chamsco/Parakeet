@@ -132,6 +132,54 @@ class LatentShardDataset(Dataset):
         return item
 
 
+def crop_item_to_tokens(
+    item: Dict[str, torch.Tensor], start_frame: int, n_frames: int
+) -> Optional[Dict[str, torch.Tensor]]:
+    """Crop a cached item to a frame window **and** the text tokens that cover it.
+
+    Training a flow on whole utterances means every step sees ~140 compressed frames of *one* text: the
+    per-step cost scales with sequence length while the thing that has to be learned — which latent belongs
+    to which text — needs *variety* per step instead.  The papers train on random aligned crops for exactly
+    that reason, and this project can too because every cache item carries per-token frame counts
+    (`durations`), so a frame window maps to a token span.
+
+    Text and acoustics must be cropped *together*: keeping the whole sentence while cutting the audio
+    teaches the model to predict an arbitrary part of the utterance from all of it.  Returns ``None`` when
+    the item cannot be cropped (no durations, or fewer than two tokens in the window).
+    """
+    durations = item.get("durations")
+    latent = item.get("latent")
+    if durations is None or latent is None or durations.numel() < 2:
+        return None
+    total_frames = int(latent.shape[-1])
+    n_frames = int(min(n_frames, total_frames))
+    if n_frames < 8 or total_frames < 16:
+        return None
+    start_frame = int(max(0, min(start_frame, total_frames - n_frames)))
+
+    cumulative = torch.cumsum(durations.float(), dim=0)
+    first = int(torch.searchsorted(cumulative, torch.tensor(float(start_frame))).item())
+    last = int(torch.searchsorted(cumulative, torch.tensor(float(start_frame + n_frames - 1))).item()) + 1
+    first = max(0, min(first, durations.numel() - 1))
+    last = max(first + 1, min(last, durations.numel()))
+    if last - first < 2:
+        return None
+
+    cropped = dict(item)
+    cropped["latent"] = latent[..., start_frame : start_frame + n_frames]
+    if item.get("log_mel") is not None:
+        cropped["log_mel"] = item["log_mel"][..., start_frame : start_frame + n_frames]
+    # per-token tensors are indexed along their *first* axis: `ids` and `durations` are (T,), while
+    # `latent_token` is (T, latent_dim * rate) -- slicing the last axis there would cut the features
+    for key in ("ids", "durations", "f0", "energy", "latent_token"):
+        value = item.get(key)
+        if value is not None:
+            cropped[key] = value[first:last]
+    cropped.pop("text_mask", None)  # `collate` rebuilds it from the token lengths
+    cropped["crop"] = torch.tensor([start_frame, n_frames, first, last])
+    return cropped
+
+
 class LatentShardBatchSource:
     """Infinite batch iterator over a :class:`LatentShardDataset` (a callable for ``run_stage``).
 
@@ -153,6 +201,7 @@ class LatentShardBatchSource:
         pair_references: bool = False,
         max_ref_frames: Optional[int] = None,
         self_reference: bool = True,
+        crop_frames: Optional[int] = None,
     ) -> None:
         self.dataset = dataset
         self.batch_size = batch_size
@@ -163,6 +212,9 @@ class LatentShardBatchSource:
         self.device = device
         self.pair_references = pair_references
         self.max_ref_frames = max_ref_frames
+        #: random aligned crops, in frames: every step then sees *variety* rather than one long sequence.
+        #: `crop_item_to_tokens` cuts text and acoustics together, so the conditioning stays consistent.
+        self.crop_frames = crop_frames
         #: False means "only paired references, skip items that have no partner" (a strict
         #: pairing curriculum).  True falls back to the item's own mel when no partner exists.
         self.self_reference = self_reference
@@ -228,6 +280,20 @@ class LatentShardBatchSource:
     def __call__(self) -> Dict[str, torch.Tensor]:
         indices = self._next_indices()
         items = [self.dataset[i] for i in indices]
+        if self.crop_frames:
+            cropped = []
+            for item in items:
+                total = int(item["latent"].shape[-1])
+                window = min(self.crop_frames, total)
+                if total <= window:
+                    cropped.append(item)
+                    continue
+                start = int(
+                    torch.randint(0, total - window + 1, (1,), generator=self.generator).item()
+                )
+                piece = crop_item_to_tokens(item, start, window)
+                cropped.append(piece if piece is not None else item)
+            items = cropped
         if self.pair_references:
             self._attach_references(indices, items)
         elif self.self_reference:

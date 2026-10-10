@@ -84,6 +84,10 @@ def main() -> int:
     ap.add_argument("--lr", type=float, default=None,
                     help="override the learning rate; a memorisation test wants a bigger one than a "
                          "full-corpus run")
+    ap.add_argument("--crop-frames", type=int, default=None,
+                    help="train on random aligned crops of this many latent frames.  Text is cropped with "
+                         "the audio, so the pairing stays consistent, and each step sees far more variety "
+                         "for the same compute (the papers' own recipe)")
     args = ap.parse_args()
 
     cfg = load_config(args.config)
@@ -113,7 +117,7 @@ def main() -> int:
 
     source = LatentShardBatchSource(
         dataset, batch_size=args.batch_size, shuffle=True, seed=0,
-        pair_references=False, self_reference=True,
+        pair_references=False, self_reference=True, crop_frames=args.crop_frames,
     )
     # Align the schedule with the run, exactly as `train.py --steps` does: the config's warmup is 1000
     # steps, and calling `run_stage` directly with a shorter budget leaves the learning rate at ~0 for the

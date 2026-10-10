@@ -2151,7 +2151,31 @@ training scale beyond what this CPU can reach — which is the case for the oper
 `docs/GPU.md` carries the commands and the four criteria to judge it by (ρ ≥ 0.75 first, then
 speech-likeness, then WER with its control, then fit on the training prompts).
 
-## 49. Smoke test output (measured)
+## 49. Aligned crops: implemented, tested — and not yet shown to help (round 42)
+
+Training the flow on whole utterances spends each step on one long sequence, while what has to be learned
+— which latent belongs to which text — needs *variety* per step. The standard answer is random crops, and
+this project can do it properly because every cache item carries per-token frame counts, so a frame window
+maps to a token span: `crop_item_to_tokens()` cuts **text and acoustics together** (keeping the whole
+sentence while cutting the audio would teach the model to predict an arbitrary part of an utterance from
+all of it). Six tests pin the invariant (cropped tokens cover the cropped frames within one token), the
+per-token slicing (`latent_token` is `(T, features)` — the wrong axis would cut the features), the
+in-bounds clamp, and the degenerate cases.
+
+Measured on the only task small enough to run on this CPU — overfitting two utterances:
+
+| 3 000 steps, lr 1e-3, 2 utterances | wall time | flow loss | sampled-latent ρ |
+|---|---|---|---|
+| whole utterances | ~30 min | 0.064 | **+0.2495** |
+| 160-frame aligned crops | **10.2 min** | 0.194 | **+0.0548** |
+
+So crops are **3× cheaper per step** and **worse per step** on this task: with two items a whole utterance
+is the more informative sample and a 160-frame window is not. The efficiency argument for crops is about
+*variety across a large corpus*, which this test cannot show. Both numbers are recorded rather than the
+convenient one — the feature stays (tested, off by default, and the right thing for a full-corpus run),
+with no claim the measurement does not support.
+
+## 50. Smoke test output (measured)
 
 ```
 parakeet-tiny [tiny] sr=24000 mel=80@93.8Hz latent=24 compress=1/6 voice=constant
@@ -2202,7 +2226,7 @@ overhead — it is not a valid throughput measurement until the model predicts s
 learning demo (§2) trains properly but on 15 seconds of *synthetic* audio, so it demonstrates that
 the machinery learns, not that the model is good.
 
-## 50. Deliberate engineering checks worth calling out
+## 51. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
@@ -2238,7 +2262,7 @@ the machinery learns, not that the model is good.
   `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
   else, rather than surfacing a cryptic `torch.stft` message.
 
-## 51. Environment notes
+## 52. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
