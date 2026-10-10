@@ -96,6 +96,10 @@ def main() -> int:
     ap.add_argument("--t-sampling", default=None, choices=["uniform", "logit_normal"],
                     help="timestep distribution for flow matching; `logit_normal` concentrates t around "
                          "0.5 (the SD3 trick) instead of spending most samples near the noise end")
+    ap.add_argument("--holdout", type=int, default=0,
+                    help="evaluate rho on this many cache items *after* the training range, giving the "
+                         "flow's first train/held-out comparison -- memorisation on the training items "
+                         "says nothing about generalisation to unseen text")
     args = ap.parse_args()
 
     cfg = load_config(args.config)
@@ -133,8 +137,20 @@ def main() -> int:
                 block.cross_gain.fill_(args.cross_gain)
         print(f"cross-attention gain overridden to {args.cross_gain}")
 
-    before = sampled_rho(model, cfg, dataset, args.items)
-    print(f"before training: sampled latent rho on the {len(dataset)} training utterances = {before:+.4f}")
+    # score a bounded number of items: the point is a stable estimate, and scoring 200 of them costs
+    # more than a minute of sampling for a number that twelve items pin down to ~0.01
+    probe = min(args.items, 24)
+    before = sampled_rho(model, cfg, dataset, probe)
+    print(f"before training: sampled latent rho on {probe} of the {len(dataset)} training utterances "
+          f"= {before:+.4f}")
+
+    holdout = None
+    if args.holdout:
+        holdout = LatentShardDataset(
+            args.cache, indices=list(range(args.items, args.items + args.holdout))
+        )
+        print(f"holdout: {len(holdout)} utterances never trained on "
+              f"(rho before = {sampled_rho(model, cfg, holdout, min(args.holdout, 24)):+.4f})")
 
     source = LatentShardBatchSource(
         dataset, batch_size=args.batch_size, shuffle=True, seed=0,
@@ -146,6 +162,7 @@ def main() -> int:
     # had barely been trained, not one that could not learn).
     cfg.train.max_steps = args.steps
     cfg.train.warmup_steps = max(10, min(cfg.train.warmup_steps, args.steps // 20))
+    cfg.train.save_every = max(1, args.steps // 4)  # checkpoints, so rho can be tracked and resumed
     if args.lr is not None:
         cfg.train.lr = args.lr
     print(f"schedule: {args.steps} steps with {cfg.train.warmup_steps} warmup at lr {cfg.train.lr}")
@@ -154,12 +171,18 @@ def main() -> int:
         device="cpu", log_fn=lambda l: print("  ", {k: round(v, 4) if isinstance(v, float) else v
                                                    for k, v in l.items()}),
     )
-    after = sampled_rho(model, cfg, dataset, args.items)
+    after = sampled_rho(model, cfg, dataset, probe)
+    holdout_after = (
+        sampled_rho(model, cfg, holdout, min(args.holdout, 24)) if holdout is not None else None
+    )
     print(f"\nafter {args.steps} steps on {len(dataset)} utterances: rho = {after:+.4f} "
           f"(target 0.75 to be intelligible)")
+    if holdout is not None:
+        print(f"held-out rho (never trained on): {holdout_after:+.4f}  <- the number that generalises")
     Path("runs/flow_overfit.json").write_text(json.dumps({
-        "items": len(dataset), "steps": args.steps,
-        "rho_before": before, "rho_after": after, "logs": logs,
+        "items": len(dataset), "steps": args.steps, "holdout": args.holdout,
+        "rho_before": before, "rho_after": after, "rho_holdout": holdout_after,
+        "crop_frames": args.crop_frames, "lr": cfg.train.lr, "logs": logs,
     }, indent=2), encoding="utf-8")
     return 0
 

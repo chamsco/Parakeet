@@ -2248,7 +2248,27 @@ checkpoints: flow_step20.pt, flow_step40.pt, flow_step80.pt
 
 Optimizer, EMA, schedule position and the step counter all continue correctly.
 
-## 52. Smoke test output (measured)
+## 52. The flow's first train/holdout measurement (round 44)
+
+Every flow number until now came either from memorising two utterances or from the end of a short run on
+the whole corpus, so nothing said whether ρ *generalises*. `overfit_flow.py --holdout N` trains on
+`[0, items)` and scores a range that is never trained on, and `rho_curve.py` walks a run's checkpoints to
+produce ρ against steps for both.
+
+First datapoint (200 trained utterances, 32 held out, 160-frame aligned crops, batch 16, lr 5e-4,
+step 2 250):
+
+| step | ρ trained | ρ held-out |
+|---|---|---|
+| 2 250 | **−0.0405** | **+0.0264** |
+
+Both at zero: no text-to-latent mapping yet at this scale. That is consistent with the two-utterance curve
+(600 steps → −0.013, 3 000 steps → +0.25) — ρ appears only after a few thousand steps, and here the
+objective is spread over 200 utterances rather than two, so it takes longer still. The run continues with
+checkpoints every 2 250 steps, and the curve is the artifact the GPU decision needs: it is the difference
+between "buy 40 000 steps" being a guess and being an extrapolation.
+
+## 53. Smoke test output (measured)
 
 ```
 parakeet-tiny [tiny] sr=24000 mel=80@93.8Hz latent=24 compress=1/6 voice=constant
@@ -2299,7 +2319,7 @@ overhead — it is not a valid throughput measurement until the model predicts s
 learning demo (§2) trains properly but on 15 seconds of *synthetic* audio, so it demonstrates that
 the machinery learns, not that the model is good.
 
-## 53. Deliberate engineering checks worth calling out
+## 54. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
@@ -2335,7 +2355,7 @@ the machinery learns, not that the model is good.
   `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
   else, rather than surfacing a cryptic `torch.stft` message.
 
-## 54. Environment notes
+## 55. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
