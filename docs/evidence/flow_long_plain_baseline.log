@@ -1,0 +1,19 @@
+before training: sampled latent rho on 24 of the 1175 training utterances = -0.0027
+holdout: 32 utterances never trained on (rho before = +0.0002)
+schedule: 200000 steps with 1000 warmup at lr 0.0005
+   {'step': 0, 'trainable_params': 16132310.0, 'total_params': 21165328.0, 'frozen': 'autoencoder'}
+   {'flow': 2.0281, 'length': 1.8263, 'loss': 3.8544, 'lr': 0.0, 'step': 50}
+   {'flow': 1.4192, 'length': 0.2452, 'loss': 1.6643, 'lr': 0.0, 'step': 100}
+   {'flow': 1.2292, 'length': 0.0003, 'loss': 1.2295, 'lr': 0.0001, 'step': 150}
+   {'flow': 1.0311, 'length': 0.0002, 'loss': 1.0313, 'lr': 0.0001, 'step': 200}
+   {'flow': 0.899, 'length': 0.0001, 'loss': 0.8991, 'lr': 0.0001, 'step': 250}
+   {'flow': 0.8133, 'length': 0.0, 'loss': 0.8133, 'lr': 0.0001, 'step': 300}
+   {'flow': 0.7531, 'length': 0.0, 'loss': 0.7532, 'lr': 0.0002, 'step': 350}
+   {'flow': 0.7071, 'length': 0.0, 'loss': 0.7072, 'lr': 0.0002, 'step': 400}
+   {'flow': 0.6637, 'length': 0.0, 'loss': 0.6637, 'lr': 0.0002, 'step': 450}
+   {'flow': 0.6269, 'length': 0.0, 'loss': 0.6269, 'lr': 0.0002, 'step': 500}
+   {'flow': 0.5964, 'length': 0.0001, 'loss': 0.5965, 'lr': 0.0003, 'step': 550}
+   {'flow': 0.5652, 'length': 0.0007, 'loss': 0.5659, 'lr': 0.0003, 'step': 600}
+   {'flow': 0.5322, 'length': 0.0003, 'loss': 0.5325, 'lr': 0.0003, 'step': 650}
+   {'flow': 0.5154, 'length': 0.0003, 'loss': 0.5157, 'lr': 0.0003, 'step': 700}
+   {'flow': 0.4972, 'length': 0.0007, 'loss': 0.4979, 'lr': 0.0004, 'step': 750}

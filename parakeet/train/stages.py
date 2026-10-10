@@ -130,6 +130,7 @@ def flow_step(
         speaker_emb=batch.get("speaker_emb"),
         voice=batch.get("voice"),
         sample_weight=batch.get("teacher_weight"),
+        latent_token=batch.get("latent_token"),
     )
     text_mem = model.text(batch["ids"], batch.get("text_mask"))
     _, _, cond = model.conditions(
@@ -145,6 +146,11 @@ def flow_step(
     l_len = F.mse_loss(pred_frames, target_frames)
     total = loss + cfg.train.loss.duration * l_len
     logs = {"flow": loss.detach(), "length": l_len.detach()}
+    # surface the coarse-to-fine plan term: if the plan is being ignored, its loss says so, and a hidden
+    # auxiliary objective is exactly how the conditioning problem in round 39 went unnoticed for so long
+    for key, value in aux.items():
+        if isinstance(value, torch.Tensor) and value.dim() == 0 and key not in logs:
+            logs[key] = value.detach()
 
     # Style-token objectives.  The tokens are derived here rather than by the loader because they
     # are a *model* product (Q-Former over the mel memory encoder), and because collation must stay

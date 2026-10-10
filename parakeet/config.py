@@ -141,6 +141,14 @@ class FlowConfig:
     #: and this is the standard remedy -- exposed so it can be A/B'd rather than assumed.
     t_sampling: str = "uniform"
     context_expansion: int = 4  # Ke (SupertonicTTS context-sharing batch expansion)
+    #: coarse-to-fine conditioning (Paradee/SupertonicTTS).  When on, the flow predicts a *token-level
+    #: acoustic plan* from the text and appends it to its conditioning memory, and a weighted MSE against
+    #: the cached token latents trains that plan directly.  Rounds 40-47 measured the flow fitting the
+    #: marginal velocity field while its weak text conditioning stayed unused; raw text is a thin signal for
+    #: frame-level acoustics, and a plan is the papers' answer.  Off by default so existing runs are
+    #: bit-identical.
+    use_plan: bool = False
+    plan_weight: float = 1.0
     #: inference
     nfe: int = 32
     distilled_nfe: int = 4

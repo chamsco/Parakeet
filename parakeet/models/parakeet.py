@@ -216,10 +216,28 @@ class ParakeetFlow(nn.Module):
         self.cond_proj = nn.Linear(cfg.speaker.style_dim, cfg.flow.cond_dim)
         self.vf = ConvNeXtVFEstimator(cfg.flow)
         self.length_predictor = UtteranceLengthPredictor(cfg.duration, cfg.text.dim, cfg.flow.cond_dim)
+        #: coarse-to-fine: a token-level acoustic plan predicted from the text and appended to the
+        #: velocity field's memory, plus the projection that puts it in the memory's width.  This is the
+        #: papers' "predict the text-determined content, sample the rest" split, and it exists because
+        #: rounds 40-47 measured raw text conditioning being drowned out by the flow's own prior.
+        self.use_plan = bool(getattr(cfg.flow, "use_plan", False))
+        self.plan_width = cfg.autoencoder.latent_dim * max(1, int(cfg.autoencoder.latent_rate))
+        if self.use_plan:
+            self.plan_head = nn.Sequential(
+                nn.Linear(cfg.text.dim, cfg.text.dim), nn.GELU(),
+                nn.Linear(cfg.text.dim, self.plan_width),
+            )
+            self.plan_proj = nn.Linear(self.plan_width, cfg.flow.cond_dim)
         if cfg.voice_mode == "constant":
             self.voice_embed = nn.Embedding(max(1, cfg.n_voices), cfg.speaker.style_dim)
         else:
             self.voice_embed = None
+
+    def plan_from_tokens(self, text_mem: torch.Tensor) -> torch.Tensor:
+        """The flow's token-level acoustic plan: ``(B, S, latent_dim * rate)``."""
+        if not self.use_plan:
+            raise RuntimeError("plan_from_tokens called without cfg.flow.use_plan")
+        return self.plan_head(text_mem)
 
     # ------------------------------------------------------------------ conditioning
     def conditions(
@@ -249,8 +267,7 @@ class ParakeetFlow(nn.Module):
             style=style,
         )
         cond = self.cond_proj(cond)
-        memory, memory_mask = build_memory(text_mem, mask, cond)
-        # Round 39 measured the conditioning entering at a tenth of the conv branch's strength: an
+        memory, memory_mask = build_memory(text_mem, mask, cond)        # Round 39 measured the conditioning entering at a tenth of the conv branch's strength: an
         # *untrained* estimator already gives velocity rho 0.9968 between two different texts, so ~90 % of
         # the velocity was text-independent from the start.  Appending the pooled conditioning as one extra
         # memory token gives the cross-attention a global summary to attend to, which is a direct route for
@@ -261,6 +278,15 @@ class ParakeetFlow(nn.Module):
             memory_mask = torch.cat(
                 [memory_mask, memory_mask.new_ones(memory_mask.shape[0], 1)], dim=1
             )
+        if self.use_plan:
+            # the coarse plan rides in the memory as per-token tokens, so cross-attention can read a
+            # predicted acoustic state rather than only text
+            plan = self.plan_proj(self.plan_from_tokens(text_mem))
+            memory = torch.cat([memory, plan], dim=1)
+            if memory_mask is not None:
+                memory_mask = torch.cat(
+                    [memory_mask, memory_mask.new_ones(memory_mask.shape[0], plan.shape[1])], dim=1
+                )
         return memory, memory_mask, cond
 
     # ------------------------------------------------------------------ shapes
@@ -294,12 +320,17 @@ class ParakeetFlow(nn.Module):
         context_expansion: Optional[int] = None,
         reflow: bool = False,
         sample_weight: Optional[torch.Tensor] = None,
+        latent_token: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         """Conditional flow-matching MSE.  ``x1`` is the (normalised) latent ``(B, C, T)``.
 
         ``sample_weight`` carries the per-sample teacher-mixture weight (see
         :class:`~parakeet.train.losses.MultiTeacherMixer`); it is repeated along with the batch when
         context-sharing expansion is active, so the mixture re-weights the gradient exactly.
+
+        ``latent_token`` is the cached token-level target.  With ``cfg.flow.use_plan`` it supervises the
+        coarse plan directly, which is what keeps the plan from being ignored: an unstructured extra
+        conditioning token is exactly what the measurement in round 39 showed the field learning to skip.
         """
         ke = context_expansion or self.cfg.flow.context_expansion
         t_latent = x1.shape[-1]
@@ -313,6 +344,12 @@ class ParakeetFlow(nn.Module):
             speaker_emb = None if speaker_emb is None else speaker_emb.repeat_interleave(ke, dim=0)
             voice = None if voice is None else voice.repeat_interleave(ke, dim=0)
             x1c = x1c.repeat_interleave(ke, dim=0)
+            # the plan's target has to be expanded with the batch, exactly like `sample_weight`: with
+            # context-sharing expansion the text (and so the plan) is repeated, and an unexpanded target
+            # would either misalign or silently drop the auxiliary term
+            latent_token = (
+                None if latent_token is None else latent_token.repeat_interleave(ke, dim=0)
+            )
             sample_weight = (
                 None if sample_weight is None else sample_weight.repeat_interleave(ke, dim=0)
             )
@@ -333,6 +370,16 @@ class ParakeetFlow(nn.Module):
         per_sample = (v_pred - v_target).pow(2).mean(dim=tuple(range(1, v_pred.dim())))
         loss = weighted_mean(per_sample, sample_weight)
         aux = {"t_latent": torch.tensor(float(t_latent)), "tc": torch.tensor(float(tc))}
+        if self.use_plan and latent_token is not None:
+            # supervise the plan against the cached token latents: the conditioning token has to carry a
+            # *correct* acoustic plan, not merely exist
+            plan = self.plan_from_tokens(self.text(ids, mask))
+            width = min(plan.shape[-1], latent_token.shape[-1])
+            target = latent_token[..., :width].to(plan.dtype)
+            if target.shape[1] == plan.shape[1]:
+                plan_loss = (plan[..., :width] - target).pow(2).mean()
+                aux["plan"] = plan_loss.detach()
+                loss = loss + self.cfg.flow.plan_weight * plan_loss
         if reflow:
             loss = loss * 1.0  # reflow pairs are supplied by the caller as (x0, x1)
         return loss, aux

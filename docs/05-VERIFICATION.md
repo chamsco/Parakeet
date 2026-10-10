@@ -2383,7 +2383,46 @@ overhead — it is not a valid throughput measurement until the model predicts s
 learning demo (§2) trains properly but on 15 seconds of *synthetic* audio, so it demonstrates that
 the machinery learns, not that the model is good.
 
-## 54. Deliberate engineering checks worth calling out
+## 54. Coarse-to-fine plan conditioning — the papers' split, finally implemented (round 47)
+
+The measurements had converged on one diagnosis: the flow fits the *marginal* velocity field while its
+**text** conditioning stays unused (an untrained field was already indifferent to which text it was given,
+round 39; ρ_trained climbs while ρ_held-out stays at zero, round 46). Raw characters are a thin signal for
+frame-level acoustics, and every paper in the objective splits the problem for exactly that reason:
+predict the text-determined content, *sample* the rest.
+
+`cfg.flow.use_plan` implements it:
+
+* `ParakeetFlow.plan_head` predicts a **token-level acoustic plan** from the text memory;
+* `plan_proj` puts that plan into the conditioning memory, one token per text token, so cross-attention
+  reads a predicted acoustic state rather than only characters;
+* the plan is **supervised directly** against the cached token latents (`latent_token`) with weight
+  `flow.plan_weight`, because an unstructured extra conditioning token is precisely what round 39 measured
+  the field learning to skip.
+
+It is **off by default**, so the baseline is bit-identical, and it is +78k parameters (16.21M trainable
+against 16.13M). Four tests pin it: off-by-default adds no parameters and no memory tokens; the plan widens
+the memory by exactly one token per text token and is not masked out; gradients reach the plan head; and the
+plan loss falls ≥30 % over 40 steps on a fixed batch.
+
+**The plan learns the coarse acoustics almost immediately** — the smoke run's own log, 2 utterances:
+
+```
+{'flow': 1.5133, 'length': 0.0014, 'plan': 0.2139, 'loss': 1.5147, 'lr': 0.0009, 'step': 50}
+{'flow': 0.9168, 'length': 0.0000, 'plan': 0.0074, 'loss': 0.9168, 'lr': 0.0006, 'step': 100}
+{'flow': 0.6808, 'length': 0.0000, 'plan': 0.0018, 'loss': 0.6808, 'lr': 0.0001, 'step': 150}
+```
+
+100× reduction in 150 steps, against ρ ≈ 0 for the flow term over thousands. So the plan is a *learnable*
+coarse signal where raw text was not — which is why the long run was switched to it: 20 minutes of the
+plain run were traded for an architecture the measurements support, and its log is kept as the baseline
+(`docs/evidence/flow_long_plain_baseline.log`).
+
+Careful about what this does *not* show: the plan **learning** is not evidence that the flow's ρ improves.
+That A/B is still unmeasured, and until it is, the honest claim is "the coarse signal is learnable", not
+"this fixes the mapping".
+
+## 55. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
@@ -2419,7 +2458,7 @@ the machinery learns, not that the model is good.
   `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
   else, rather than surfacing a cryptic `torch.stft` message.
 
-## 55. Environment notes
+## 56. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).

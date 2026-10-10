@@ -1,0 +1,91 @@
+# Parakeet-Flow with the coarse-to-fine *plan* conditioning on.
+#
+# Why: rounds 40-47 measured the velocity field fitting the marginal field while its text conditioning
+# stayed weak (an untrained field was already indifferent to which text it was given; sampled-latent rho
+# climbed linearly on the training split and not at all on held-out data).  Raw characters are a thin
+# signal for frame-level acoustics, so this config gives the flow the papers' answer instead: predict a
+# *token-level acoustic plan* from the text, append it to the conditioning memory, and supervise it
+# directly against the cached token latents so it carries a correct plan rather than an ignored token.
+#
+# It is a copy of `parakeet_flow.yaml` with `flow.use_plan: true` added, so a comparison is only about that:
+#   python scripts/overfit_flow.py --config configs/parakeet_flow_plan.yaml \
+#       --items 200 --holdout 32 --steps 9000 --batch-size 16 --crop-frames 160 --lr 0.0005 \
+#       --out runs/flow_plan
+name: parakeet-flow-plan
+variant: small
+voice_mode: constant
+n_voices: 1
+
+audio:
+  sample_rate: 24000
+  n_fft: 1024
+  hop_length: 256
+  win_length: 1024
+  n_mels: 80
+  fmax: 12000.0
+
+autoencoder:            # must match the autoencoder that produced the cache
+  latent_dim: 24
+  encoder_dims: [64, 96, 128]
+  encoder_blocks: [1, 2, 2]
+  decoder_dim: 256
+  decoder_blocks: 5
+  decoder_expansion: 4
+  decoder_dilations: [1, 2, 4, 8, 16]
+  causal_decoder: true
+
+text:
+  vocab_size: 128
+  dim: 256
+  n_layers: 4
+  n_heads: 4
+  mode: char
+
+duration:
+  hidden: 256
+  n_layers: 2
+  predict_token_durations: true
+  predict_utterance_length: false
+
+speaker:
+  n_mels: 80
+  emb_dim: 192
+  n_query: 8
+  style_dim: 256
+  freeze: true
+
+flow:
+  latent_dim: 24
+  compress: 6
+  dim: 256
+  depth: 4
+  n_heads: 4
+  text_dim: 256
+  cond_dim: 256
+  nfe: 32
+  distilled_nfe: 4
+  cfg_scale: 1.5
+  use_plan: true        # the only change from parakeet_flow.yaml
+  plan_weight: 1.0
+
+train:
+  batch_size: 8
+  lr: 0.0002
+  max_steps: 20000
+  ema_decay: 0.999
+  save_every: 5000
+  log_every: 50
+  loss:
+    mel: 1.0
+    spectral: 3.0
+    adversarial: 1.0
+    feature_match: 2.0
+    duration: 1.0
+    f0: 1.0
+    energy: 1.0
+    latent_feature: 1.0
+    phase_lock: 0.05
+    audio_mel: 1.0
+    audio_spectral: 3.0
+    audio_aux: 1.0
+    signal_latent_contrast: 1.0
