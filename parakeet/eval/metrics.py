@@ -127,6 +127,74 @@ def utmos(wavs: Sequence[torch.Tensor], sample_rate: int = 24000) -> OptionalMet
         return OptionalMetric(None, False, str(exc))
 
 
+def speechlikeness(
+    audio: Sequence[torch.Tensor], sample_rate: int = 24000, reference: Optional[Sequence[torch.Tensor]] = None
+) -> Dict[str, object]:
+    """Is this *speech at all*?  The acceptance criterion the proxies could not supply.
+
+    Round 35 measured both paths at WER 1.000 while their mel proxies looked healthy (Tiny 0.95, flow
+    0.90) -- and then measured why: the Tiny path emits a near-silent **tonal buzz** (98 % of frames
+    "voiced" at 491 Hz, the pitch tracker's ceiling, at 0.012 amplitude against the teacher's 0.49) and
+    the flow emits **unvoiced noise** (7 % voiced, spectral flatness 0.60 against the teacher's 0.30).
+    Neither is speech, and the envelope proxy rewarded both.
+
+    So this reports three quantities that a noise-or-buzz generator cannot fake, against the teacher for
+    the same sentence where available:
+
+    * **voiced fraction** -- speech is 55-75 % voiced; buzz is ~100 % *but* at one pitch, noise is ~0;
+    * **median F0** -- speech sits around 100-250 Hz; a buzz pinned at the tracker's ceiling (500 Hz) or
+      a 95 Hz drone is not a human pitch range;
+    * **spectral flatness** -- speech ~0.2-0.4, white noise near 1.0.
+
+    Returns a dict (not OptionalMetric): the three numbers plus a ``verdict``, because a single boolean
+    would hide which of them failed.
+    """
+    from ..audio.f0 import estimate_f0
+
+    if not audio:
+        return {"available": False, "reason": "no audio"}
+    voiced, pitches, flat = [], [], []
+    for wav in audio:
+        x = wav.reshape(-1).float()
+        if x.numel() < 4096:
+            continue
+        f0 = estimate_f0(x, sample_rate)[0]
+        voiced.append(float((f0 > 0).float().mean()))
+        track = f0[f0 > 0]
+        pitches.append(float(track.median()) if track.numel() else 0.0)
+        if x.numel() >= 2048:
+            spectrum = torch.stft(
+                x.reshape(1, -1), n_fft=1024, hop_length=256,
+                window=torch.hann_window(1024), return_complex=True,
+            ).abs().clamp_min(1e-8)
+            geometric = spectrum.log().mean(dim=1).exp()
+            flat.append(float((geometric / spectrum.mean(dim=1)).mean()))
+    if not voiced:
+        return {"available": False, "reason": "audio too short to analyse"}
+
+    def median(values):
+        ordered = sorted(values)
+        return ordered[len(ordered) // 2]
+
+    report: Dict[str, object] = {
+        "available": True,
+        "voiced_fraction": sum(voiced) / len(voiced),
+        "median_f0_hz": median(pitches),
+        "spectral_flatness": sum(flat) / len(flat) if flat else None,
+        "detail": "voiced fraction, median F0 and spectral flatness via the YIN tracker",
+    }
+    if reference:
+        ref = speechlikeness(reference, sample_rate)
+        report["reference"] = ref
+    # speech-like: a normal voiced fraction, a pitch inside the human range, a non-flat spectrum
+    report["speech_like"] = bool(
+        0.35 <= report["voiced_fraction"] <= 0.9
+        and 70.0 <= report["median_f0_hz"] <= 350.0
+        and (report["spectral_flatness"] is None or report["spectral_flatness"] < 0.5)
+    )
+    return report
+
+
 def dnsmos_score(audio: Sequence[torch.Tensor], sample_rate: int = 24000) -> OptionalMetric:
     """DNSMOS P.835 (pip install speechmos) -- reference-free naturalness.
 

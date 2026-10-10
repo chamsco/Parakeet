@@ -41,6 +41,8 @@ def main() -> int:
     ap.add_argument("--manifest", default="val.jsonl")
     ap.add_argument("--limit", type=int, default=8)
     ap.add_argument("--steps", type=int, default=4, help="sampler NFE")
+    ap.add_argument("--reference", action="store_true",
+                        help="condition on a partner mel from the same voice: the flow is trained that way")
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
 
@@ -62,6 +64,7 @@ def main() -> int:
             "--prose-only",
             "--limit", str(args.limit),
             "--steps", str(args.steps),
+                        *(["--reference"] if args.reference else []),
             "--out", str(report.parent / f"eval_{report.stem}"),
         ]
         done = subprocess.run(command, cwd=str(ROOT), capture_output=True, text=True)

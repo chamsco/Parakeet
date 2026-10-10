@@ -188,6 +188,15 @@ CLAIMS: List[Dict[str, Any]] = [
         "fmt": "{value} checkpoints",
     },
     {
+        "id": "speechlikeness_gate",
+        "statement": "is it **speech at all**? The teacher passes the gate (voiced fraction, human pitch range, non-flat spectrum) while **both trained paths fail it** -- Tiny is a tonal buzz, the flow is unvoiced noise -- which WER 1.0 alone could not distinguish from wrong words",
+        "report": ["runs/eval_flow1600_likeness/report.json"],
+        "field": "speechlikeness.teacher.voiced_fraction",
+        "op": ">=",
+        "target": 0.5,
+        "fmt": "teacher voiced fraction {value:.2f} (students: see the report)",
+    },
+    {
         "id": "acoustic_path_works",
         "statement": "the **acoustic path works**: the autoencoder round trip of a real teacher utterance transcribes at WER 0.0 while the same checkpoint's text-to-speech is WER 1.0 -- so the text side is the whole problem, not the decoder",
         "report": ["docs/demo/index.json"],

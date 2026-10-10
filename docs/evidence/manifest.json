@@ -1,7 +1,7 @@
 {
-  "generated": "2026-10-10T05:12:52",
+  "generated": "2026-10-10T06:29:18",
   "git": {
-    "rev": "5bf26ab",
+    "rev": "d0b9310",
     "dirty": true
   },
   "note": "Committed snapshots of the reports the model card cites.  Refresh with `python scripts/model_card.py --refresh-evidence` after re-running the demos; the hashes make a stale bundle visible.",
@@ -123,7 +123,14 @@
       "status": "copied",
       "source": "runs/flow_trajectory.json",
       "evidence": "docs/evidence/flow_trajectory.json",
-      "sha256": "1578cb77bbb89dc6152ac7fe375062b1fdbbb2d0a6731d49286f0e255768442b"
+      "sha256": "2877c85981e899fffe5869b572ebfe461e0445efd97e954e76a81c4687f90353"
+    },
+    {
+      "claim": "speechlikeness_gate",
+      "status": "copied",
+      "source": "runs/eval_flow1600_likeness/report.json",
+      "evidence": "docs/evidence/speechlikeness_gate.json",
+      "sha256": "420fc7c496a0e3b38b0842f03ea4546b7b8b733e05f517f669c25e283376e381"
     },
     {
       "claim": "acoustic_path_works",

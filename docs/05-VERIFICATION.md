@@ -1824,7 +1824,50 @@ their own targeted internal and neither moved the correlation past 0.2, while th
 time. The flow run was therefore resumed from step 800 to **6 000 steps**, and the Tiny regression path
 is not where the next three hours go.
 
-## 40. Smoke test output (measured)
+## 40. Neither path produces speech, and the proxies could not say so (round 35)
+
+Every model in this project reaches WER 1.000 while its envelope proxy looks healthy — the Tiny path at
+a log-mel cosine of 0.95, the flow at 0.90. WER alone cannot distinguish *wrong words*, which more
+training can fix, from *not speech*, which it cannot. Measured for both, against the teacher's own audio:
+
+| audio | voiced fraction | median F0 | spectral flatness | speech-like |
+|---|---|---|---|---|
+| **teacher** (control) | 0.67–0.72 | 193–202 Hz | 0.285–0.300 | **yes** |
+| Tiny regression (calibrated, 3 000 steps) | **0.96** | 209 Hz (or 491 Hz) | 0.318 | **no** |
+| flow (step 1 600, NFE 4) | **0.07** | 96 Hz | **0.547** | **no** |
+
+Two different failures, both non-speech: the Tiny path emits a **near-silent tonal buzz** (98 % of frames
+"voiced" at one pitch — 0.012 amplitude against the teacher's 0.49 in one sample, pinned at the pitch
+tracker's 500 Hz ceiling in another), and the flow emits **loud unvoiced noise** at the right length and
+(after level matching) the right envelope. Neither is speech, and the mel proxy rewarded both. That is
+the missing acceptance criterion, and it is now a first-class metric:
+
+* `parakeet.eval.metrics.speechlikeness()` reports voiced fraction, median F0 and spectral flatness with a
+  `speech_like` verdict that rejects both a buzz and noise — a buzz has a pitch pinned at one frequency,
+  noise is flat. `real_eval.py` prints it for the student **and the teacher** and records it in the
+  report; `tests/test_speechlikeness.py` pins the three cases (harmonic tone, white noise, ceiling buzz).
+
+### Two more measurements from the same round
+
+* **the level was distorting every number.** The flow's raw waveforms peaked at up to **55× full scale**
+  (the autoencoder's magnitude head exponentiates, `exp(log_mag)`, clamped only at 8) while the
+  references it is compared against are peak-normalised — so WER and DNSMOS were reading clipping as much
+  as the model. `Synthesizer.synthesize` now peak-normalises (recording the gain) and `real_eval` reports
+  the correction. With level matching, the flow's mel cosine rises from 0.75–0.79 to **0.90**.
+* **the sampled latents are in-distribution**, so the gain is the decoder's, not the sampler's: std
+  0.788–0.791 against the teacher's 1.083, absmax 3.3–3.5 against 5.48. Two candidate levers were ruled
+  out by measurement rather than argument: guidance (`cfg_scale` 1.0/1.5/3.0 leaves the latent std at
+  0.788/0.791/0.789) and reference conditioning (supplying a partner mel of the same voice does change
+  the waveform — verified — and changes the result not at all: WER 1.000 either way).
+
+### Where this leaves the objective
+
+The acoustic path is proven perfect (round-trip WER **0.0**) and the text→acoustic stage is now known to
+produce *non-speech* by two different routes with two different signatures. That is a far more useful
+statement than "WER 1.0": it says what to look at next (voicing and formant structure, not more steps of
+envelope matching) and it stops the project being fooled by its own proxies again.
+
+## 41. Smoke test output (measured)
 
 ```
 parakeet-tiny [tiny] sr=24000 mel=80@93.8Hz latent=24 compress=1/6 voice=constant

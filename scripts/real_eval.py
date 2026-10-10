@@ -38,7 +38,13 @@ if str(ROOT) not in sys.path:
 
 from parakeet.audio.mel import MelSpectrogram  # noqa: E402
 from parakeet.config import load_config  # noqa: E402
-from parakeet.eval.metrics import dnsmos_score, utmos, whisper_wer  # noqa: E402
+from parakeet.eval.metrics import (  # noqa: E402
+    OptionalMetric,
+    dnsmos_score,
+    speechlikeness,
+    utmos,
+    whisper_wer,
+)
 from parakeet.inference import Synthesizer, phase_coherence, write_wav  # noqa: E402
 from parakeet.models import build_model  # noqa: E402
 
@@ -237,6 +243,20 @@ def main() -> int:
     print(f"  length: generated {generated_seconds:.1f}s vs reference {reference_seconds:.1f}s "
           f"(ratio {length_ratio:.2f})")
 
+    _banner("is it speech at all?  (voiced fraction, pitch, spectral flatness vs the teacher)")
+    likeness = speechlikeness(generated, cfg.audio.sample_rate, reference=references)
+    likeness_teacher = likeness.pop("reference", {})
+    print(f"  student: voiced {likeness['voiced_fraction']:.2f} | f0 {likeness['median_f0_hz']:.0f} Hz "
+          f"| flatness {likeness['spectral_flatness']:.3f} | speech_like "
+          f"{'YES' if likeness['speech_like'] else 'NO'}")
+    if likeness_teacher:
+        print(f"  teacher: voiced {likeness_teacher['voiced_fraction']:.2f} | "
+              f"f0 {likeness_teacher['median_f0_hz']:.0f} Hz | "
+              f"flatness {likeness_teacher['spectral_flatness']:.3f} | speech_like "
+              f"{'YES' if likeness_teacher['speech_like'] else 'NO'}  <- control")
+        print("  (a generator can match the mel envelope while producing a buzz or noise; this is the "
+              "gate that cannot be gamed)")
+
     _banner("perceptual naturalness: DNSMOS (available) and UTMOS (documented, not installable here)")
     student_dns = dnsmos_score(generated, sample_rate=cfg.audio.sample_rate)
     teacher_dns = dnsmos_score(references, sample_rate=cfg.audio.sample_rate)
@@ -293,6 +313,7 @@ def main() -> int:
                       "generated_seconds": generated_seconds,
                       "reference_seconds": reference_seconds,
                       "length_ratio": length_ratio},
+        "speechlikeness": {**likeness, "teacher": likeness_teacher},
         "naturalness": {
             "metric": "dnsmos p835",
             "student": student_dns.value,
