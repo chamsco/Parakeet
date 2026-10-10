@@ -206,6 +206,7 @@ def main() -> int:
     # ~18 000 steps merely to reach the right magnitude -- and the earlier runs were 1 600-2 400 steps,
     # which is why the latent was learned in the mean and not in its variation (round 30: flattened
     # cosine 0.805, per-dimension correlation 0.126).  Only the head's last linear layer is touched.
+    calibration: dict = {}
     if not args.dry_run and args.cache and args.stage in {"distill-audio", "distill-text"}:
         try:
             probe = next(iter([source()])) if callable(source) else None
@@ -214,6 +215,7 @@ def main() -> int:
 
                 measured = calibrate_head_scale(model, probe)
                 if measured:
+                    calibration = {f"head_calibration_{k}": v for k, v in measured.items()}
                     print(f"[train] latent head scale: predicted std {measured['predicted_std']:.4f} "
                           f"-> target {measured['target_std']:.4f} (x{measured['ratio']:.2f}); "
                           f"after calibration {measured.get('predicted_std_after', float('nan')):.4f}")
@@ -235,7 +237,7 @@ def main() -> int:
         out_dir=cfg.train.out_dir,
         device=args.device,
         log_fn=log_fn,
-        run_metadata=_cache_provenance(args.cache),
+        run_metadata={**_cache_provenance(args.cache), **calibration},
         resume_from=args.resume,
     )
     Path(cfg.train.out_dir).mkdir(parents=True, exist_ok=True)

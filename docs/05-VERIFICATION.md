@@ -1784,7 +1784,47 @@ phase-aligned envelope, which is why it scored 0.95 while being unintelligible; 
 expected nor required. WER and DNSMOS are the metrics that mean something here, and both are still at
 their floor — the run continues to 4 000 steps.
 
-## 38. Smoke test output (measured)
+## 39. The head calibration did not pay off, and the throughput changed (round 34)
+
+Round 33 measured the Tiny path's latent head starting with an output standard deviation of 0.25–0.29
+against a target of ~1.03 (3.6× too small) and argued that AdamW's ~lr-per-step travel meant ~18 000
+steps to close it. The fix was applied, and a 3 000-step run made with **every** fix in place
+(`latent_rate` inferred, `audio_aux 1.0`, `signal_latent_contrast 1.0`, `length_init 6.5`, warmup
+aligned to the run). Result, on the corpus's **own training prompts**, with a valid control:
+
+| run | steps | per-dim correlation (train) | latent cosine | WER, training prompts | control |
+|---|---|---|---|---|---|
+| zero-shot (round 30 baseline) | 1 600 | 0.126 | 0.805 | 1.000 | 0.082 |
+| contrast objective (round 30b) | 2 400 | **0.200** | 0.839 | 0.994 | 0.082 |
+| **calibrated** (round 34) | 3 000 | 0.145 | 0.828 | **1.000** | 0.082 |
+
+**The calibration did not move the quantity it was built for.** The output *scale* was fixed exactly
+(it starts at 1.031 instead of 0.287) and the run's rendered/target frame ratio improved to **1.027**
+from 0.77 — but the per-dimension correlation, which measures whether the right latent is produced for
+each token, is unchanged within noise, and the model still cannot render its own training text. Fixing
+where the head *starts* is necessary and insufficient: the structure is the expensive part, and a
+one-shot regression does not learn it in 3 000 steps.
+
+Two incidental findings worth keeping:
+
+* **the audio stage is ~4.5× faster than earlier rounds measured**: 500 steps per ~4 minutes
+  (**0.5 s/step** at batch 4) against the 2.25 s/step the round-30 runs recorded, and
+  `nonfinite_steps: 0` confirms the speedup is not skipped updates. The likely cause is that earlier
+  runs shared the CPU with my own concurrent evaluations — a reminder that a timing measured under
+  contention is not a property of the code.
+* the training log's rendered/target ratio (1.027) and the fit diagnosis's duration ratio (0.73, first
+  24 cache items) disagree because they measure different subsets. Both are reported rather than one.
+
+### What it means for the plan
+
+At 0.5 s/step, 20 000 steps is ~3 hours instead of ~12, so "undertrained" is finally testable at scale.
+But the evidence points elsewhere now: two different fixes to the one-shot regression each improved
+their own targeted internal and neither moved the correlation past 0.2, while the flow — which
+*samples* the frame latents instead of regressing them — already produces full-length audio at 30× real
+time. The flow run was therefore resumed from step 800 to **6 000 steps**, and the Tiny regression path
+is not where the next three hours go.
+
+## 40. Smoke test output (measured)
 
 ```
 parakeet-tiny [tiny] sr=24000 mel=80@93.8Hz latent=24 compress=1/6 voice=constant
@@ -1835,7 +1875,7 @@ overhead — it is not a valid throughput measurement until the model predicts s
 learning demo (§2) trains properly but on 15 seconds of *synthetic* audio, so it demonstrates that
 the machinery learns, not that the model is good.
 
-## 40. Deliberate engineering checks worth calling out
+## 42. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
@@ -1871,7 +1911,7 @@ the machinery learns, not that the model is good.
   `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
   else, rather than surfacing a cryptic `torch.stft` message.
 
-## 41. Environment notes
+## 43. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
