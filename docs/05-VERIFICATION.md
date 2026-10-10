@@ -1946,10 +1946,21 @@ against a real one and decodes them through the same frozen decoder:
 | WER | **0.000** | **0.000** | **0.000** | **1.000** | 1.000 | 1.000 | 1.000 |
 
 **The recogniser reads the sentence perfectly at rho ≥ 0.75 and fails at 0.60.** That is the first
-quantified target this project has had for the text side, and it reframes the work: the small text side
-reaches 0.375 (train) / 0.245 (validation) after 9 000 steps of pure regression, with growth decelerating
-(+0.06 then +0.03 per 3 000 steps), so *more steps alone will not get there* — which is what makes the
-capacity question decisive rather than optional.
+quantified target this project has had for the text side, and it reframes the work.
+
+The small text side (4.6M trainable), trained *purely* on the regression with no decoder in the loop,
+runs out of slope well before it:
+
+| step | train correlation | validation correlation | duration ratio | F0 MAE |
+|---|---|---|---|---|
+| 3 000 | 0.285 | 0.118 | 0.767 | 0.108 |
+| 6 000 | 0.343 | 0.212 | 0.802 | 0.100 |
+| 9 000 | 0.375 | 0.245 | 0.814 | 0.099 |
+| 12 000 | **0.387** | **0.251** | 0.817 | 0.098 |
+
+The increments per 3 000 steps are +0.058, +0.032, +0.012: it is **saturating at ~0.39 train / 0.25
+validation — 52 % and 33 % of the target**. "More steps" is therefore ruled out as the answer, which is
+what makes capacity the decisive question rather than an optional one.
 
 ### My speech-likeness gate was rejecting good audio
 
