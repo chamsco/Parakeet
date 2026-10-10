@@ -149,6 +149,12 @@ class FlowConfig:
     #: bit-identical.
     use_plan: bool = False
     plan_weight: float = 1.0
+    #: how the plan reaches the velocity field.  ``False`` (default) appends it to the memory and lets the
+    #: field use it or ignore it; ``True`` makes the flow model the *residual* ``x1 - upsample(plan)``, so
+    #: the target cannot be satisfied by the marginal distribution alone.  Both were measured on the same
+    #: task and came out within noise of each other and of no plan at all (rho 0.2495 / 0.2752 / 0.2511),
+    #: so the default is the one whose worst case is 'no better than plain' rather than 'corrupted target'.
+    plan_residual: bool = False
     #: inference
     nfe: int = 32
     distilled_nfe: int = 4

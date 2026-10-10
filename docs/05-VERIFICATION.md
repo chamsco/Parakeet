@@ -2483,7 +2483,47 @@ Two consequences worth keeping:
 * `scripts/latent_autocorrelation.py` keeps the distinction checkable, and its docstring records the
   refuted hypothesis rather than quietly dropping it.
 
-## 57. Deliberate engineering checks worth calling out
+## 57. The residual form: principled, tested, and no better — which also questions the +10 % (round 50)
+
+Round 49's diagnosis said p(latent | text) is the missing factor. The principled answer is to make the plan
+*necessary*: instead of appending it as extra conditioning, have the field model the **residual**
+`x1 − upsample(plan)`, so the target depends on the plan and the plan depends on the text — the objective
+can no longer be satisfied by the marginal distribution alone. Implemented for training, one-shot synthesis
+and blockwise streaming (where the plan is spread over the whole utterance once and sliced per block, so
+streaming cannot silently disagree with offline).
+
+Then measured, on the same task and budget as the previous two:
+
+| 2 utterances, 3 000 steps, lr 1e-3 | flow loss | sampled-latent ρ |
+|---|---|---|
+| no plan | 0.064 | 0.2495 |
+| advisory plan (memory token) | 0.064 | 0.2752 |
+| **residual plan** | 0.082 | **0.2511** |
+
+**All three are indistinguishable.** The residual form's loss is *lower* in early training purely because a
+residual is a smaller target — not evidence of anything (the round 43 lesson, again).
+
+The important consequence is what this does to the earlier result: the advisory plan's "+10 %" (0.2752 vs
+0.2495) is **the same size as the spread between three variants that should differ**, on a task of two
+utterances. The honest reading is that **the plan is not shown to help**, not that it helps by 10 %, and the
+earlier claim is corrected here rather than left standing.
+
+### A near-miss worth recording
+
+Gating the residual behind `flow.plan_residual` was done in three places (loss, one-shot, streaming). A
+failed edit left the two synthesis paths ungated, so in advisory mode the code would have *added a plan the
+model never learned to subtract* — a training/inference mismatch that no metric would explain, and that the
+test suite would have passed because the only synthesis test requested residual mode. It was caught by
+reading the diff rather than by a red test; there is now a test that advisory mode does not add the plan
+back, since that is exactly the kind of silent corruption that costs days.
+
+### What was chosen and why
+
+Both variants are exposed (`flow.plan_residual`, default **false**). With no measurable difference, the
+default is the **advisory** form, whose worst case is "no better than plain" rather than "the target is
+corrupted while the plan is still bad". The long run was restarted on it.
+
+## 58. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
@@ -2519,7 +2559,7 @@ Two consequences worth keeping:
   `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
   else, rather than surfacing a cryptic `torch.stft` message.
 
-## 58. Environment notes
+## 59. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).

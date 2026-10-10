@@ -239,6 +239,19 @@ class ParakeetFlow(nn.Module):
             raise RuntimeError("plan_from_tokens called without cfg.flow.use_plan")
         return self.plan_head(text_mem)
 
+    @staticmethod
+    def upsample_plan(plan: torch.Tensor, frames: int) -> torch.Tensor:
+        """Spread a token-rate plan to frame rate: ``(B, S, W) -> (B, W, frames)``.
+
+        Nearest-neighbour and *uniform*, deliberately: training and inference must spread a plan over frames
+        the same way or the residual the flow learns would not be the residual it is asked to add back. Token
+        durations are available at training time but not at inference (they are predicted), so uniform
+        spacing is the version that can be identical in both.
+        """
+        if frames <= 0:
+            return plan.transpose(1, 2)[..., :0]
+        index = torch.linspace(0, plan.shape[1] - 1, frames, device=plan.device).round().long()
+        return plan.transpose(1, 2)[:, :, index]
     # ------------------------------------------------------------------ conditioning
     def conditions(
         self,
@@ -356,6 +369,18 @@ class ParakeetFlow(nn.Module):
         memory, memory_mask, _ = self.conditions(
             ids, mask, ref_mel, ref_mask, speaker_emb, voice
         )
+        # Coarse-to-fine as a *residual* rather than as an extra conditioning token.  Round 49 measured the
+        # failure precisely: p(latent) is learned and p(latent | text) is not, because a field can fit the
+        # marginal distribution on its own.  Here the flow is asked for ``x1 - upsample(plan)``, so its
+        # target depends on the plan, and the plan depends on the text: the objective can no longer be
+        # satisfied by modelling the marginal at all.
+        plan = None
+        if self.use_plan and latent_token is not None:
+            plan = self.plan_from_tokens(self.text(ids, mask))
+            if getattr(self.cfg.flow, "plan_residual", False):
+                plan_up = self.upsample_plan(plan, t_latent)
+                # folding is a reshape, hence linear, so subtracting at compressed resolution is equivalent
+                x1c = x1c - fold_time(plan_up, self.cfg.flow.compress)
         x0 = torch.randn_like(x1c)
         t = sample_timesteps(
             x1c.shape[0], x1c.device, self.cfg.flow.sigma_min,
@@ -373,7 +398,8 @@ class ParakeetFlow(nn.Module):
         if self.use_plan and latent_token is not None:
             # supervise the plan against the cached token latents: the conditioning token has to carry a
             # *correct* acoustic plan, not merely exist
-            plan = self.plan_from_tokens(self.text(ids, mask))
+            if plan is None:
+                plan = self.plan_from_tokens(self.text(ids, mask))
             width = min(plan.shape[-1], latent_token.shape[-1])
             target = latent_token[..., :width].to(plan.dtype)
             if target.shape[1] == plan.shape[1]:
@@ -435,6 +461,13 @@ class ParakeetFlow(nn.Module):
             self.vf, memory, memory_mask, shape, steps=steps, device=ids.device, cfg_scale=cfg_scale
         )
         latent = unfold_time(x1c, self.cfg.flow.compress, t_out=n_latent_frames)
+        if self.use_plan and getattr(self.cfg.flow, "plan_residual", False):
+            # add the coarse plan back: only in residual mode did the field predict `x1 - plan`.  In
+            # advisory mode the plan was merely extra conditioning, so adding it here would corrupt the
+            # output -- and that is exactly the kind of mismatch between training and inference that makes
+            # a model look broken for reasons no metric explains.
+            plan = self.plan_from_tokens(self.text(ids, mask))
+            latent = latent + self.upsample_plan(plan, latent.shape[-1])
         latent = self.latent_norm.denormalize(latent)
         return self.autoencoder.decode(latent)
 
@@ -489,6 +522,15 @@ class ParakeetFlow(nn.Module):
             self.autoencoder, chunk_frames=voice_stream_chunk or block_frames
         )
         remaining = int(n_latent_frames)
+        # the plan is spread over the whole utterance once, then sliced per block: block *k* must get the
+        # same plan frames it would have got from the one-shot path, or streaming would silently disagree
+        # with offline synthesis
+        stream_plan = None
+        if self.use_plan and getattr(self.cfg.flow, "plan_residual", False):
+            stream_plan = self.upsample_plan(
+                self.plan_from_tokens(text_mem), int(n_latent_frames)
+            )
+        stream_offset = 0
         for _start, _end, block in iter_blockwise_sample(
             self.vf,
             memory,
@@ -505,6 +547,10 @@ class ParakeetFlow(nn.Module):
             if latent.shape[-1] > remaining:
                 latent = latent[..., :remaining]
             remaining -= latent.shape[-1]
+            if stream_plan is not None:
+                piece = stream_plan[..., stream_offset : stream_offset + latent.shape[-1]]
+                stream_offset += latent.shape[-1]
+                latent = latent + piece
             latent = self.latent_norm.denormalize(latent)
             wav = vocoder.push(latent)
             if wav.shape[-1]:

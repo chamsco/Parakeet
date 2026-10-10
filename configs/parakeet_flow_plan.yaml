@@ -67,6 +67,12 @@ flow:
   cfg_scale: 1.5
   use_plan: true        # the only change from parakeet_flow.yaml
   plan_weight: 1.0
+  # `false` = advisory: the plan is extra conditioning the field may use or ignore.
+  # `true`  = residual: the field models `x1 - upsample(plan)`, so the target depends on the plan.
+  # Measured on the same 2-utterance/3000-step task: no plan 0.2495, advisory 0.2752, residual 0.2511 --
+  # indistinguishable.  The default is the advisory form because its worst case is "no better than plain"
+  # rather than "the target is corrupted while the plan is still bad".
+  plan_residual: false
 
 train:
   batch_size: 8
