@@ -33,6 +33,77 @@ def step_of(path: Path) -> int:
     return 10**9  # `flow_last.pt`: the final weights, sorts last
 
 
+def sampled_latent_correlation(checkpoint: Path, config: str, cache: Path, items: int = 6):
+    """Per-dim correlation between the flow's *sampled* latents and the teacher's, for the same text.
+
+    Round 37 calibrated what this number must be: a decoded latent is read perfectly at rho >= 0.75 and
+    fails at 0.60.  Correlating samples is therefore a *predictive* metric for the flow -- it says whether
+    intelligibility is reachable before any audio exists, and unlike the mel-envelope proxy it cannot be
+    satisfied by noise.  Runs in a subprocess so a checkpoint that cannot be sampled does not take the
+    report down with it.
+    """
+    code = f'''
+import sys
+sys.path.insert(0, r"{ROOT}")
+import torch
+from pathlib import Path
+from parakeet.config import load_config
+from parakeet.data.dataset import LatentShardDataset
+from parakeet.models import build_model
+from parakeet.models.flow import consistency_sample, unfold_time
+from parakeet.train.common import apply_checkpoint_geometry, load_latent_norm_from_cache
+
+cfg = load_config(r"{config}")
+payload = torch.load(r"{checkpoint}", map_location="cpu", weights_only=False)
+state = (payload.get("ema") or {{}}).get("shadow") or payload["model"]
+applied = apply_checkpoint_geometry(cfg, state)
+model = build_model(cfg)
+current = model.state_dict()
+model.load_state_dict({{k: v for k, v in state.items()
+                       if k in current and tuple(current[k].shape) == tuple(v.shape)}}, strict=False)
+load_latent_norm_from_cache(model, r"{cache}")
+model.eval()
+dataset = LatentShardDataset(r"{cache}")
+scores = []
+with torch.no_grad():
+    for index in range(min({items}, len(dataset))):
+        item = dataset[index]
+        ids = item["ids"][None]
+        mask = item.get("text_mask")
+        mask = mask[None] if mask is not None else None
+        voice = item.get("voice")
+        voice = voice.reshape(1) if voice is not None else None
+        memory, memory_mask, cond = model.conditions(ids, mask, voice=voice)
+        frames = int(model.predict_latent_frames(model.text(ids, mask), mask, cond).item())
+        tc = model.compressed_frames(frames)
+        x1c = consistency_sample(model.vf, memory, memory_mask,
+                                 (1, cfg.flow.latent_dim * cfg.flow.compress, tc),
+                                 steps=4, device=torch.device("cpu"), cfg_scale=cfg.flow.cfg_scale)
+        sampled = unfold_time(x1c, cfg.flow.compress, t_out=frames)
+        target = item["latent"][None]
+        length = min(sampled.shape[-1], target.shape[-1])
+        per_dim = []
+        for dim in range(sampled.shape[1]):
+            x, y = sampled[0, dim, :length], target[0, dim, :length]
+            if float(x.std()) < 1e-6 or float(y.std()) < 1e-6:
+                continue
+            per_dim.append(float(torch.corrcoef(torch.stack([x, y]))[0, 1]))
+        if per_dim:
+            scores.append(sum(per_dim) / len(per_dim))
+print("RESULT", sum(scores) / max(1, len(scores)) if scores else "nan")
+'''
+    done = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True,
+                          timeout=900, cwd=str(ROOT))
+    for line in (done.stdout or "").splitlines():
+        if line.startswith("RESULT"):
+            try:
+                value = float(line.split()[1])
+                return value if value == value else None
+            except (IndexError, ValueError):
+                return None
+    return None
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Flow checkpoint trajectory")
     ap.add_argument("--run", default="runs/flow_v2")
@@ -44,6 +115,9 @@ def main() -> int:
     ap.add_argument("--reference", action="store_true",
                         help="condition on a partner mel from the same voice: the flow is trained that way")
     ap.add_argument("--out", default=None)
+    ap.add_argument("--latent-cache", default=None,
+                    help="cache whose teacher latents to correlate the samples against; rho >= 0.75 is the"
+                         " measured threshold for intelligibility (round 37)")
     args = ap.parse_args()
 
     checkpoints = sorted(Path(args.run).glob("flow_*.pt"), key=step_of)
@@ -73,6 +147,13 @@ def main() -> int:
             print(f"  step {step_of(checkpoint):>6}: evaluation failed")
             continue
         payload = json.loads(payload_path.read_text(encoding="utf-8"))
+        latent_correlation = None
+        if args.latent_cache:
+            # the calibrated metric: rho >= 0.75 is what intelligibility needs (round 37), and unlike the
+            # mel proxy it cannot be satisfied by noise
+            latent_correlation = sampled_latent_correlation(
+                checkpoint, args.config, Path(args.latent_cache)
+            )
         row = {
             "step": step_of(checkpoint),
             "length_ratio": payload["synthesis"].get("length_ratio"),
@@ -81,11 +162,13 @@ def main() -> int:
             "wer": payload["wer"]["student"],
             "wer_control": payload["wer"]["teacher"],
             "dnsmos": payload["naturalness"]["student"],
+            "sampled_latent_correlation": latent_correlation,
         }
         rows.append(row)
         print(f"  step {row['step']:>6}: length {row['length_ratio']:.2f} | "
               f"cosine {row['log_mel_cosine'] if row['log_mel_cosine'] is None else round(row['log_mel_cosine'], 4)} | "
-              f"WER {row['wer']:.3f} (control {row['wer_control']:.3f}) | "
+              f"latent rho {latent_correlation if latent_correlation is None else round(latent_correlation, 3)} "
+              f"(target 0.75) | WER {row['wer']:.3f} (control {row['wer_control']:.3f}) | "
               f"DNSMOS {row['dnsmos']:.3f} | {row['x_realtime']:.0f}x real time")
 
     if not rows:

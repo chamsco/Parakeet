@@ -1,0 +1,49 @@
+{
+  "run": "runs\\flow_v2",
+  "sampler_nfe": 4,
+  "utterances": 4,
+  "checkpoints": 3,
+  "rows": [
+    {
+      "step": 400,
+      "length_ratio": 1.4059945078339537,
+      "log_mel_cosine": 0.901764765381813,
+      "x_realtime": 30.657027064635205,
+      "wer": 1.0,
+      "wer_control": 0.27631578947368424,
+      "dnsmos": 1.2724066597528605,
+      "sampled_latent_correlation": 0.004331675152368714
+    },
+    {
+      "step": 800,
+      "length_ratio": 1.4614942910379256,
+      "log_mel_cosine": 0.9024042338132858,
+      "x_realtime": 30.42217368484567,
+      "wer": 1.0,
+      "wer_control": 0.07894736842105263,
+      "dnsmos": 1.2084518413161416,
+      "sampled_latent_correlation": -0.0058549100552530335
+    },
+    {
+      "step": 1600,
+      "length_ratio": 1.5194940644763104,
+      "log_mel_cosine": 0.8932197093963623,
+      "x_realtime": 29.503266420981387,
+      "wer": 1.0,
+      "wer_control": 0.07894736842105263,
+      "dnsmos": 1.0642305062955202,
+      "sampled_latent_correlation": 0.018521103044299204
+    }
+  ],
+  "best_by_wer": {
+    "step": 400,
+    "length_ratio": 1.4059945078339537,
+    "log_mel_cosine": 0.901764765381813,
+    "x_realtime": 30.657027064635205,
+    "wer": 1.0,
+    "wer_control": 0.27631578947368424,
+    "dnsmos": 1.2724066597528605,
+    "sampled_latent_correlation": 0.004331675152368714
+  },
+  "verdict": "still at chance on every checkpoint: the flow's length is right, its acoustic proxy is well above zero, and it is still not intelligible"
+}

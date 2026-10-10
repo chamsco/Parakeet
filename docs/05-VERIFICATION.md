@@ -2039,7 +2039,28 @@ exactly.
 `text.n_layers`). `train.common.apply_checkpoint_geometry()` now reads all four off the checkpoint's own
 tensors and configures the config before building, and it prints what it applied.
 
-## 45. Smoke test output (measured)
+## 45. The flow's samples are uncorrelated with the target — and the new metric says so (round 39)
+
+Round 37 calibrated a predictive metric (decoded latents are read perfectly at ρ ≥ 0.75, fail at 0.60).
+Applying it to the flow's *sampled* latents — the per-dimension correlation against the teacher's latents
+for the same text — gives the sharpest result of the project so far. The old (identity-space) flow:
+
+| checkpoint | length ratio | **log-mel cosine** | **sampled latent ρ** | WER (control) |
+|---|---|---|---|---|
+| step 400 | 1.41 | 0.9018 | **0.004** | 1.000 (0.276) |
+| step 800 | 1.46 | 0.9024 | **−0.006** | 1.000 (0.079) |
+| step 1 600 | 1.52 | 0.8932 | **0.019** | 1.000 (0.079) |
+
+**ρ ≈ 0 with a mel cosine of 0.90.** The flow learned the *marginal* distribution — which is why its
+latents looked in-distribution (std 0.79 against the teacher's 1.08) and its envelope plausible — and
+nothing at all about which latent belongs to which text. It has been sampling from the prior.
+
+That is exactly the failure the audio proxy cannot see and the calibrated metric catches: ρ ≈ 0 predicts
+the measured WER of 1.000, while the mel cosine said 0.90. From here the flow's progress is measured by
+**ρ**, with 0.75 as the target, and `flow_trajectory.py` reports it for every checkpoint via
+`--latent-cache`.
+
+## 46. Smoke test output (measured)
 
 ```
 parakeet-tiny [tiny] sr=24000 mel=80@93.8Hz latent=24 compress=1/6 voice=constant
@@ -2090,7 +2111,7 @@ overhead — it is not a valid throughput measurement until the model predicts s
 learning demo (§2) trains properly but on 15 seconds of *synthetic* audio, so it demonstrates that
 the machinery learns, not that the model is good.
 
-## 46. Deliberate engineering checks worth calling out
+## 47. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
@@ -2126,7 +2147,7 @@ the machinery learns, not that the model is good.
   `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
   else, rather than surfacing a cryptic `torch.stft` message.
 
-## 47. Environment notes
+## 48. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
