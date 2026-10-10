@@ -10,6 +10,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from ..config import AudioConfig
+from .istft import device_supports_complex, real_magnitude_spectrogram
 
 
 def hz_to_mel(freq: torch.Tensor | float) -> torch.Tensor:
@@ -89,10 +90,33 @@ class MelSpectrogram(nn.Module):
             return_complex=True,
         )
 
+    def magnitude(self, wav: torch.Tensor) -> torch.Tensor:
+        """``(B, N) -> (B, F, T)`` magnitude spectrogram, **without a complex dtype**.
+
+        `torch.stft` returns a complex tensor, which DirectML cannot hold, and this magnitude is what
+        the mel loss and the multi-resolution spectral loss are built on.  On a device without complex
+        support the DFT is a real matrix multiply against precomputed cosine/sine bases -- the same
+        arithmetic, matching `torch.stft`'s padding/windowing/framing, so the losses can run on the
+        same device as the model and one autograd graph never crosses devices (DirectML's engine
+        asserts on that).  `tests/test_real_istft.py` asserts agreement with `torch.stft`.
+        """
+        if wav.dim() == 1:
+            wav = wav.unsqueeze(0)
+        elif wav.dim() == 3 and wav.shape[1] == 1:
+            wav = wav[:, 0, :]
+        if device_supports_complex(wav.device):
+            return self.stft(wav).abs()
+        return real_magnitude_spectrogram(
+            wav, self.cfg.n_fft, self.cfg.hop_length, self.cfg.win_length, self.window,
+            center=self.center,
+        )
+
     def forward(self, wav: torch.Tensor) -> torch.Tensor:
         """``(B, N) -> (B, n_mels, T)`` linear-mel."""
-        spec = self.stft(wav)
-        mag = spec.abs()
+        if device_supports_complex(wav.device):
+            mag = self.stft(wav).abs()
+        else:
+            mag = self.magnitude(wav)
         if self.power != 1.0:
             mag = mag.pow(self.power)
         return torch.matmul(self.fb, mag)

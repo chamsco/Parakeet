@@ -21,6 +21,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from ..audio.istft import device_supports_complex, real_magnitude_spectrogram
 from ..audio.mel import MelSpectrogram
 from ..models.duration import durations_to_normalized
 
@@ -47,12 +48,21 @@ class MultiResolutionSTFTLoss(nn.Module):
             self.register_buffer(f"win_{n}", torch.hann_window(w), persistent=False)
 
     def _stft(self, x: torch.Tensor, n_fft: int, hop: int, win: int) -> torch.Tensor:
+        """Complex spectrogram where the device supports it, magnitude otherwise.
+
+        The caller only ever uses the magnitude, so on a device with no complex dtype (DirectML) this
+        returns the real magnitude and the loss is unchanged -- which is what lets the whole audio
+        step stay on one device.  DirectML's autograd engine asserts when a graph crosses
+        CPU/GPU, so the alternative (losses on the CPU) does not work.
+        """
         window = getattr(self, f"win_{n_fft}")
         x = x.reshape(-1, x.shape[-1])
+        if not device_supports_complex(x.device):
+            return real_magnitude_spectrogram(x, n_fft, hop, win, window, center=True)
         return torch.stft(
             x, n_fft=n_fft, hop_length=hop, win_length=win, window=window,
             center=True, return_complex=True,
-        )
+        ).abs()
 
     def forward(self, x: torch.Tensor, y: torch.Tensor) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         x = x.reshape(-1, x.shape[-1])
@@ -64,7 +74,9 @@ class MultiResolutionSTFTLoss(nn.Module):
         for n_fft, hop, win in zip(self.fft_sizes, self.hop_sizes, self.win_sizes):
             sx = self._stft(x, n_fft, hop, win)
             sy = self._stft(y, n_fft, hop, win)
-            mx, my = sx.abs(), sy.abs()
+            # _stft already returns magnitudes on devices without complex support
+
+            mx, my = (sx if not device_supports_complex(sx.device) else sx.abs()), (sy if not device_supports_complex(sy.device) else sy.abs())
             sc = torch.linalg.norm(my - mx, dim=(-2, -1)) / (torch.linalg.norm(my, dim=(-2, -1)) + self.eps)
             lm = F.l1_loss(torch.log(mx + self.eps), torch.log(my + self.eps))
             sc_total = sc_total + sc.mean()

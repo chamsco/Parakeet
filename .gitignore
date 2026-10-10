@@ -42,3 +42,6 @@ Thumbs.db
 /.secrets/
 *.key
 
+
+# the DirectML experiment venv (Python 3.11, torch-directml; ~700 MB)
+/.venv-dml/

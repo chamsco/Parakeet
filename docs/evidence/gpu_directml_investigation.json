@@ -1,0 +1,34 @@
+{
+  "hardware": {
+    "gpu": "AMD Radeon RX 6950 XT (RDNA2, gfx1030)",
+    "driver": "32.0.21045.5002",
+    "route": "torch-directml 0.2.5.dev240914 (torch 2.4.1) in a Python 3.11 venv; the project venv is 3.13 and torch-directml does not support it"
+  },
+  "measured": {
+    "sanity_matmul_2048": "20x 2048^2 matmul in 0.134 s on the DirectML device",
+    "text_step_batch8_ms": {"cpu": 91, "dml": 91, "speedup": 1.0},
+    "text_step_batch16_ms": {"cpu": 162, "dml": 107, "speedup": 1.51},
+    "decoder_conv_stack_batch4_900frames_ms": {"cpu": 67, "dml": 11, "speedup": 6.09},
+    "audio_step_cpu_ms_per_step": 478,
+    "audio_step_breakdown_cpu_ms": {
+      "text_side": 23, "decode": 158, "mel_loss": 7, "spectral_loss": 34, "aux_loss": 1
+    },
+    "audio_step_dml": "cannot complete: forward+backward fails inside the plugin"
+  },
+  "blockers_found": [
+    "no complex dtype: torch.polar / torch.fft.irfft / torch.stft are unavailable ('Invalid or unsupported data type ComplexFloat') -- the autoencoder output head and both STFT losses depend on them",
+    "F.fold's backward is aten::col2im, unimplemented: the plugin's CPU fallback leaves the autograd graph crossing devices",
+    "torch.eye is broken: it falls back and returns an EMPTY tensor (0,)",
+    "repeat_interleave is unimplemented, so an integer index lands on the CPU while the features are on the GPU",
+    "index_add falls back to the CPU",
+    "the plugin's error path itself raises UnicodeDecodeError while decoding a Windows error string, so real failures surface as decode errors rather than messages"
+  ],
+  "fixed_in_the_repo": [
+    "a real-valued iSTFT/inverse-DFT and magnitude-spectrogram path, used only where the device has no complex dtype, asserted equal to torch.fft.irfft and torch.istft (tests/test_real_istft.py)",
+    "the overlap-add rewritten as a transposed convolution with an identity kernel, removing the F.fold/col2im dependency while keeping the streaming path numerically identical to the offline one",
+    "the identity kernel built on the CPU and cached (torch.eye is broken on DirectML)",
+    "align_token_frames builds its index on the CPU and moves it, keeping the gather -- and the gradient -- on the model's device",
+    "text_audio_step accepts loss_device so a future backend can place the STFT losses itself"
+  ],
+  "conclusion": "DirectML is not the unlock for this model. It gives 1.0-1.5x on the small-op-bound text step and 6.1x on the decoder's conv stack, while the ops the audio stage needs are missing or broken and the plugin's error reporting is unhelpful. For real GPU training of gfx1030 the viable route is ROCm on Linux (or WSL2), which officially supports this card and has complete op coverage; DirectML remains a reasonable path for inference, which is not this project's bottleneck (synthesis already runs at 80-126x real time on the CPU)."
+}

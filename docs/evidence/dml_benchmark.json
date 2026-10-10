@@ -1,0 +1,10 @@
+{
+  "results": [
+    {
+      "device": "dml",
+      "error": "UnicodeDecodeError: 'utf-8' codec can't decode byte 0x92 in position 1: invalid start byte"
+    }
+  ],
+  "speedup": null,
+  "note": "measured on the real distill-audio step, so an op DirectML cannot run shows up as an error rather than as optimistic latency"
+}

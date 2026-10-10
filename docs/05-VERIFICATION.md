@@ -1619,7 +1619,71 @@ one that no re-weighting of the objective reaches. That is what the papers avoid
 flow-matching or autoregressive decoder over the acoustic tokens, which this repository's Small path
 already implements. The next move is that architecture, not another weight.
 
-## 35. Smoke test output (measured)
+## 36. The Radeon: measured, and why it is not the unlock (round 31)
+
+This machine has an **AMD Radeon RX 6950 XT** (RDNA2, gfx1030). Since round 28 established that the
+model was *undertrained*, compute is the binding constraint on every experiment, so this was worth
+measuring rather than assuming. On Windows the route into PyTorch is `torch-directml`, which needs
+Python ≤ 3.12: a second venv (`.venv-dml`, Python 3.11) was built with `torch-directml 0.2.5` and
+`torch 2.4.1`. The device works — `torch_directml.device_name(0)` reports *AMD Radeon RX 6950 XT* and
+20 2048² matmuls take 0.134 s.
+
+### What the GPU is actually worth here
+
+| workload | CPU | DirectML | speedup |
+|---|---|---|---|
+| `distill-text` step, batch 8 | 91 ms | 91 ms | **1.0×** |
+| `distill-text` step, batch 16 | 162 ms | 107 ms | **1.5×** |
+| decoder conv stack, 4×900 frames | 67 ms | **11 ms** | **6.1×** |
+| full `distill-audio` step | 478 ms | *cannot complete* | — |
+
+The GPU is fast exactly where the work is big and regular (the conv stack, 6.1×) and no faster where
+it is small ops and per-op overhead (the text side, 1.0–1.5×). The audio step's CPU breakdown shows
+where the time goes: text side 23 ms, **decode 158 ms**, mel loss 7 ms, spectral loss 34 ms.
+
+### Why the audio step still cannot train on it
+
+Each of these was found by measurement, not by reading documentation, and they compound:
+
+1. **No complex dtype.** `torch.polar` / `torch.fft.irfft` / `torch.stft` are unavailable
+   (*"Invalid or unsupported data type ComplexFloat"*), and the autoencoder's output head plus both
+   STFT losses depend on them.
+2. **`F.fold`'s backward is `aten::col2im`**, unimplemented; the plugin's CPU fallback leaves the
+   autograd graph crossing devices, and the backward then dies *inside the plugin's own error handler*.
+3. **`torch.eye` is broken**: it falls back and returns an **empty tensor** `(0,)`.
+4. **`repeat_interleave` is unimplemented**, so an integer index ends up on the CPU while the features
+   are on the GPU.
+5. **`index_add` falls back to the CPU.**
+6. **The plugin's error path raises `UnicodeDecodeError`** while decoding a Windows error string, so
+   real failures surface as decode errors instead of messages — which is what made 2–5 slow to find.
+
+### What the repository gained anyway
+
+The changes are correct and stay (all CPU behaviour verified unchanged — 291 tests pass, the smoke test
+passes, synthesis numerically identical):
+
+* a **real-valued iSTFT / inverse-DFT and magnitude-spectrogram path**, selected only where the device
+  has no complex dtype, asserted equal to `torch.fft.irfft` and `torch.istft` (five equivalence tests,
+  plus the streaming path);
+* the **overlap-add rewritten as a transposed convolution** with an identity kernel, removing the
+  `F.fold`/`col2im` dependency while keeping streaming numerically identical to offline;
+* **`align_token_frames` builds its index on the CPU** and moves it, so the gather — and the gradient —
+  stays on the model's device;
+* `text_audio_step` takes a `loss_device`, for a backend that needs the losses placed elsewhere.
+
+### The honest conclusion
+
+**DirectML is not the unlock.** Realistic gains are 1.0–1.5× on the small-op-bound parts and 6.1× on
+the conv stack, while the ops the audio stage needs are missing or broken and the failure reporting is
+hostile. For real GPU training on a gfx1030 card the viable route is **ROCm on Linux (native or
+WSL2)**, which officially supports this card and has complete op coverage. DirectML remains a
+reasonable route for *inference* — which is not this project's bottleneck, since synthesis already runs
+at 80–126× real time on the CPU.
+
+None of this changes the scientific state: the model is undertrained, and the next work is training it
+properly, on CPU, or on the GPU once a ROCm path exists.
+
+## 37. Smoke test output (measured)
 
 ```
 parakeet-tiny [tiny] sr=24000 mel=80@93.8Hz latent=24 compress=1/6 voice=constant
@@ -1670,7 +1734,7 @@ overhead — it is not a valid throughput measurement until the model predicts s
 learning demo (§2) trains properly but on 15 seconds of *synthetic* audio, so it demonstrates that
 the machinery learns, not that the model is good.
 
-## 37. Deliberate engineering checks worth calling out
+## 38. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
@@ -1706,7 +1770,7 @@ the machinery learns, not that the model is good.
   `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
   else, rather than surfacing a cryptic `torch.stft` message.
 
-## 38. Environment notes
+## 39. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).

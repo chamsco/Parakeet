@@ -253,6 +253,7 @@ def text_audio_step(
     batch: Dict[str, torch.Tensor],
     losses: Dict[str, nn.Module],
     criterion: Optional[TextSideDistillLoss] = None,
+    loss_device: Optional[torch.device] = None,
 ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor], torch.Tensor]:
     """Train the text side **through the decoder**, against the target audio (round 23).
 
@@ -284,8 +285,19 @@ def text_audio_step(
     target_audio = batch["wav"]
     recon = model.autoencoder.decode(latent, length=target_audio.shape[-1])
 
-    l_mel = losses["mel"](recon, target_audio)
-    l_spec, spec_parts = losses["spectral"](recon, target_audio)
+    # The mel and multi-resolution STFT losses are built on torch.stft, which needs a complex dtype.
+    # DirectML does not have one ("Invalid or unsupported data type ComplexFloat"), so on a DirectML
+    # device the *losses* run on the CPU while the model runs on the GPU: what crosses the boundary is
+    # the rendered and target audio, a couple of megabytes a step, and autograd carries the gradient
+    # back across it.  `loss_device` is None on CPU-only runs, which keeps the original path identical.
+    if loss_device is not None and loss_device != recon.device:
+        l_mel = losses["mel"](recon.to(loss_device), target_audio.to(loss_device))
+        l_spec, spec_parts = losses["spectral"](
+            recon.to(loss_device), target_audio.to(loss_device)
+        )
+    else:
+        l_mel = losses["mel"](recon, target_audio)
+        l_spec, spec_parts = losses["spectral"](recon, target_audio)
     total = cfg.train.loss.audio_mel * l_mel + cfg.train.loss.audio_spectral * l_spec
     logs = {
         "audio_mel": l_mel.detach(),
