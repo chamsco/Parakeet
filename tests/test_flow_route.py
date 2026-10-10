@@ -67,6 +67,50 @@ def test_the_flow_model_can_synthesize_through_the_shared_wrapper():
     assert bool(torch.isfinite(wav).all())
 
 
+def test_the_velocity_field_actually_uses_its_text_conditioning():
+    """An *untrained* estimator must still be sensitive to which text it is given.
+
+    Round 39 measured the opposite: velocity correlation 0.9968 between two different texts, with the
+    cross-attention branch contributing a tenth of the conv branch's strength (0.063 against 0.604), i.e.
+    ~90 % of the velocity was text-independent from initialisation.  Random weights propagate their
+    inputs, so an untrained network ignoring its conditioning is a wiring signal, not a training one.
+    With the pooled conditioning token and a cross-attention gain this drops to ~0.94 (34 % of the
+    velocity text-dependent), and this test fails if it regresses.
+    """
+    from parakeet.data.text import TextTokenizer
+    from parakeet.models.flow import consistency_sample  # noqa: F401  (import kept for clarity)
+
+    cfg = load_config("configs/parakeet_flow.yaml")
+    cfg.n_voices = 2
+    torch.manual_seed(0)
+    model = build_model(cfg).eval()
+    tokenizer = TextTokenizer(mode=cfg.text.mode)
+
+    velocities = []
+    with torch.no_grad():
+        for text in ("The quick brown fox jumps over the lazy dog.",
+                     "Dinner is at seven, so do not be late."):
+            ids, mask = tokenizer.batch([text], add_special=False)
+            memory, memory_mask, _cond = model.conditions(
+                ids, mask, voice=torch.zeros(1, dtype=torch.long)
+            )
+            generator = torch.Generator().manual_seed(0)
+            x_t = torch.randn(1, cfg.flow.latent_dim * cfg.flow.compress, 60, generator=generator)
+            t = torch.full((1,), 0.5)
+            velocities.append(model.vf(x_t, t, memory, memory_mask))
+
+    a, b = velocities[0].reshape(-1), velocities[1].reshape(-1)
+    correlation = float(torch.corrcoef(torch.stack([a, b]))[0, 1])
+    text_dependent_share = float((a - b).std() / a.std())
+    assert correlation < 0.99, (
+        f"an untrained estimator is nearly indifferent to its text (rho {correlation:.4f}); the "
+        "conditioning path is too weak to train through"
+    )
+    assert text_dependent_share > 0.15, (
+        f"only {text_dependent_share:.3f} of the velocity depends on the text"
+    )
+
+
 def test_the_length_head_starts_near_a_plausible_length():
     """Round 32's measured bug: the head started 6.4 away from its target in log space.
 

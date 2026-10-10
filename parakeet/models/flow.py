@@ -67,11 +67,18 @@ class FlowBlock(nn.Module):
         self.ffn = nn.Sequential(
             nn.Linear(cfg.dim, cfg.ffn_mult * cfg.dim), nn.GELU(), nn.Linear(cfg.ffn_mult * cfg.dim, cfg.dim)
         )
+        #: learnable gain on the cross-attention branch.  Round 39 measured that branch contributing
+        #: 0.063 against the conv branch's 0.604 at initialisation -- a factor of ten -- and an
+        #: *untrained* estimator was already insensitive to which text it was given (velocity correlation
+        #: 0.9968 between two different texts).  Starting the gain near that ratio puts conditioning on
+        #: equal footing with the local path instead of hoping training grows it.
+        self.cross_gain = nn.Parameter(torch.tensor(8.0))
 
     def forward(self, x: torch.Tensor, memory: torch.Tensor, memory_mask: Optional[torch.Tensor]) -> torch.Tensor:
         """``x``: channels-first ``(B, dim, Tc)``; ``memory``: ``(B, S, dim)``."""
         x = self.conv(x)
-        x = x + self.cross(self.norm(x.transpose(1, 2)), memory, memory_mask).transpose(1, 2)
+        cross = self.cross(self.norm(x.transpose(1, 2)), memory, memory_mask).transpose(1, 2)
+        x = x + self.cross_gain * cross
         return x + self.ffn(self.ffn_norm(x.transpose(1, 2))).transpose(1, 2)
 
 

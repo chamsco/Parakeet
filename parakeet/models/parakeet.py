@@ -250,6 +250,17 @@ class ParakeetFlow(nn.Module):
         )
         cond = self.cond_proj(cond)
         memory, memory_mask = build_memory(text_mem, mask, cond)
+        # Round 39 measured the conditioning entering at a tenth of the conv branch's strength: an
+        # *untrained* estimator already gives velocity rho 0.9968 between two different texts, so ~90 % of
+        # the velocity was text-independent from the start.  Appending the pooled conditioning as one extra
+        # memory token gives the cross-attention a global summary to attend to, which is a direct route for
+        # text/style information that does not depend on the local attention pattern.
+        pooled = cond.mean(dim=1, keepdim=True)
+        memory = torch.cat([memory, pooled], dim=1)
+        if memory_mask is not None:
+            memory_mask = torch.cat(
+                [memory_mask, memory_mask.new_ones(memory_mask.shape[0], 1)], dim=1
+            )
         return memory, memory_mask, cond
 
     # ------------------------------------------------------------------ shapes
