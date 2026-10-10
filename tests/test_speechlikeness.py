@@ -27,6 +27,61 @@ def _voiced_tone(seconds: float = 2.0, f0: float = 130.0, rate: int = 24000) -> 
     return wave * 0.2
 
 
+def test_the_gate_accepts_measured_good_audio_and_rejects_the_two_failures():
+    """Thresholds calibrated on measurements, not intuition.
+
+    The anchor that forced a correction: the autoencoder round trip of a *real* latent transcribes at
+    WER 0.000 with flatness 0.51 -- above a first version's 0.5 cutoff, so the gate rejected good
+    audio.  The failing cases are the opposite extremes: a buzz is ~96 % voiced, noise is <10 %.
+    """
+    rate = 24000
+    t = torch.arange(rate * 2) / rate
+    buzz = torch.sin(2 * torch.pi * 495 * t) * 0.05
+    assert speechlikeness([buzz], rate)["speech_like"] is False
+
+    generator = torch.Generator().manual_seed(0)
+    noise = torch.randn(rate * 2, generator=generator) * 0.2
+    assert speechlikeness([noise], rate)["speech_like"] is False
+
+
+def test_the_real_autoencoder_round_trip_passes_the_gate():
+    """The end-to-end anchor: a real cached latent, denormalised with the cache's statistics and decoded
+    through the trained autoencoder, is intelligible (WER 0.000, measured in round 36).  If this fails,
+    either the gate is miscalibrated or the latent convention regressed -- both worth failing for."""
+    from pathlib import Path
+
+    import pytest
+
+    from parakeet.config import load_config
+    from parakeet.data.dataset import LatentShardDataset
+    from parakeet.eval.metrics import speechlikeness as gate
+    from parakeet.models import build_model
+    from parakeet.train.common import derive_n_voices_from_cache, load_latent_norm_from_cache
+
+    cache = Path("runs/mixed_v2/latent_cache")
+    autoencoder = Path("runs/ae_scaled/adversarial/autoencoder_last.pt")
+    if not cache.exists() or not autoencoder.exists():
+        pytest.skip("the trained autoencoder / cache are not present in this workspace")
+
+    cfg = load_config("configs/parakeet_tiny.yaml")
+    cfg.n_voices = derive_n_voices_from_cache(cache)
+    payload = torch.load(autoencoder, map_location="cpu", weights_only=False)
+    state = (payload.get("ema") or {}).get("shadow") or payload["model"]
+    model = build_model(cfg)
+    current = model.state_dict()
+    model.load_state_dict(
+        {k: v for k, v in state.items() if k in current and tuple(current[k].shape) == tuple(v.shape)},
+        strict=False,
+    )
+    assert load_latent_norm_from_cache(model, cache) is True, "the cache must carry its statistics"
+    model.eval()
+    latent = model.latent_norm.denormalize(LatentShardDataset(cache)[0]["latent"][None])
+    with torch.no_grad():
+        audio = model.autoencoder.decode(latent, length=latent.shape[-1] * cfg.audio.hop_length)
+    measured = gate([audio.reshape(-1)], cfg.audio.sample_rate)
+    assert measured["speech_like"] is True, measured
+
+
 def test_a_voiced_tone_is_speech_like_and_noise_is_not():
     generator = torch.Generator().manual_seed(0)
     tone = speechlikeness([_voiced_tone()], 24000)

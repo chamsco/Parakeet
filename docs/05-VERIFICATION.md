@@ -1933,7 +1933,49 @@ objective, aligned schedule). At step 1 000–1 500 it is **still not speech-lik
 0.52, WER 1.000) at 59× real time. The convention fix is necessary and its effect is unambiguous on a
 *real* latent (WER 0.000), but the models have to be retrained to benefit, and that is running.
 
-## 42. Smoke test output (measured)
+## 42. How good must the latent be? (round 37) — and a correction to my own gate
+
+The fit diagnosis reports a per-dimension correlation between predicted and teacher latents (0.13–0.38 so
+far) and WER 1.000, but nothing connected the two. This manufactures latents with a *known* correlation
+against a real one and decodes them through the same frozen decoder:
+
+    latent = rho * standardised(real) + sqrt(1 - rho^2) * noise      (per dimension)
+
+| rho | 1.00 | 0.90 | **0.75** | **0.60** | 0.45 | 0.30 | 0.15 |
+|---|---|---|---|---|---|---|---|
+| WER | **0.000** | **0.000** | **0.000** | **1.000** | 1.000 | 1.000 | 1.000 |
+
+**The recogniser reads the sentence perfectly at rho ≥ 0.75 and fails at 0.60.** That is the first
+quantified target this project has had for the text side, and it reframes the work: the small text side
+reaches 0.375 (train) / 0.245 (validation) after 9 000 steps of pure regression, with growth decelerating
+(+0.06 then +0.03 per 3 000 steps), so *more steps alone will not get there* — which is what makes the
+capacity question decisive rather than optional.
+
+### My speech-likeness gate was rejecting good audio
+
+The same experiment exposed a mistake in round 35's gate: at rho = 1.00 — the *real* latent, WER
+**0.000** — the gate said **not speech**, because it required spectral flatness < 0.5 and the
+autoencoder's decoded output sits at **0.51**. The thresholds are now calibrated on measured anchors:
+
+| anchor | voiced | flatness | must be |
+|---|---|---|---|
+| the teacher's own audio | 0.67 | 0.30 | speech |
+| **the autoencoder round trip of a real latent** (WER 0.000) | 0.50 | **0.51** | **speech** |
+| the Tiny path's buzz | 0.96 | 0.32 | not speech |
+| the flow's noise | 0.07 | 0.55 | not speech |
+
+with `speech_like = 0.25 ≤ voiced ≤ 0.9 and 70 ≤ F0 ≤ 350 and flatness < 0.65`. The round-35 conclusion
+survives — both trained paths are still rejected, now for voicing rather than flatness — and the real
+anchor is a **test** (`test_the_real_autoencoder_round_trip_passes_the_gate`), so a regression in either
+the gate or the latent convention fails the suite instead of quietly changing a verdict.
+
+### In flight
+
+A 12 000-step `distill-text` run with **text.dim 512 / 6 layers (22.6M trainable against 4.6M)**, same
+stage and steps as the 0.375 run, to separate capacity from step budget. Its first checkpoint had not
+landed by the end of the round.
+
+## 43. Smoke test output (measured)
 
 ```
 parakeet-tiny [tiny] sr=24000 mel=80@93.8Hz latent=24 compress=1/6 voice=constant
@@ -1984,7 +2026,7 @@ overhead — it is not a valid throughput measurement until the model predicts s
 learning demo (§2) trains properly but on 15 seconds of *synthetic* audio, so it demonstrates that
 the machinery learns, not that the model is good.
 
-## 43. Deliberate engineering checks worth calling out
+## 44. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
@@ -2020,7 +2062,7 @@ the machinery learns, not that the model is good.
   `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
   else, rather than surfacing a cryptic `torch.stft` message.
 
-## 44. Environment notes
+## 45. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).

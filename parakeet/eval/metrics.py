@@ -186,11 +186,18 @@ def speechlikeness(
     if reference:
         ref = speechlikeness(reference, sample_rate)
         report["reference"] = ref
-    # speech-like: a normal voiced fraction, a pitch inside the human range, a non-flat spectrum
+    # Calibrated against measured anchors rather than intuition (round 37):
+    #   the teacher's own audio                         voiced 0.67, flatness 0.30  -> speech
+    #   the autoencoder round trip of a real latent     voiced 0.50, flatness 0.51  -> speech (WER 0.000)
+    #   a tonal buzz (the Tiny path's failure)          voiced 0.96                -> not speech
+    #   unvoiced noise (the flow's failure)             voiced 0.07, flatness 0.55 -> not speech
+    # The round-trip anchor matters most: a first version used flatness < 0.5 and rejected *perfectly
+    # intelligible* decoded audio, because the autoencoder's output is spectrally flatter than the
+    # original recording.
     report["speech_like"] = bool(
-        0.35 <= report["voiced_fraction"] <= 0.9
+        0.25 <= report["voiced_fraction"] <= 0.9
         and 70.0 <= report["median_f0_hz"] <= 350.0
-        and (report["spectral_flatness"] is None or report["spectral_flatness"] < 0.5)
+        and (report["spectral_flatness"] is None or report["spectral_flatness"] < 0.65)
     )
     return report
 

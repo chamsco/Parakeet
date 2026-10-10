@@ -1,0 +1,44 @@
+[
+  {
+    "rho": 1.0,
+    "wer": 0.0,
+    "speech_like": false,
+    "voiced_fraction": 0.5048231482505798
+  },
+  {
+    "rho": 0.9,
+    "wer": 0.0,
+    "speech_like": false,
+    "voiced_fraction": 0.28617364168167114
+  },
+  {
+    "rho": 0.75,
+    "wer": 0.0,
+    "speech_like": false,
+    "voiced_fraction": 0.3118970990180969
+  },
+  {
+    "rho": 0.6,
+    "wer": 1.0,
+    "speech_like": false,
+    "voiced_fraction": 0.27009645104408264
+  },
+  {
+    "rho": 0.45,
+    "wer": 1.0,
+    "speech_like": false,
+    "voiced_fraction": 0.3215433955192566
+  },
+  {
+    "rho": 0.3,
+    "wer": 1.0,
+    "speech_like": false,
+    "voiced_fraction": 0.28617364168167114
+  },
+  {
+    "rho": 0.15,
+    "wer": 1.0,
+    "speech_like": false,
+    "voiced_fraction": 0.25723472237586975
+  }
+]
