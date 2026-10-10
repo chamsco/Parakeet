@@ -72,6 +72,11 @@ def main() -> int:
 
                              "words ('CHAPTER IV' is read as 'chapter four'), which inflates every WER")
     ap.add_argument("--whisper", default="base.en", help="faster-whisper model size")
+    ap.add_argument("--steps", type=int, default=None,
+                    help="flow-matching sampling steps (NFE).  The flow variant defaults to "
+                         "cfg.flow.nfe (32), which is 3x *slower than real time* on the CPU: a "
+                         "distilled sampler is meant to use 2-4, and SupertonicTTS reports WER 11.43 at "
+                         "NFE 4 against 2.64 at NFE 32, so the number belongs in the report")
     ap.add_argument("--out", default="runs/real_eval")
     args = ap.parse_args()
 
@@ -153,7 +158,7 @@ def main() -> int:
     audio_seconds = 0.0
     for i, record in enumerate(records):
         t0 = time.perf_counter()
-        wav = synth.synthesize(record["text"], seed=0)
+        wav = synth.synthesize(record["text"], seed=0, steps=args.steps)
         synth_seconds += time.perf_counter() - t0
         reference, ref_rate = sf.read(str(corpus / record["wav_path"]), dtype="float32")
         ref_t = torch.from_numpy(reference).reshape(-1)
@@ -179,9 +184,19 @@ def main() -> int:
             write_wav(out / f"generated_{i}.wav", wav, cfg.audio.sample_rate)
             write_wav(out / f"reference_{i}.wav", ref_t.reshape(1, -1), cfg.audio.sample_rate)
     rtf = synth_seconds / max(audio_seconds, 1e-9)
+    # a flow checkpoint early in training can predict a near-zero length, and then every comparison
+    # against a reference is empty.  Report that rather than dying in statistics.mean, and make the
+    # length ratio visible: for the flow sampler it is the first thing that has to be right.
+    cosine_text = f"{statistics.mean(cosine):.4f}" if cosine else "n/a (no overlapping audio)"
+    coherence_text = f"{statistics.mean(coherence):.4f}" if coherence else "n/a"
+    generated_seconds = sum(w.numel() for w in generated) / cfg.audio.sample_rate
+    reference_seconds = sum(r.numel() for r in references) / cfg.audio.sample_rate
+    length_ratio = generated_seconds / max(reference_seconds, 1e-9)
     print(f"  {len(records)} utterances in {synth_seconds:.1f}s "
           f"(RTF {rtf:.2f}, {1 / max(rtf, 1e-9):.1f}x real time) | log-mel cosine "
-          f"{statistics.mean(cosine):.4f} | phase coherence {statistics.mean(coherence):.4f}")
+          f"{cosine_text} | phase coherence {coherence_text}")
+    print(f"  length: generated {generated_seconds:.1f}s vs reference {reference_seconds:.1f}s "
+          f"(ratio {length_ratio:.2f})")
 
     _banner("perceptual naturalness: DNSMOS (available) and UTMOS (documented, not installable here)")
     student_dns = dnsmos_score(generated, sample_rate=cfg.audio.sample_rate)
@@ -230,8 +245,13 @@ def main() -> int:
         "weights": "ema" if "ema" in payload else "raw",
         "corpus": {"manifest": manifest.name, "utterances": len(records)},
         "synthesis": {"rtf": rtf, "x_realtime": 1 / max(rtf, 1e-9),
-                      "log_mel_cosine_vs_reference": statistics.mean(cosine),
-                      "phase_coherence": statistics.mean(coherence)},
+                      "log_mel_cosine_vs_reference": (
+                          statistics.mean(cosine) if cosine else None
+                      ),
+                      "phase_coherence": statistics.mean(coherence) if coherence else None,
+                      "generated_seconds": generated_seconds,
+                      "reference_seconds": reference_seconds,
+                      "length_ratio": length_ratio},
         "naturalness": {
             "metric": "dnsmos p835",
             "student": student_dns.value,

@@ -129,10 +129,27 @@ def main() -> int:
         payload = torch.load(args.warm_start, map_location="cpu", weights_only=False)
         ema_shadow = (payload.get("ema") or {}).get("shadow")
         state = ema_shadow or payload["model"]
-        info = model.load_state_dict(state, strict=False)
+        # Skip keys whose *shape* differs instead of failing the run.  `strict=False` tolerates missing
+        # and unexpected keys but not a size mismatch, which is what makes a cross-variant warm start
+        # awkward: an autoencoder checkpoint trained before the corpus grew carries a 4-voice embedding
+        # against a 12-voice table, and one stale key should not cost the whole run.  Reported, not
+        # silent, so a genuinely wrong checkpoint still shows up.
+        current = model.state_dict()
+        usable, skipped = {}, []
+        for key, value in state.items():
+            if key not in current:
+                continue
+            if tuple(current[key].shape) != tuple(value.shape):
+                skipped.append(f"{key} {tuple(value.shape)}->{tuple(current[key].shape)}")
+                continue
+            usable[key] = value
+        info = model.load_state_dict(usable, strict=False)
         print(f"[train] warm start from {args.warm_start} at step {payload.get('step')} "
               f"({'EMA' if ema_shadow else 'raw'} weights, {len(info.missing_keys)} missing / "
               f"{len(info.unexpected_keys)} unexpected keys); optimizer and schedule start fresh")
+        if skipped:
+            print(f"[train]   skipped {len(skipped)} key(s) whose shape did not match: "
+                  f"{', '.join(skipped[:3])}{' ...' if len(skipped) > 3 else ''}")
     if args.resume:
         # NOTE: the model is *not* loaded here.  run_stage does the full restore -- optimizer, EMA,
         # discriminator, LR schedule position, RNG and batch order -- so that resuming continues the

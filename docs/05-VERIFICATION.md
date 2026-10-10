@@ -1683,7 +1683,63 @@ at 80–126× real time on the CPU.
 None of this changes the scientific state: the model is undertrained, and the next work is training it
 properly, on CPU, or on the GPU once a ROCm path exists.
 
-## 37. Smoke test output (measured)
+## 37. The flow route, made usable on real data (round 32)
+
+Round 30's A/B closed with a specific reading: a one-shot regression from a small character encoder to
+72-dimensional token latents has a ceiling (per-dimension correlation 0.20 while the autoencoder round
+trip transcribes at **WER 0.0**), and the papers avoid that ceiling by **sampling** the acoustic latents
+with a flow-matching velocity field. This round puts that route on real data.
+
+### A correction to round 31
+
+Round 31 stated that the flow model "was trained by the smoke test but no synthesis path existed for
+it". **That was wrong**: `ParakeetFlow.synthesize` exists (it samples the velocity field, unfolds the
+compressed frames and decodes), and `Synthesizer.synthesize` already dispatches to it for non-Tiny
+variants. What is true is narrower and still important — the flow variant had only ever been trained on
+**synthetic** batches by the smoke-test recipe, never on a real corpus, and `real_eval.py` could not
+report its numbers. Both are fixed here.
+
+### A config trap worth naming
+
+The flow cannot simply use `parakeet_small.yaml`: its autoencoder has `decoder_dim 384` / `encoder_dims
+[128, 192, 256]`, while the cached latents were produced by the **Tiny** autoencoder (256 / [64, 96,
+128]). Training the flow there would pair a decoder with latents from an encoder it does not share — the
+warm start failed with exactly that shape mismatch rather than silently training on the wrong latents.
+`configs/parakeet_flow.yaml` therefore takes `variant: small` (the flow model) with the **Tiny
+autoencoder geometry**, so the existing caches and the trained autoencoder are directly reusable.
+
+`--warm-start` also stopped failing on a single stale key: it now skips keys whose shape differs and
+reports them (the autoencoder checkpoint predates the corpus growing from 4 voices to 12, and one stale
+embedding should not cost a run).
+
+### What the flow costs, measured
+
+| | per step | audio per step | audio per second of compute |
+|---|---|---|---|
+| `distill-audio` (token latents, decodes audio) | 2.25 s @ batch 4 | 9.1 s | ~4 s |
+| `flow` (velocity field, no decoding) | **2.02 s @ batch 8** | **73 s** | **~36 s** |
+
+The flow sees roughly **eight times more audio per unit of compute** because its objective never
+decodes a waveform — which is what makes a real flow run affordable on this CPU.
+
+### The evaluation had to be fixed for it
+
+An early flow checkpoint predicts a near-zero length, and then nothing overlaps a reference:
+`real_eval.py` died inside `statistics.mean` on an empty list. It now reports `n/a` and, crucially, the
+**length ratio** — for a flow sampler that is the first thing that must be right (untrained: **0.008**,
+0.2 s generated against 21.3 s of reference). `--steps` selects the sampler's NFE, because the default
+(`cfg.flow.nfe = 32`) runs at **0.34× real time** on the CPU while a distilled sampler is meant for 2-4;
+SupertonicTTS reports WER 11.43 at NFE 4 against 2.64 at NFE 32, so the NFE belongs in every report.
+
+### The decision, and the run
+
+The 6000-step token-side run was stopped ~20 minutes in and the CPU redirected to a **4000-step flow run
+on the 12-voice mixture** (`runs/flow_v2`, checkpoint every 400 steps so intermediate fit is
+inspectable). The reasoning is measured, not aesthetic: the token path's ceiling is quantified, the
+acoustic path is proven (round-trip WER 0.0), and the flow is both the papers' route and ~8× cheaper per
+second of audio.
+
+## 38. Smoke test output (measured)
 
 ```
 parakeet-tiny [tiny] sr=24000 mel=80@93.8Hz latent=24 compress=1/6 voice=constant
@@ -1734,7 +1790,7 @@ overhead — it is not a valid throughput measurement until the model predicts s
 learning demo (§2) trains properly but on 15 seconds of *synthetic* audio, so it demonstrates that
 the machinery learns, not that the model is good.
 
-## 38. Deliberate engineering checks worth calling out
+## 39. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
@@ -1770,7 +1826,7 @@ the machinery learns, not that the model is good.
   `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
   else, rather than surfacing a cryptic `torch.stft` message.
 
-## 39. Environment notes
+## 40. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
