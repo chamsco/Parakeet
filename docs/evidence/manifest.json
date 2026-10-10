@@ -1,7 +1,7 @@
 {
-  "generated": "2026-10-10T04:02:07",
+  "generated": "2026-10-10T05:12:52",
   "git": {
-    "rev": "41916d2",
+    "rev": "5bf26ab",
     "dirty": true
   },
   "note": "Committed snapshots of the reports the model card cites.  Refresh with `python scripts/model_card.py --refresh-evidence` after re-running the demos; the hashes make a stale bundle visible.",
@@ -117,6 +117,13 @@
       "source": "runs/objective_fit_ab.json",
       "evidence": "docs/evidence/objective_fit_ab.json",
       "sha256": "490f36e9a2141d6cf8a1d7e3fe85499d5b2ad5a48d3a79588a58eb983ce9c10a"
+    },
+    {
+      "claim": "flow_trajectory",
+      "status": "copied",
+      "source": "runs/flow_trajectory.json",
+      "evidence": "docs/evidence/flow_trajectory.json",
+      "sha256": "1578cb77bbb89dc6152ac7fe375062b1fdbbb2d0a6731d49286f0e255768442b"
     },
     {
       "claim": "acoustic_path_works",

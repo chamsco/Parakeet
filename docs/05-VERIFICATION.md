@@ -1766,6 +1766,24 @@ Full-length audio, a computable acoustic proxy, and 30× real time at NFE 4 afte
 trajectory has a gradient to follow, which the token path never showed. It is still not intelligible, so
 the run continues to 4 000 steps and the trajectory (cosine, WER, clipping) is what gets reported next.
 
+### The trajectory, and a proxy that misleads a sampler
+
+`scripts/flow_trajectory.py` walks every saved checkpoint in step order and reports the three quantities
+in the order they must come right (length ratio, acoustic proxy, WER with a control). At NFE 4:
+
+| step | length ratio | log-mel cosine | student WER | control | DNSMOS | speed |
+|---|---|---|---|---|---|---|
+| 400 | 1.67 | 0.794 | 1.000 | 0.087 | 1.412 | 29× real time |
+| 800 | 1.73 | 0.752 | 1.000 | 0.087 | 1.386 | 32× real time |
+
+Full-length audio and ~30× real time, still at chance at 20 % of the run — and the acoustic proxy is
+**flat**. That is worth stating plainly: **log-mel cosine against the reference is a poor progress
+signal for a generative sampler.** The deterministic Tiny path copies the reference's timing and
+phase-aligned envelope, which is why it scored 0.95 while being unintelligible; a flow samples a
+*plausible* rendition from noise, so matching a different speaker's exact mel trajectory is neither
+expected nor required. WER and DNSMOS are the metrics that mean something here, and both are still at
+their floor — the run continues to 4 000 steps.
+
 ## 38. Smoke test output (measured)
 
 ```

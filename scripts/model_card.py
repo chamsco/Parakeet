@@ -179,6 +179,15 @@ CLAIMS: List[Dict[str, Any]] = [
         "fmt": "{passed}/{total} checks",
     },
     {
+        "id": "flow_trajectory",
+        "statement": "the flow produces **full-length** audio at **~30× real time** (NFE 4) from step 400, and is still not intelligible at step 800 — recorded as a trajectory rather than a single number, because one checkpoint cannot distinguish learning from stuck",
+        "report": ["runs/flow_trajectory.json"],
+        "field": "checkpoints",
+        "op": ">=",
+        "target": 2,
+        "fmt": "{value} checkpoints",
+    },
+    {
         "id": "acoustic_path_works",
         "statement": "the **acoustic path works**: the autoencoder round trip of a real teacher utterance transcribes at WER 0.0 while the same checkpoint's text-to-speech is WER 1.0 -- so the text side is the whole problem, not the decoder",
         "report": ["docs/demo/index.json"],

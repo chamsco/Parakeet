@@ -92,6 +92,7 @@ def main() -> int:
         "run": args.run,
         "sampler_nfe": args.steps,
         "utterances": args.limit,
+        "checkpoints": len(rows),
         "rows": rows,
         "best_by_wer": best,
         "verdict": (

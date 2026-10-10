@@ -1,0 +1,36 @@
+{
+  "run": "runs/flow_v2",
+  "sampler_nfe": 4,
+  "utterances": 8,
+  "checkpoints": 2,
+  "rows": [
+    {
+      "step": 400,
+      "length_ratio": 1.6712807962602858,
+      "log_mel_cosine": 0.7940839380025864,
+      "x_realtime": 37.03434372102001,
+      "wer": 1.0,
+      "wer_control": 0.0873015873015873,
+      "dnsmos": 1.4121539488207748
+    },
+    {
+      "step": 800,
+      "length_ratio": 1.7335441984739042,
+      "log_mel_cosine": 0.7517770603299141,
+      "x_realtime": 28.285787377691864,
+      "wer": 1.0,
+      "wer_control": 0.0873015873015873,
+      "dnsmos": 1.3855625008463792
+    }
+  ],
+  "best_by_wer": {
+    "step": 400,
+    "length_ratio": 1.6712807962602858,
+    "log_mel_cosine": 0.7940839380025864,
+    "x_realtime": 37.03434372102001,
+    "wer": 1.0,
+    "wer_control": 0.0873015873015873,
+    "dnsmos": 1.4121539488207748
+  },
+  "verdict": "still at chance on every checkpoint: the flow's length is right, its acoustic proxy is well above zero, and it is still not intelligible"
+}
