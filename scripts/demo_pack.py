@@ -52,6 +52,10 @@ def main() -> int:
     ap.add_argument("--text-mode", default=None, choices=["char", "phoneme"])
     ap.add_argument("--out", default="docs/demo")
     ap.add_argument("--sentences", type=int, default=len(SENTENCES))
+    ap.add_argument("--steps", type=int, default=None,
+                    help="flow sampler NFE.  The flow variant defaults to cfg.flow.nfe (32), which runs "
+                         "slower than real time; a distilled sampler uses 2-4")
+    ap.add_argument("--voice", type=int, default=0)
     args = ap.parse_args()
 
     import soundfile as sf
@@ -111,7 +115,7 @@ def main() -> int:
     entries: List[Dict] = []
     student_audio: List[torch.Tensor] = []
     for index, text in enumerate(texts):
-        student = synth.synthesize(text, seed=0)
+        student = synth.synthesize(text, seed=0, voice=args.voice, steps=args.steps)
         path = out / f"student_{index:02d}.wav"
         sf.write(str(path), student.detach().reshape(-1).numpy(), cfg.audio.sample_rate)
         student_audio.append(student.reshape(-1))

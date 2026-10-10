@@ -48,3 +48,6 @@ Thumbs.db
 
 # the listenable demo pack is small and is the artifact (regenerate: scripts/demo_pack.py)
 !docs/demo/*.wav
+
+# the flow demo pack (same rationale as docs/demo)
+!docs/demo_flow/*.wav

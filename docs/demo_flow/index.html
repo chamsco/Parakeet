@@ -1,0 +1,22 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Parakeet demo</title>
+<style>body{font-family:system-ui,sans-serif;max-width:52rem;margin:2rem auto;line-height:1.5}
+td{padding:.4rem .6rem;border-bottom:1px solid #eee} audio{height:2rem}</style></head>
+<body>
+<h1>Parakeet: Tiny (1 latents/token, char input)</h1>
+<p><strong>Measured:</strong> student WER 1.2264150943396226 
+(DNSMOS 1.2861669961251427), reference/teacher WER 0.0.</p>
+<p><strong>Verdict:</strong> not intelligible yet: the demo says so, and shows the autoencoder round trip instead, which is the part that measurably works</p>
+<h2>Autoencoder round trip (the part that works)</h2><audio controls src="autoencoder_roundtrip.wav"></audio>
+<h2>Text to speech</h2>
+<table><tr><th>sentence</th><th>rendered</th></tr>
+    <tr><td>The quick brown fox jumps over the lazy dog.</td><td><audio controls src="student_00.wav"></audio></td></tr>
+    <tr><td>She opened the window and listened to the rain.</td><td><audio controls src="student_01.wav"></audio></td></tr>
+    <tr><td>We should leave before the traffic gets bad.</td><td><audio controls src="student_02.wav"></audio></td></tr>
+    <tr><td>He wrote the letter twice and sent the second one.</td><td><audio controls src="student_03.wav"></audio></td></tr>
+    <tr><td>The little engine climbed the hill without stopping.</td><td><audio controls src="student_04.wav"></audio></td></tr>
+    <tr><td>Dinner is at seven, so do not be late.</td><td><audio controls src="student_05.wav"></audio></td></tr>
+</table>
+<p>Regenerate with <code>scripts/demo_pack.py</code>.  WER comes from a control-first recogniser
+run: if the control on real speech fails, the number is withheld rather than reported.</p>
+</body></html>
