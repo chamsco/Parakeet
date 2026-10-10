@@ -53,22 +53,46 @@ python scripts/check_device.py                # expect every probe [ok] and "ful
 The repository's own dependencies are `torch`, `numpy`, `pyyaml` (plus `soundfile` for audio I/O), so
 a ROCm venv is a small install. **Do not** install `torch-directml` there.
 
-## Option B — WSL2 with ROCm (worth trying; check the support matrix first)
+## Option B — WSL2 with ROCm: CHECKED, and it cannot work for this card
 
-AMD's *official* ROCm-on-WSL support currently lists RDNA3 (RX 7000 series). The 6950 XT is RDNA2, so
-this may or may not work — which is exactly why `scripts/check_device.py` exists: run it and believe it
-rather than the matrix.
+**Verified against AMD's own support matrices (ROCm 7.2).** Both the
+[Linux matrix](https://rocm.docs.amd.com/projects/radeon-ryzen/en/docs-7.2/docs/compatibility/compatibilityrad/native_linux/native_linux_compatibility.html)
+and the
+[WSL matrix](https://rocm.docs.amd.com/projects/radeon-ryzen/en/docs-7.2/docs/compatibility/compatibilityrad/wsl/wsl_compatibility.html)
+list the same supported Radeon hardware, and it is **RDNA3/RDNA4 only**: RX 9070/9060 series, RX
+7900/7800/7700 series, PRO W7900/W7800/W7700. **There is no RX 6000-series entry on either list.**
 
-```powershell
-# ADMIN PowerShell
-wsl --install -d Ubuntu-24.04
-wsl --update
+The card in this machine is a **Radeon RX 6950 XT = gfx1030 = RDNA2**, so it is outside ROCm 7.2's support
+by matrix — on native Linux as well as WSL. This was checked on the machine, not assumed:
+
+```
+$ wsl -d Ubuntu -- bash scripts/wsl_gpu_check.sh
+=== distro ===   Ubuntu 26.04 LTS, kernel 6.18.33.1-microsoft-standard-WSL2
+=== python ===   Python 3.14.4; torch MISSING; numpy MISSING; soundfile MISSING
+=== rocm ===     no /opt/rocm, no rocminfo, no rocm-smi
+=== devices ===  /dev/dxg present (WSL GPU passthrough works), /dev/kfd absent (no ROCm driver)
+=== torch ===    No module named 'torch'
 ```
 
+Two things this does and does not say. **`/dev/dxg` exists**, so WSL *can* see the GPU — the platform is
+capable. But ROCm is not installed, `/dev/kfd` is absent, and even with a perfect install the matrix above
+excludes gfx1030. `scripts/wsl_gpu_check.sh` re-runs that inspection in one command.
+
+### Routes that can actually reach gfx1030
+
+| route | status |
+|---|---|
+| ROCm 6.x on **native Linux** | gfx1030 was supported in the ROCm 5.x/6.x era; the 7.x Radeon matrices are RDNA3+. Needs a Linux install, not WSL. |
+| **Windows + HIP SDK**, community ROCm PyTorch wheels | the promising one: no OS change. See the [RDNA2 (gfx1030–1036) Windows ROCm torch installer work](https://github.com/unslothai/unsloth/pull/7277) and [the request to ship wheels for every supported card](https://github.com/unslothai/unsloth/issues/11815). |
+| DirectML | already measured here: text step 1.0–1.5×, conv stack 6.1×, **the audio step cannot complete** — see the "measurement, in short" section. |
+| CPU | works today, at the rates in the table below. |
+
+Whatever the route, `scripts/check_device.py` is the acceptance test: run it and believe it rather than the
+matrix.
+
 ```bash
-# inside Ubuntu
+# inside Ubuntu, if ROCm is ever installed there
 sudo apt update && sudo apt install -y python3-pip python3-venv
-# AMD's "ROCm on WSL" guide: install the WSL-specific amdgpu-install package, then
 sudo amdgpu-install --usecase=wsl,rocm --no-opengl
 python3 -m venv .venv && source .venv/bin/activate
 pip install torch --index-url https://download.pytorch.org/whl/rocm6.2
@@ -76,9 +100,9 @@ rocminfo | head -20                          # does it see gfx1030?
 python scripts/check_device.py
 ```
 
-If `check_device.py` reports the required probes `[ok]` and the complex ones too, training can move
-there unchanged: the pipeline is CPU-only code plus torch, and `text_audio_step` now takes a
-`loss_device`, so a backend that cannot hold complex tensors can still place the STFT losses itself.
+If `check_device.py` reports the required probes `[ok]` and the complex ones too, training can move there
+unchanged: the pipeline is CPU-only code plus torch, and `text_audio_step` takes a `loss_device`, so a
+backend that cannot hold complex tensors can still place the STFT losses itself.
 
 ## Training commands (both environments)
 
