@@ -86,6 +86,10 @@ def main() -> int:
     ap.add_argument("--cfg-scale", type=float, default=None,
                         help="classifier-free guidance for the flow sampler; the config's 1.5 can over-shoot on a partly"
                              " trained model")
+    ap.add_argument("--duration-scale", type=float, default=1.0,
+                    help="multiply the predicted durations.  The Tiny route under-predicts systematically "
+                         "(length ratio 0.775), and a global calibration is the cheap way to see how much "
+                         "of the timing error is bias rather than variance")
     ap.add_argument("--steps", type=int, default=None,
                     help="flow-matching sampling steps (NFE).  The flow variant defaults to "
                          "cfg.flow.nfe (32), which is 3x *slower than real time* on the CPU: a "
@@ -209,7 +213,8 @@ def main() -> int:
                         ref_wav[:, None, :], size=size, mode="linear", align_corners=False
                     )[:, 0, :]
         wav = synth.synthesize(record["text"], seed=0, steps=args.steps,
-                               cfg_scale=args.cfg_scale, ref_wav=ref_wav)
+                               cfg_scale=args.cfg_scale, ref_wav=ref_wav,
+                               duration_scale=args.duration_scale)
         synth_seconds += time.perf_counter() - t0
         # Level matching.  The curated references are peak-normalised, and the autoencoder's output is
         # not bounded: the flow clipped 14.6% of its samples, which both the recogniser and DNSMOS read

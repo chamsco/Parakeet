@@ -2674,7 +2674,26 @@ the whole load in one place: read the payload, apply the checkpoint's own geomet
 load only shape-compatible tensors. `real_eval.py` and `fit_diagnosis.py` use it; the remaining scripts
 that build from a config are listed in the round's notes so they can be migrated the same way.
 
-## 63. Deliberate engineering checks worth calling out
+## 63. The 23 % duration shortfall is not the blocker (round 55)
+
+The Tiny route under-predicts utterance length systematically — `fit_diagnosis` reports a duration ratio of
+0.764 and `real_eval` sees generated audio at 0.77 of the reference. A systematic bias is separable from
+variance, so it is worth one measurement: `real_eval.py --duration-scale` now passes a multiplier through to
+the synthesizer (the parameter already existed there).
+
+| duration scale | length ratio | WER | DNSMOS | voiced |
+|---|---|---|---|---|
+| 1.00 | 0.810 | **1.000** | 1.262 | 1.000 |
+| 1.29 (1 / 0.775) | **1.062** | **1.000** | 1.195 | 1.000 |
+
+The calibration does exactly what it should to the timing — 0.81 → 1.06, i.e. the shortfall was bias, not
+variance — and it changes **nothing** about intelligibility, while DNSMOS drifts slightly down. So the
+timing error is excluded as a cause: the content is wrong, which is the ρ ≈ 0.19 the token route measures.
+
+The flag is kept: it is the right thing for a *report* to be able to separate timing from content, and a
+future checkpoint whose latents are right will still want its durations calibrated.
+
+## 64. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
