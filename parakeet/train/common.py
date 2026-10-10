@@ -363,6 +363,51 @@ def load_latent_norm_from_cache(model, cache_dir: Optional[str | Path]) -> bool:
     return True
 
 
+def apply_checkpoint_geometry(cfg, state: Dict[str, Any]) -> Dict[str, Any]:
+    """Configure a config from a checkpoint's own shapes.
+
+    The recurring bug class in this project, hit six times: a script builds the model from the *config*
+    and then loads a checkpoint with different widths -- `n_voices`, `latent_rate`, `text.dim`,
+    `text.n_layers` -- and either crashes on a shape mismatch deep inside a loss or silently evaluates the
+    wrong architecture.  Everything here is read off the tensors, so a checkpoint is always evaluated as
+    the model it actually is.
+    """
+    applied: Dict[str, Any] = {}
+
+    voice = state.get("voice_embed.weight")
+    if voice is not None and hasattr(voice, "shape") and len(voice.shape) == 2:
+        cfg.n_voices = max(1, int(voice.shape[0]))
+        applied["n_voices"] = cfg.n_voices
+
+    # the latent head's in_features is the text width, and its out_features is latent_dim * latency_rate
+    head = state.get("latent_head.2.weight")
+    if head is not None and hasattr(head, "shape") and len(head.shape) == 2:
+        cfg.autoencoder.latent_rate = max(
+            1, int(head.shape[0]) // max(1, int(cfg.autoencoder.latent_dim))
+        )
+        applied["latent_rate"] = cfg.autoencoder.latent_rate
+        text_dim = int(head.shape[1])
+        cfg.text.dim = text_dim
+        applied["text_dim"] = text_dim
+        # the flow config is validated against text.dim even for the tiny variant, so keep them equal
+        if hasattr(cfg, "flow"):
+            cfg.flow.text_dim = text_dim
+            cfg.flow.cond_dim = text_dim
+
+    # count the text encoder's blocks from its keys
+    layers = set()
+    for key in state:
+        if key.startswith("text.blocks."):
+            parts = key.split(".")
+            if len(parts) > 2 and parts[2].isdigit():
+                layers.add(int(parts[2]))
+    if layers:
+        cfg.text.n_layers = max(layers) + 1
+        applied["text_layers"] = cfg.text.n_layers
+
+    return applied
+
+
 def infer_model_geometry(state: Dict[str, Any]) -> Dict[str, int]:
     """Read the *widths* a checkpoint implies, so a model can be built to match it.
 

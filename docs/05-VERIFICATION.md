@@ -2010,7 +2010,36 @@ says most of the per-*frame* latent structure is **voice and rendition, not text
   voices of one paragraph), so "how well could a fixed-voice model do" remains open. What is measured is
   that *cross-voice* generalisation of the fine structure is ~0.17.
 
-## 44. Smoke test output (measured)
+## 44. Capacity: it helps, and it is not the ceiling (round 38)
+
+Same stage (`distill-text`), same corpus, same step count — only the text side differs:
+
+| text side | trainable | train corr | val corr | duration ratio | F0 MAE | latent cosine |
+|---|---|---|---|---|---|---|
+| dim 256, 4 layers | 4.6M | 0.285 | 0.118 | 0.767 | 0.108 | 0.849 |
+| **dim 512, 6 layers** | **22.6M** | **0.321** | **0.190** | 0.764 | 0.113 | 0.853 |
+
+Capacity helps — **+13 % on training correlation and +61 % on validation**, so it buys generalisation more
+than fitting — and it is nowhere near the 0.75 the threshold experiment measured. Combined with the
+cross-voice result (two voices reading the *same text* agree at only 0.172), the reading is coherent: the
+per-frame latent target carries a great deal of voice and rendition detail, so a deterministic text
+regressor is fitting a one-to-many mapping, and a wider regressor does not change that. That is what the
+papers' split exists for: predict what the text determines, **sample** the rest.
+
+The `ParakeetFlow` run was therefore restarted **in the corrected latent space** (6 000 steps, checkpoint
+every 1 000) — its earlier runs used the identity normaliser, so this is the first flow training that
+decodes where the decoder expects. Verified before spending the hours: the flow's normaliser reads
+`var 1.0000` after the warm start and `0.4368` after loading the cache's statistics, matching the cache
+exactly.
+
+### One more shape mismatch, now closed as a class
+
+`fit_diagnosis.py` crashed loading the 22.6M checkpoint because it built the model from the config
+(`text.dim 256`) — the **sixth** time a script has hit this class (`n_voices`, `latent_rate`, `text.dim`,
+`text.n_layers`). `train.common.apply_checkpoint_geometry()` now reads all four off the checkpoint's own
+tensors and configures the config before building, and it prints what it applied.
+
+## 45. Smoke test output (measured)
 
 ```
 parakeet-tiny [tiny] sr=24000 mel=80@93.8Hz latent=24 compress=1/6 voice=constant
@@ -2061,7 +2090,7 @@ overhead — it is not a valid throughput measurement until the model predicts s
 learning demo (§2) trains properly but on 15 seconds of *synthetic* audio, so it demonstrates that
 the machinery learns, not that the model is good.
 
-## 45. Deliberate engineering checks worth calling out
+## 46. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
@@ -2097,7 +2126,7 @@ the machinery learns, not that the model is good.
   `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
   else, rather than surfacing a cryptic `torch.stft` message.
 
-## 46. Environment notes
+## 47. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).

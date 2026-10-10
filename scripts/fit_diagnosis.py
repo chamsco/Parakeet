@@ -37,7 +37,7 @@ from parakeet.data.dataset import LatentShardDataset  # noqa: E402
 from parakeet.data.text import TextTokenizer  # noqa: E402
 from parakeet.models import build_model  # noqa: E402
 from parakeet.models.duration import normalized_to_durations  # noqa: E402
-from parakeet.train.common import infer_model_geometry  # noqa: E402
+from parakeet.train.common import apply_checkpoint_geometry, infer_model_geometry  # noqa: E402
 
 
 def collect(
@@ -97,6 +97,9 @@ def main() -> int:
     cache = Path(args.cache)
     payload = torch.load(args.checkpoint, map_location="cpu", weights_only=False)
     state = (payload.get("ema") or {}).get("shadow") or payload["model"]
+    applied = apply_checkpoint_geometry(cfg, state)
+    if applied:
+        print(f"[fit] geometry from the checkpoint: {applied}")
     geometry = infer_model_geometry(state)
     if "n_voices" in geometry:
         cfg.n_voices = geometry["n_voices"]
