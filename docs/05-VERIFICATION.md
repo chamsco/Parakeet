@@ -2285,6 +2285,53 @@ things could change that, and both are cheap to test relative to a 40-hour run:
 
 The 9 000-step point and then a long full-corpus run are what separate those.
 
+## 53. The long run, and how to operate it (round 46)
+
+Since the decision was CPU-only and the curve said *more data per step* is the cheap remedy for
+memorising without generalising, the run that is now training uses the **whole corpus** rather than 200
+utterances:
+
+```powershell
+.\.venv\Scripts\python.exe -u scripts\overfit_flow.py --items 1175 --holdout 32 `
+    --steps 200000 --batch-size 16 --crop-frames 160 --lr 0.0005 --save-every 2500 `
+    --out runs\flow_long > runs\flow_long\train.log 2>&1
+```
+
+* 1 175 training utterances, **32 held out** (ρ is reported for both, so generalisation is measured, not
+  assumed);
+* 160-frame aligned crops, batch 16 — the throughput setting: ~1.1 steps/s, so 200 000 steps is roughly
+  **50 hours** on this machine;
+* checkpoints every 2 500 steps (~40 min), which is the unit to read progress in.
+
+Monitoring, in one command each:
+
+```powershell
+Get-Content runs\flow_long\train.log -Tail 5           # loss per 50 steps, and the schedule position
+python scripts\rho_curve.py --run runs\flow_long --items 1175 --holdout 32   # rho vs steps, both splits
+```
+
+The first log lines, from before the run started:
+
+```
+before training: sampled latent rho on 24 of the 1175 training utterances = -0.0027
+holdout: 32 utterances never trained on (rho before = +0.0002)
+schedule: 200000 steps with 1000 warmup at lr 0.0005
+{'step': 0, 'trainable_params': 16132310.0, ...}
+{'flow': 2.0281, 'length': 1.8263, 'loss': 3.8544, 'lr': 0.0, 'step': 50}
+{'flow': 1.4192, 'length': 0.2452, 'loss': 1.6643, 'lr': 0.0, 'step': 100}
+{'flow': 0.8990, 'length': 0.0001, 'loss': 0.8991, 'lr': 0.0001, 'step': 250}
+```
+
+Note the length term collapsing to ~1e-4 within 250 steps — the bias initialisation from round 32 doing
+its job — while the flow term falls the way the marginal solution falls. **ρ, not the loss, is the
+progress metric** (round 43): the loss falling here is expected and proves nothing until ρ moves.
+
+The run is `python -u` on purpose: without `-u`, Python buffers stdout when it is redirected to a file, so
+a multi-day run would show an empty log until it exited. `--save-every 2500` replaces the harness's
+quarter-of-the-run default, which for a 200 000-step run would have been a single 50-hour checkpoint.
+
+
+
 ## 53. Smoke test output (measured)
 
 ```
