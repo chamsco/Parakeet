@@ -81,6 +81,9 @@ def main() -> int:
                     help="override the cross-attention gain after building; a large value tests whether "
                          "conditioning *strength* is what limits learning the mapping")
     ap.add_argument("--tag", default="", help="suffix for the report file")
+    ap.add_argument("--lr", type=float, default=None,
+                    help="override the learning rate; a memorisation test wants a bigger one than a "
+                         "full-corpus run")
     args = ap.parse_args()
 
     cfg = load_config(args.config)
@@ -118,7 +121,9 @@ def main() -> int:
     # had barely been trained, not one that could not learn).
     cfg.train.max_steps = args.steps
     cfg.train.warmup_steps = max(10, min(cfg.train.warmup_steps, args.steps // 20))
-    print(f"schedule: {args.steps} steps with {cfg.train.warmup_steps} warmup")
+    if args.lr is not None:
+        cfg.train.lr = args.lr
+    print(f"schedule: {args.steps} steps with {cfg.train.warmup_steps} warmup at lr {cfg.train.lr}")
     logs = run_stage(
         "flow", cfg, model=model, batches=source, max_steps=args.steps, out_dir=args.out,
         device="cpu", log_fn=lambda l: print("  ", {k: round(v, 4) if isinstance(v, float) else v
