@@ -1739,6 +1739,33 @@ inspectable). The reasoning is measured, not aesthetic: the token path's ceiling
 acoustic path is proven (round-trip WER 0.0), and the flow is both the papers' route and ~8× cheaper per
 second of audio.
 
+### Verification: what the two fixes changed, measured
+
+The first checkpoint of the *pre-fix* run generated 0.3 s for a 35.8 s reference (length ratio 0.01).
+Its length head read 0.35 in log frames against a 6.75 target, unchanged between step 12 and step 400 —
+it was not learning at all. Training *only* that head at lr 1e-2 for 60 steps took the loss from 40.975
+to **0.006** (0.35 → 6.81), which ruled the head out and pointed at arithmetic: AdamW moves a parameter
+by roughly the learning rate per step regardless of gradient size, so a bias starting 6.75 away needs
+~32 000 steps at lr 2e-4 to arrive. Every run in this project has been 1 600–6 000 steps. **That is the
+duration collapse measured in round 30** — the duration head was never given the chance, not badly
+trained. `DurationConfig.log_length_init = 6.5` fixes the start, and `train.py` now scales warmup to 5 %
+of the run instead of consuming a third of it (the pre-fix flow run trained at an effective lr near
+1e-5).
+
+Re-run with both fixes, same corpus, batch 8, evaluated at step 400 (10 % of the run, NFE 4):
+
+| at step 400 | before the fix | after |
+|---|---|---|
+| length ratio (generated / reference) | **0.01** | **1.67** |
+| log-mel cosine against the reference | n/a — nothing overlapped | **0.794** |
+| speed | — | RTF 0.03 (**30× real time** at NFE 4) |
+| student WER (control 0.087) | 1.000 | 1.000 |
+| student DNSMOS | 0.879 | 1.412 (14.6 % of samples clipped) |
+
+Full-length audio, a computable acoustic proxy, and 30× real time at NFE 4 after 400 steps: the flow
+trajectory has a gradient to follow, which the token path never showed. It is still not intelligible, so
+the run continues to 4 000 steps and the trajectory (cosine, WER, clipping) is what gets reported next.
+
 ## 38. Smoke test output (measured)
 
 ```
@@ -1790,7 +1817,7 @@ overhead — it is not a valid throughput measurement until the model predicts s
 learning demo (§2) trains properly but on 15 seconds of *synthetic* audio, so it demonstrates that
 the machinery learns, not that the model is good.
 
-## 39. Deliberate engineering checks worth calling out
+## 40. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
@@ -1826,7 +1853,7 @@ the machinery learns, not that the model is good.
   `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
   else, rather than surfacing a cryptic `torch.stft` message.
 
-## 40. Environment notes
+## 41. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).

@@ -1,0 +1,49 @@
+{
+  "checkpoint": "runs\\flow_v2\\flow_step400.pt",
+  "checkpoint_step": 400,
+  "weights": "ema",
+  "corpus": {
+    "manifest": "val.jsonl",
+    "utterances": 8
+  },
+  "synthesis": {
+    "rtf": 0.03306331216585421,
+    "x_realtime": 30.24500373658086,
+    "log_mel_cosine_vs_reference": 0.7940839380025864,
+    "phase_coherence": 0.1677966807037592,
+    "generated_seconds": 59.84,
+    "reference_seconds": 35.804875,
+    "length_ratio": 1.6712807962602858
+  },
+  "naturalness": {
+    "metric": "dnsmos p835",
+    "student": 1.4121539488207748,
+    "teacher": 3.2838995829502258,
+    "note": "teacher = the Kokoro reference the corpus was built from; it is the control"
+  },
+  "utmos": {
+    "student": null,
+    "teacher": null,
+    "available": false,
+    "reason": "`utmos` not installed (ModuleNotFoundError)",
+    "note": "the documented metric; `utmos` needs fairseq, whose sdist cannot build here"
+  },
+  "wer": {
+    "student": 1.0,
+    "teacher": 0.0873015873015873,
+    "recogniser": "base.en",
+    "note": "the recogniser size is part of the number; not comparable to a large-v3 WER"
+  },
+  "caveats": [
+    "the student is trained on a small corpus for a short CPU budget: this is a baseline",
+    "DNSMOS on the *teacher* is the ceiling for this corpus, not a human MOS",
+    "WER with a small recogniser is an upper bound relative to the papers' large-v3"
+  ],
+  "checks": {
+    "synthesis_produces_audio": true,
+    "dnsmos_available": true,
+    "wer_available": true,
+    "naturalness_metric_separates_teacher_from_student": true,
+    "recogniser_works_on_the_teacher_audio": true
+  }
+}
