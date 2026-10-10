@@ -2523,7 +2523,38 @@ Both variants are exposed (`flow.plan_residual`, default **false**). With no mea
 default is the **advisory** form, whose worst case is "no better than plain" rather than "the target is
 corrupted while the plan is still bad". The long run was restarted on it.
 
-## 58. Deliberate engineering checks worth calling out
+## 58. The text *is* in the objective — it contributes 14 % (round 51)
+
+Rounds 39–49 inferred the conditioning's weakness from *samples*: an untrained field indifferent to its text,
+ρ ≈ 0 with teacher-like temporal statistics. That leaves a question those measurements cannot answer — is
+the text in the **objective** at all, or is it being ignored by construction?
+
+`scripts/text_dependence.py` answers it directly with a shuffled-text control: pair each utterance's
+acoustics with a **different utterance's text** and see whether the loss moves. On the 3 000-step plan
+checkpoint:
+
+```
+flow loss with the RIGHT text     : 1.0642
+flow loss with a SHUFFLED text    : 1.2146
+difference                        : +0.1505 (+14.1% of the loss)
+  -> the objective does depend on the text; the gap is optimisation or scale
+```
+
+So the conditioning path works and the text is genuinely part of the objective — the failure is not a
+disconnected signal. It is a **magnitude** problem, and now it has a number: **the text accounts for ~14 %
+of the loss**, while ρ against the right latent is ≈ 0. The model is extracting a little from the text and
+the marginal distribution supplies the rest — which is a precise restatement of "p(latent) learned,
+p(latent | text) not", with a quantity attached that can be tracked across checkpoints instead of inferred.
+
+That also makes this a better *progress* indicator than the loss: a run that is learning the conditioning
+should push the shuffled-text gap **up**, while the total loss can keep falling purely on the marginal.
+
+One honest note on the gradient table this script prints: it shows **no gradient for the length
+predictor**, which is an artefact of the probe calling `flow_loss` directly — the length term lives in
+`stage_flow`, not in `flow_loss`. It is not a finding about the model, and the script says so where it
+matters rather than leaving a misleading zero in a table.
+
+## 59. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
@@ -2559,7 +2590,7 @@ corrupted while the plan is still bad". The long run was restarted on it.
   `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
   else, rather than surfacing a cryptic `torch.stft` message.
 
-## 59. Environment notes
+## 60. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
