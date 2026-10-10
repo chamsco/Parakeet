@@ -320,7 +320,10 @@ class ParakeetFlow(nn.Module):
             ids, mask, ref_mel, ref_mask, speaker_emb, voice
         )
         x0 = torch.randn_like(x1c)
-        t = sample_timesteps(x1c.shape[0], x1c.device, self.cfg.flow.sigma_min)
+        t = sample_timesteps(
+            x1c.shape[0], x1c.device, self.cfg.flow.sigma_min,
+            mode=getattr(self.cfg.flow, "t_sampling", "uniform"),
+        )
         x_t = make_xt(x1c, x0, t)
         v_target = x1c - x0
         drop = (torch.rand(x1c.shape[0], device=x1c.device) < 0.1) if self.training else None

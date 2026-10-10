@@ -135,6 +135,11 @@ class FlowConfig:
     cond_dim: int = 256
     #: training
     sigma_min: float = 1e-4
+    #: timestep distribution for flow matching.  "uniform" spends most samples near the noise end, where
+    #: the conditional information is weakest; "logit_normal" concentrates t around 0.5 (the SD3 trick).
+    #: Round 40/41 measured the flow fitting the *marginal* field first and the conditioning only later,
+    #: and this is the standard remedy -- exposed so it can be A/B'd rather than assumed.
+    t_sampling: str = "uniform"
     context_expansion: int = 4  # Ke (SupertonicTTS context-sharing batch expansion)
     #: inference
     nfe: int = 32

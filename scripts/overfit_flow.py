@@ -88,6 +88,14 @@ def main() -> int:
                     help="train on random aligned crops of this many latent frames.  Text is cropped with "
                          "the audio, so the pairing stays consistent, and each step sees far more variety "
                          "for the same compute (the papers' own recipe)")
+    ap.add_argument("--warm-start", default=None,
+                    help="checkpoint whose matching weights to load before training.  The text encoder "
+                         "(dim 256, 4 layers) is shared with the Tiny variant, so a text side trained to "
+                         "regress latents gives the flow's cross-attention a meaningful memory from step 0 "
+                         "instead of a random one")
+    ap.add_argument("--t-sampling", default=None, choices=["uniform", "logit_normal"],
+                    help="timestep distribution for flow matching; `logit_normal` concentrates t around "
+                         "0.5 (the SD3 trick) instead of spending most samples near the noise end")
     args = ap.parse_args()
 
     cfg = load_config(args.config)
@@ -106,6 +114,19 @@ def main() -> int:
                            if k in current and tuple(current[k].shape) == tuple(v.shape)},
                           strict=False)
     load_latent_norm_from_cache(model, args.cache)
+    if args.warm_start:
+        warm = torch.load(args.warm_start, map_location="cpu", weights_only=False)
+        warm_state = (warm.get("ema") or {}).get("shadow") or warm["model"]
+        current = model.state_dict()
+        usable = {k: v for k, v in warm_state.items()
+                  if k in current and tuple(current[k].shape) == tuple(v.shape)}
+        model.load_state_dict(usable, strict=False)
+        text_keys = [k for k in usable if k.startswith("text.")]
+        print(f"warm start: loaded {len(usable)} tensors, {len(text_keys)} of them from the text encoder "
+              f"({args.warm_start})")
+    if args.t_sampling:
+        cfg.flow.t_sampling = args.t_sampling
+        print(f"timestep sampling: {args.t_sampling}")
     if args.cross_gain is not None:
         with torch.no_grad():
             for block in model.vf.blocks:
