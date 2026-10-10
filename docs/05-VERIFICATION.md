@@ -2422,7 +2422,34 @@ Careful about what this does *not* show: the plan **learning** is not evidence t
 That A/B is still unmeasured, and until it is, the honest claim is "the coarse signal is learnable", not
 "this fixes the mapping".
 
-## 55. Deliberate engineering checks worth calling out
+### The A/B, measured (same task, same budget)
+
+| 2 utterances, 3 000 steps, lr 1e-3 | flow loss | sampled-latent ρ |
+|---|---|---|
+| plain text conditioning | 0.064 | **0.2495** |
+| **plan conditioning** | 0.064 | **0.2752** |
+
+A **+10 % relative** improvement in ρ (0.2495 → 0.2752). Real, in the direction the plan's own loss
+predicted, and *small*: it does not close a gap of 0.75. The honest verdict is that the coarse signal helps
+a little and the binding constraint is still the training scale — the plan is in the long run because it is
+measurably better, not because it is the papers' shape, and it is not the breakthrough.
+
+One caveat on the comparison: both runs used the same data and step budget, but model initialisation is not
+seeded by the harness, so part of the +0.026 could be run-to-run variation. It is recorded as a modest
+effect, not a decisive one.
+
+## 55. Wall time is not compute time on this machine (round 48)
+
+A round's worth of wall clock passed with only ~50 minutes of CPU accumulated: **the machine sleeps**, so
+elapsed time is a misleading unit here. Every estimate in this project should be read in **CPU-minutes**,
+and the long run's budget is ~50 *CPU*-hours — which may be several days of wall clock if the machine is
+idle part of the time. The logs carry the step counter, so progress never depends on the clock:
+
+```powershell
+Get-Content runs\flow_long_plan\train.log -Tail 3
+```
+
+## 56. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
