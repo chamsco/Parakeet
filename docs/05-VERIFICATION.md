@@ -2060,7 +2060,29 @@ the measured WER of 1.000, while the mel cosine said 0.90. From here the flow's 
 **ρ**, with 0.75 as the target, and `flow_trajectory.py` reports it for every checkpoint via
 `--latent-cache`.
 
-## 46. Smoke test output (measured)
+## 46. The flow's conditioning is *weak*, not broken — measured (round 39)
+
+ρ ≈ 0 for the flow's samples could mean "not trained yet" or "never wired". Measurements separate them:
+
+| probe | result |
+|---|---|
+| **untrained** model, velocity for two *different texts*, same noise and timestep | ρ = **+0.9968** |
+| trained (step 1 000) model, same probe | ρ = **+0.9994** |
+| trained model, conditioned vs `drop_cond=True` | ρ = **+0.9981** |
+| sampled latents for two different texts (same seed) | ρ = **+0.998…+0.999** |
+| cross-attention contribution vs the conv branch, at initialisation | 0.063 vs 0.604 → **ratio 0.10** |
+
+An **untrained** network proving insensitive to its conditioning rules out "needs more training" as the
+explanation for the *wiring*, and the last row says why: the cross-attention enters at about **a tenth of
+the local conv branch's strength**, so ~90 % of the velocity is text-independent from the start. The model
+is not ignoring the text — its own prior is drowning it out, which is also what the cross-voice
+measurement (0.172) says about the target: most frame-latent detail is *not* determined by the text.
+
+That makes the next change concrete rather than speculative: **strengthen the conditioning path** — the
+pooled text/style embedding concatenated onto the estimator's input alongside cross-attention, and a cross
+branch scaled comparably to the conv branch — rather than adding steps.
+
+## 47. Smoke test output (measured)
 
 ```
 parakeet-tiny [tiny] sr=24000 mel=80@93.8Hz latent=24 compress=1/6 voice=constant
