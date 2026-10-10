@@ -104,15 +104,17 @@ def align_tokens_to_frames(
     out = torch.zeros(b, t_max, c, dtype=token_features.dtype, device=token_features.device)
     mask = torch.zeros(b, t_max, dtype=torch.bool, device=token_features.device)
     for i in range(b):
-        # The index is integer bookkeeping with no gradient, so it is built on the **CPU** and then
-        # moved.  `repeat_interleave` is not implemented on DirectML: the plugin silently falls back to
-        # the CPU, which leaves the index on one device and the features on another, and the backward
-        # pass then fails inside the plugin's own error handler (it raises UnicodeDecodeError trying to
-        # decode a Windows error string).  Building the index where the op exists keeps the gather --
-        # and therefore the gradient -- entirely on the model's device.
-        idx = torch.repeat_interleave(torch.arange(t), repeats[i].detach().cpu()).to(
-            token_features.device
-        )
+        # `repeat_interleave` is not implemented on DirectML: the plugin silently falls back to the CPU,
+        # which leaves the index on one device and the features on another, and the backward pass then
+        # dies inside the plugin's own error handler (a UnicodeDecodeError from a Windows error string).
+        # Everywhere else the op runs on the model's device, so CUDA/ROCm do not pay a host round-trip
+        # per utterance for an integer index.
+        index_device = token_features.device
+        if index_device.type == "privateuseone":  # DirectML
+            index_device = torch.device("cpu")
+        idx = torch.repeat_interleave(
+            torch.arange(t, device=index_device), repeats[i].detach().to(index_device)
+        ).to(token_features.device)
         n = min(idx.numel(), t_max)
         out[i, :n] = token_features[i, idx[:n]]
         mask[i, :n] = True

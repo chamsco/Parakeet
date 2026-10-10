@@ -2082,7 +2082,45 @@ That makes the next change concrete rather than speculative: **strengthen the co
 pooled text/style embedding concatenated onto the estimator's input alongside cross-attention, and a cross
 branch scaled comparably to the conv branch — rather than adding steps.
 
-## 47. Smoke test output (measured)
+## 47. The flow optimises its objective without learning the mapping (round 40)
+
+With the latent convention fixed, the conditioning strengthened and a calibrated metric in hand, the flow
+was pushed through the sharpest tests available on a CPU:
+
+| measurement | result | reading |
+|---|---|---|
+| flow-matching loss, fresh → 500 → 1 000 steps | 2.005 → 1.477 → **0.890** | it *is* learning |
+| sampled-latent ρ at those steps | 0.002 / 0.006 | uncorrelated with the target |
+| ρ vs sampler NFE (4 / 16 / 32 / 64) | 0.0021 / 0.0021 / 0.0021 / **0.0022** | the sampler is converged, not the limitation |
+| overfit **12 utterances**, 400 steps (loss 1.96 → 0.75) | ρ = **−0.003** | memorising is not happening either |
+| overfit 12 utterances with cross-gain **60** | ρ = **−0.005** | conditioning *strength* is not the blocker |
+| overfit **2 utterances**, 600 steps, correct schedule (loss 2.0 → 0.45) | ρ = **−0.013** | the sharpest test: still no mapping |
+
+The loss falls steadily in every configuration while the correlation between what the model samples and
+what the teacher produced stays at zero. That is the signature of learning the **marginal** velocity
+field — the data's average flow — which reduces the objective substantially and carries no information
+about *which* latent belongs to *which* text. Sampling from it gives plausible-looking, wrong audio,
+which is precisely what rounds 35–39 measured from the outside.
+
+Two incidental things this round, both worth keeping:
+
+* **`overfit_flow.py`** — a reusable harness that trains on a handful of cache items and reports ρ before
+  and after, so "can this architecture learn the mapping at all?" is a ten-minute question instead of a
+  multi-hour one;
+* the harness's *first* run was invalid and said so quietly: calling `run_stage` directly skipped the
+  `--steps` schedule alignment from round 32, so the learning rate sat at ~0 for the whole run (`lr 0.0`
+  at step 250 in its own log). Fixed in the harness; every number above is from the corrected run.
+
+### What this means for the objective
+
+The diagnostics are calibrated (ρ target, speech-likeness gate), several real defects are fixed (latent
+convention, length initialisation, conditioning strength, schedule alignment), and what remains is
+**training at a scale this CPU cannot reach** — a few thousand steps against the orders of magnitude the
+papers use. That is the case for the operator's WSL2/ROCm work, and the code is ready for it:
+`resolve_device` already selects CUDA/ROCm, the training path is plain fp32 with no CUDA-specific AMP
+assumptions, and the per-utterance host round-trip that existed for DirectML is now conditional.
+
+## 48. Smoke test output (measured)
 
 ```
 parakeet-tiny [tiny] sr=24000 mel=80@93.8Hz latent=24 compress=1/6 voice=constant
@@ -2133,7 +2171,7 @@ overhead — it is not a valid throughput measurement until the model predicts s
 learning demo (§2) trains properly but on 15 seconds of *synthetic* audio, so it demonstrates that
 the machinery learns, not that the model is good.
 
-## 48. Deliberate engineering checks worth calling out
+## 49. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
@@ -2169,7 +2207,7 @@ the machinery learns, not that the model is good.
   `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
   else, rather than surfacing a cryptic `torch.stft` message.
 
-## 49. Environment notes
+## 50. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
