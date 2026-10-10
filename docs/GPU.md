@@ -7,6 +7,13 @@ compute is the binding constraint on every experiment. This machine has an **AMD
 
 ## The measurement, in short
 
+**Status (round 45): this machine trains on CPU.** The GPU routes were investigated and closed — WSL2+ROCm
+is outside AMD's support matrix for this card (see Option B), DirectML cannot run the audio step (table
+below), and the decision taken was to keep training on CPU. That makes the governing metric **ρ per
+CPU-hour**, not ρ per step: at the measured rates, an evening of CPU buys a few thousand flow steps, and
+the flow needs tens of thousands to cross ρ 0.75. Everything in this file about GPU routes is kept as the
+record of what was checked, not as a pending plan.
+
 | workload | CPU | DirectML (`torch-directml`) | speedup |
 |---|---|---|---|
 | `distill-text` step, batch 8 | 91 ms | 91 ms | 1.0× |

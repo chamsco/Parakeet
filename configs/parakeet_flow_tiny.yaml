@@ -1,0 +1,89 @@
+# Parakeet-Flow, *tiny* — the same acoustic route at a quarter of the parameters.
+#
+# Why this config exists.  Round 45 established that this machine trains on CPU only, so what matters is
+# rho per CPU-hour, not rho per step.  A velocity field at dim 128 / depth 3 does roughly a quarter of the
+# arithmetic per step of the 21M field in `parakeet_flow.yaml`, which buys several times the steps for the
+# same wall clock -- and the objective asks for the lightest model that works, so if the mapping is
+# learnable at this size then this is the *right* size rather than a compromise.
+#
+# It is a copy of `parakeet_flow.yaml` with exactly three changes -- `name`, `flow.dim`, `flow.depth` -- so
+# that a comparison between them is only about capacity:
+#   python scripts/overfit_flow.py --config configs/parakeet_flow_tiny.yaml \
+#       --items 200 --holdout 32 --steps 9000 --batch-size 16 --crop-frames 160 --lr 0.0005 \
+#       --out runs/flow_general_tiny
+name: parakeet-flow-tiny
+variant: small
+voice_mode: constant
+n_voices: 1
+
+audio:
+  sample_rate: 24000
+  n_fft: 1024
+  hop_length: 256
+  win_length: 1024
+  n_mels: 80
+  fmax: 12000.0
+
+autoencoder:            # must match the autoencoder that produced the cache, or the flow learns to
+  latent_dim: 24        # decode latents that nothing in the corpus produces
+  encoder_dims: [64, 96, 128]
+  encoder_blocks: [1, 2, 2]
+  decoder_dim: 256
+  decoder_blocks: 5
+  decoder_expansion: 4
+  decoder_dilations: [1, 2, 4, 8, 16]
+  causal_decoder: true
+
+text:
+  vocab_size: 128
+  dim: 256
+  n_layers: 4
+  n_heads: 4
+  mode: char
+
+duration:
+  hidden: 256
+  n_layers: 2
+  predict_token_durations: true
+  predict_utterance_length: false
+
+speaker:
+  n_mels: 80
+  emb_dim: 192
+  n_query: 8
+  style_dim: 256
+  freeze: true
+
+flow:
+  latent_dim: 24
+  compress: 6
+  dim: 128              # a quarter of the width
+  depth: 3              # one fewer block
+  n_heads: 4
+  text_dim: 256
+  cond_dim: 256
+  nfe: 32
+  distilled_nfe: 4
+  cfg_scale: 1.5
+
+train:
+  batch_size: 8
+  lr: 0.0002
+  max_steps: 20000
+  ema_decay: 0.999
+  save_every: 5000
+  log_every: 50
+  loss:
+    mel: 1.0
+    spectral: 3.0
+    adversarial: 1.0
+    feature_match: 2.0
+    duration: 1.0
+    f0: 1.0
+    energy: 1.0
+    latent_feature: 1.0
+    phase_lock: 0.05
+    audio_mel: 1.0
+    audio_spectral: 3.0
+    audio_aux: 1.0
+    signal_latent_contrast: 1.0
