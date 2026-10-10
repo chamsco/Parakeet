@@ -2213,11 +2213,28 @@ Identical within noise. On a two-item task the objective is dominated by fitting
 rather than by the quality of the text representation, so this test *cannot* show a benefit — and claiming
 one would be dishonest.
 
-**2. Logit-normal timestep sampling — exposed, running.** Uniform t spends most samples near the noise end
-where the conditional information is weakest; SD3's logit-normal concentrates t around 0.5.
+**2. Logit-normal timestep sampling — lower loss, same mapping.** Uniform t spends most samples near the
+noise end where the conditional information is weakest; SD3's logit-normal concentrates t around 0.5.
 `sample_timesteps` already implemented the mode, but `flow_loss` hard-coded `"uniform"` so it had never
-been used; it is now wired through `FlowConfig.t_sampling`, default unchanged, and A/B-able via
-`overfit_flow.py --t-sampling logit_normal`.
+been used; it is now wired through `FlowConfig.t_sampling` (default unchanged).
+
+| 2 utterances, 3 000 steps, lr 1e-3 | flow loss | sampled-latent ρ |
+|---|---|---|
+| uniform t | 0.064 | **+0.2495** |
+| logit-normal t | **0.023** | +0.2304 |
+| text encoder warm-started | 0.065 | +0.2466 |
+
+Logit-normal cuts the flow-matching loss by **~3×** and does not improve the mapping at all. That is the
+round's most useful lesson: **the loss and the conditional mapping are decoupled**, because the loss is
+dominated by the marginal velocity field, which carries no text information. Every "the loss is falling"
+observation in rounds 40–43 is therefore *not* evidence of progress; ρ is the only number that is.
+
+### The only lever that worked was steps
+
+Across four configurations at identical step counts (2 utterances, 3 000 steps, lr 1e-3) ρ stays in
+0.23–0.25. The one thing that moved it was **more steps** — 600 steps gave −0.013 and 3 000 gave +0.25
+(round 41) — while cropping, the conditioning gain, warm-starting the text encoder and logit-normal
+timesteps all leave it where it is. The requirement is compute, and `docs/GPU.md` is the response to it.
 
 **3. De-risking that worked: the flow stage verifiably resumes.** A long GPU run must survive
 interruption, so this was tested rather than assumed — 40 steps with checkpoints every 20, then
