@@ -2449,7 +2449,41 @@ idle part of the time. The logs carry the step counter, so progress never depend
 Get-Content runs\flow_long_plan\train.log -Tail 3
 ```
 
-## 56. Deliberate engineering checks worth calling out
+## 56. The flow has learned *what latents look like*, not *which one to make* (round 49)
+
+The plan checkpoint's synthesised audio has a median F0 of **93.7486 Hz** — exactly the 93.75 Hz latent
+frame rate. The natural reading is "the samples are temporally white, so the decoder emits a pulse train at
+the frame rate". That reading is **wrong**, and measuring it took one script:
+
+| autocorrelation lag | teacher target | flow sample |
+|---|---|---|
+| 1 | 0.9011 | **0.8853** |
+| 2 | 0.7375 | 0.7951 |
+| 4 | 0.4851 | 0.6165 |
+| 8 | 0.2048 | 0.3993 |
+| 16 | 0.1224 | 0.2297 |
+
+std: target 1.048, sample 0.809.
+
+The samples are **smooth, and slightly smoother than the teacher** — the field has learned the marginal
+*temporal process* of real latents quite well. What it has not learned is *which* latent belongs to *which*
+text (ρ ≈ 0). So the failure has a precise description:
+
+> **p(latent) is learned; p(latent | text) is not.**
+
+That is consistent with everything else measured — the loss falling as the marginal is fitted (round 40),
+the untrained field being indifferent to its text (round 39), the plan adding only +10 % (round 48) — and it
+is the reason the audio is acoustically plausible and linguistically empty.
+
+Two consequences worth keeping:
+
+* the ρ measurement (value agreement per dimension) and this one (temporal structure) answer different
+  questions, and both are needed: ρ ≈ 0 with teacher-like autocorrelation is a *different* failure from
+  ρ ≈ 0 with white samples, and only the second would be a sampler or scale bug;
+* `scripts/latent_autocorrelation.py` keeps the distinction checkable, and its docstring records the
+  refuted hypothesis rather than quietly dropping it.
+
+## 57. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
@@ -2485,7 +2519,7 @@ Get-Content runs\flow_long_plan\train.log -Tail 3
   `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
   else, rather than surfacing a cryptic `torch.stft` message.
 
-## 57. Environment notes
+## 58. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
