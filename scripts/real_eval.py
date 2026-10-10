@@ -91,6 +91,9 @@ def main() -> int:
                          "cfg.flow.nfe (32), which is 3x *slower than real time* on the CPU: a "
                          "distilled sampler is meant to use 2-4, and SupertonicTTS reports WER 11.43 at "
                          "NFE 4 against 2.64 at NFE 32, so the number belongs in the report")
+    ap.add_argument("--cache", default=None,
+                        help="the latent cache the checkpoint trained on; it stores the latent-normaliser"
+                             " statistics that every decode path must apply (round 36)")
     ap.add_argument("--out", default="runs/real_eval")
     args = ap.parse_args()
 
@@ -147,6 +150,14 @@ def main() -> int:
     model = build_model(cfg)
     model.load_state_dict(state, strict=False)
     model.eval()
+    if args.cache:
+        from parakeet.train.common import load_latent_norm_from_cache
+
+        if load_latent_norm_from_cache(model, args.cache):
+            print(f"[eval] latent normaliser loaded from {args.cache}")
+        else:
+            print(f"[eval] WARNING {args.cache} carries no latent-normaliser statistics; the decoder will"
+                  f" receive normalised latents (run scripts/repair_latent_norm.py)")
     print(f"loaded {args.checkpoint} (step {payload.get('step')}, "
           f"{'EMA' if 'ema' in payload else 'raw'} weights) | n_voices={cfg.n_voices} "
           f"| latent_rate={cfg.autoencoder.latent_rate}")

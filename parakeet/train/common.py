@@ -325,6 +325,44 @@ def derive_latent_rate_from_cache(
     return rate if rate >= 1 else None
 
 
+def load_latent_norm_from_cache(model, cache_dir: Optional[str | Path]) -> bool:
+    """Load a cache's latent-normaliser statistics into the model's normaliser.
+
+    The cache holds **normalised** latents, and every decode path is supposed to undo that with
+    `LatentNormalizer.denormalize` -- but the statistics used to build it lived for one process and were
+    never saved, so a model loading a checkpoint gets `mean 0 / var 1` and `denormalize` silently becomes
+    the identity.  Round 36 measured the cost: decoding a cached latent gives **WER 1.000**, and applying
+    the recovered inverse gives **WER 0.000**, with a zero residual after the affine map.
+
+    Returns True when statistics were found and installed, False when the cache predates the fix (in
+    which case the caller should say so rather than silently decoding normalised latents).
+    """
+    if not cache_dir:
+        return False
+    meta_path = Path(cache_dir) / "cache_meta.json"
+    if not meta_path.exists():
+        return False
+    try:
+        meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return False
+    stats = meta.get("latent_norm")
+    normalizer = getattr(model, "latent_norm", None)
+    if not stats or normalizer is None:
+        return False
+    mean = torch.tensor(stats["mean"], dtype=normalizer.mean.dtype)
+    var = torch.tensor(stats["var"], dtype=normalizer.var.dtype)
+    if mean.numel() != normalizer.mean.numel():
+        print(f"[latent_norm] cache statistics have {mean.numel()} dims, model has "
+              f"{normalizer.mean.numel()}; ignoring")
+        return False
+    with torch.no_grad():
+        normalizer.mean.copy_(mean)
+        normalizer.var.copy_(var)
+        normalizer.n.fill_(float(stats.get("samples", 1)))
+    return True
+
+
 def infer_model_geometry(state: Dict[str, Any]) -> Dict[str, int]:
     """Read the *widths* a checkpoint implies, so a model can be built to match it.
 

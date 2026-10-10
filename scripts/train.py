@@ -146,6 +146,29 @@ def main() -> int:
         cfg.autoencoder.latent_rate = derived_rate
 
     model = build_model(cfg)
+
+    # the cache's latent-normaliser statistics must reach the model BEFORE training: every decode path
+
+    # denormalises with them, and a stale or identity normaliser means the decoder is trained on the
+
+    # wrong latent space (round 36).
+
+    if args.cache:
+
+        from parakeet.train.common import load_latent_norm_from_cache
+
+
+        if load_latent_norm_from_cache(model, args.cache):
+
+            print(f"[train] latent normaliser loaded from {args.cache}")
+
+        elif model.latent_norm is not None:
+
+            print("[train] WARNING: the cache carries no latent-normaliser statistics; the decoder will be"
+
+                  " trained on normalised latents (rebuild the cache, or run"
+
+                  " scripts/repair_latent_norm.py)")
     if args.warm_start:
         payload = torch.load(args.warm_start, map_location="cpu", weights_only=False)
         ema_shadow = (payload.get("ema") or {}).get("shadow")

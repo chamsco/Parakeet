@@ -1867,7 +1867,73 @@ produce *non-speech* by two different routes with two different signatures. That
 statement than "WER 1.0": it says what to look at next (voicing and formant structure, not more steps of
 envelope matching) and it stops the project being fooled by its own proxies again.
 
-## 41. Smoke test output (measured)
+## 41. The root cause: every run decoded in the wrong latent space (round 36)
+
+Round 35 established that neither path produces speech (a buzz, and noise) while the autoencoder round
+trip transcribes at **WER 0.0**. This round found why, and it is a single convention bug with a measured
+**WER 1.000 → 0.000** effect.
+
+### What the cache holds, and what the decoder was given
+
+`real_train_demo.py` fits a `LatentNormalizer` on the corpus and passes it to the cache builder, which
+stores `normalize(latent)` — so **every cached latent is normalised**. Undoing that is the job of
+`LatentNormalizer.denormalize`, and the code does call it (`decoder_latent_from_tokens` and
+`ParakeetFlow.synthesize` both do). What was missing is the **statistics**: the fitted normaliser lived
+for one process and was never saved, so anything loading a checkpoint later got `mean 0 / var 1` — the
+identity — or stale numbers from an older fit.
+
+Recovered from the data (encode the corpus with the trained autoencoder and take per-dimension
+mean/variance), the transform is exact:
+
+| | |
+|---|---|
+| per-dimension correlation(raw encoder output, cached latent) | **1.000** |
+| residual after `raw = cached * sqrt(var + eps) + mean` | **0.0000** |
+| per-dimension mean | −0.99 … +1.05 |
+| per-dimension variance | 0.109 … 1.341 |
+
+and decoding the same utterance three ways through the *same* frozen decoder:
+
+| latent fed to the decoder | speech-like | WER |
+|---|---|---|
+| `encoder(teacher audio)` | yes | **0.000** |
+| the cached latent, as stored | yes (voiced 0.64) | **1.000** |
+| the cached latent with the inverse applied | yes | **0.000** |
+
+### Which models it corrupted, measured per checkpoint
+
+| checkpoint | `latent_norm.n` | mean abs | var mean | decoded space |
+|---|---|---|---|---|
+| autoencoder | 0 | 0.0000 | 1.0000 | identity (unused) |
+| **flow** step 400/800/1600 | **0** | 0.0000 | 1.0000 | **normalised ✗** |
+| Tiny `mixed_v2`/`calibrated_v2`/`contrast_audio` | 4 | 1.43 | 1.90 | **stale ✗** |
+| Tiny `gutenberg_audio` | 4 | 0.807 | 1.408 | stale ✗ |
+| the cache's true statistics | — | −0.08 (range ±1) | **0.437** | correct |
+
+So the flow decoded normalised latents (identity), and the Tiny path — which *did* have non-zero
+statistics — used values from an **earlier fit** whose variance (1.90) is four times the cache's true 0.437.
+Both paths trained and synthesised against a mis-scaled, mis-shifted decoder input, and the models
+compensated as best they could (a near-silent buzz, and noise).
+
+### The fix
+
+* `build_latent_cache` now **persists** the normaliser statistics in `cache_meta.json`;
+* `scripts/repair_latent_norm.py` recovers them for caches built before the fix (which is exactly the
+  measurement above) and merges them in;
+* `train.common.load_latent_norm_from_cache()` installs them into a model, and **both training and
+  evaluation** call it — a cache without statistics now says so loudly instead of decoding silently;
+* `tests/test_latent_convention.py` pins the invariant (a fitted normaliser round-trips, an unfitted one
+  does **not** undo a fitted transform), the persistence, the missing-statistics case and the
+  dimension-mismatch refusal.
+
+### Honest status of the correction
+
+A 5 000-step Tiny run was restarted in the corrected space with every earlier fix (calibration, contrast
+objective, aligned schedule). At step 1 000–1 500 it is **still not speech-like** (voiced 0.20, flatness
+0.52, WER 1.000) at 59× real time. The convention fix is necessary and its effect is unambiguous on a
+*real* latent (WER 0.000), but the models have to be retrained to benefit, and that is running.
+
+## 42. Smoke test output (measured)
 
 ```
 parakeet-tiny [tiny] sr=24000 mel=80@93.8Hz latent=24 compress=1/6 voice=constant
@@ -1918,7 +1984,7 @@ overhead — it is not a valid throughput measurement until the model predicts s
 learning demo (§2) trains properly but on 15 seconds of *synthetic* audio, so it demonstrates that
 the machinery learns, not that the model is good.
 
-## 42. Deliberate engineering checks worth calling out
+## 43. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
@@ -1954,7 +2020,7 @@ the machinery learns, not that the model is good.
   `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
   else, rather than surfacing a cryptic `torch.stft` message.
 
-## 43. Environment notes
+## 44. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).

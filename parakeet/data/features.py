@@ -374,6 +374,20 @@ def build_latent_cache(
             "of range during training"
         )
     path = writer.flush()
+    # The latents stored here are **normalised** (`teacher_latent_norm.normalize`, below), and every
+    # decode path must undo that with `LatentNormalizer.denormalize`.  Those statistics used to live for
+    # one process and were never saved, so a model loading a checkpoint later got `mean 0 / var 1` -- or,
+    # worse, *stale* statistics from an older fit -- and decoded in the wrong latent space.  Round 36
+    # measured the cost: a cached latent decodes to WER 1.000 while the recovered inverse gives 0.000,
+    # with a zero residual after the affine map.  Persisting them here is what makes the convention
+    # survive the process boundary.
+    latent_norm_meta = None
+    if teacher_latent_norm is not None:
+        latent_norm_meta = {
+            "mean": [float(v) for v in teacher_latent_norm.mean.reshape(-1).tolist()],
+            "var": [float(v) for v in teacher_latent_norm.var.reshape(-1).tolist()],
+            "samples": float(teacher_latent_norm.n.reshape(-1)[0]) if hasattr(teacher_latent_norm, "n") else 0.0,
+        }
     meta = {
         "n_shards": writer.shard_idx,
         "shard_size": writer.shard_size,
@@ -383,6 +397,7 @@ def build_latent_cache(
         "teacher_names": teacher_names,
         "teacher_weights": teacher_weights or {},
         "voice_names": voices,
+        "latent_norm": latent_norm_meta,
     }
     (Path(out_dir) / "cache_meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
     return Path(out_dir)
