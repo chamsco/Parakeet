@@ -2554,33 +2554,44 @@ predictor**, which is an artefact of the probe calling `flow_loss` directly — 
 `stage_flow`, not in `flow_loss`. It is not a finding about the model, and the script says so where it
 matters rather than leaving a misleading zero in a table.
 
-## 59. The token bottleneck is provably lossy: the Tiny route can never be intelligible (round 52)
+## 59. The token bottleneck is nearly LOSSLESS — and a published claim is retracted (round 52)
 
-The intelligibility threshold is ρ ≥ 0.75 against the **frame** latent. Any route that goes
-`text → token latents → frame latents` inherits whatever the token latents preserve, and that can be
-measured *without* any prediction: feed the pipeline the **true** token latents, spread them over the
-utterance's frames, and correlate against the true frame latents. `scripts/bottleneck_ceiling.py`:
+**This section replaces a wrong claim made earlier in the same round.** The first version of this
+measurement reported that the token bottleneck retains only ρ 0.118 of the frame latent, and concluded that
+the Tiny route was capped at ~0.12 "in principle, no matter how well it is trained". Both were artefacts of
+the probe, and the corrected measurement says the opposite.
 
-| per item | oracle ρ | different utterance's tokens | token order shuffled |
-|---|---|---|---|
-| mean of 8 | **+0.1175** | +0.0134 | −0.0132 |
-| range | 0.076 … 0.231 | | |
+What the probe does: feed the pipeline the **true** token latents, expand them back to frame rate with the
+model's own geometry, and correlate against the true frame latents. That is the ceiling for any
+`text → token → frame` route, and it needs no prediction.
 
-**The oracle is 0.118 — an order of magnitude below the 0.75 threshold, with controls at ~0.** The token
-bottleneck (24 dims mean-pooled per token, 72 dims at ~12 Hz) discards ~88 % of the frame-level
-information, so:
+| mean of 8 utterances | faithful geometry (correct) | crude inverse (wrong) |
+|---|---|---|
+| oracle ρ | **+0.9507** (range 0.933 … 0.976) | +0.1175 |
+| different utterance's tokens | +0.0630 | +0.0134 |
 
-* **the Tiny one-shot route is capped at ρ ≈ 0.12 in principle, no matter how well it is trained.** That is
-  a definitive answer to a question rounds 1–35 circled: its measured 0.39 against *token* latents and ~0.2
-  against *frame* latents are consistent with a hard architectural ceiling of `0.39 × 0.12 ≈ 0.05`, and no
-  amount of capacity, curriculum or corpus work could have lifted it;
-* **the flow route is the right one for a reason no measurement had isolated before**: it generates frame
-  latents directly from text and never passes through the token bottleneck. The plan is auxiliary
-  conditioning, not a route.
+**The token bottleneck preserves ρ = 0.95 of the frame latent.** It is a 2.1× compression (2250 → 1075
+dims/s) and it is nearly lossless, which is exactly what a 2.1× compression of a smooth signal should be.
 
-This does not tell us the *flow's* ceiling — that is still text → frame predictability, which remains the
-open question the long run is asking. It does say that the project's earlier dead ends were dead for a
-structural reason, and that the current architecture is the one that is not pre-excluded.
+Two bugs produced the retracted number, and both are worth naming because they are the same class of mistake:
+
+1. **Collapsing the sub-vectors.** `extract_signals` builds each token as `rate` **sub-span means** and
+   inference expands each sub-vector back onto its own span. The first probe averaged the sub-vectors
+   together and then stretched the result over the whole token, destroying the within-token detail the
+   representation exists to keep.
+2. **A transposed reshape.** Those sub-vectors are `torch.cat`ed, so the layout is `(rate, width)`; reshaping
+   as `(width, rate)` silently transposes them. This alone took the number from 0.95 to 0.05.
+
+### What this changes
+
+* **The Tiny route is not structurally doomed.** Its measured 0.39 against token latents is a *learning*
+  result, and with a near-lossless bottleneck a better text → token model would carry that improvement
+  through to frame latents. The route is cheap (one forward pass, no sampling, a quarter of the size) and
+  under the CPU-only constraint that makes it worth revisiting rather than discarding;
+* **the data pipeline is consistent**, which the crude probe had also called into question;
+* the retraction is the point: a measured claim went into a commit and the docs, and a second look at the
+  probe — not at the model — showed it was wrong. The lesson is now attached to the tool itself, including
+  a comment on the layout, so the next person measuring this cannot repeat it silently.
 
 ## 60. Deliberate engineering checks worth calling out
 
