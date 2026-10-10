@@ -179,6 +179,15 @@ CLAIMS: List[Dict[str, Any]] = [
         "fmt": "{passed}/{total} checks",
     },
     {
+        "id": "acoustic_path_works",
+        "statement": "the **acoustic path works**: the autoencoder round trip of a real teacher utterance transcribes at WER 0.0 while the same checkpoint's text-to-speech is WER 1.0 -- so the text side is the whole problem, not the decoder",
+        "report": ["docs/demo/index.json"],
+        "field": "autoencoder_roundtrip_wer",
+        "op": "<=",
+        "target": 0.2,
+        "fmt": "round-trip WER {value:.2f} (student {reason})",
+    },
+    {
         "id": "fit_diagnosis",
         "statement": "the text side matches the latent's **mean** (cosine 0.81) with almost **no per-token structure** (per-dim correlation 0.13) and under-predicts length (0.77x)",
         "report": ["runs/fit_diag_char.json"],

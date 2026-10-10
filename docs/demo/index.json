@@ -1,0 +1,53 @@
+{
+  "checkpoint": "runs\\contrast_audio\\distill-audio_last.pt",
+  "step": 2400,
+  "latent_rate": 3,
+  "text_mode": "char",
+  "sentences": 6,
+  "student_wer": 1.0,
+  "student_wer_note": "control passed",
+  "control_wer_on_real_speech": 0.0,
+  "autoencoder_roundtrip_wer": 0.0,
+  "autoencoder_roundtrip_text": "A little bright-eyed terrier, you know, with oh, such long curly brown hair!",
+  "student_dnsmos": 1.481827198007017,
+  "reference_wer": 0.0,
+  "verdict": "not intelligible yet: the demo says so, and shows the autoencoder round trip instead, which is the part that measurably works",
+  "entries": [
+    {
+      "index": 0,
+      "text": "The quick brown fox jumps over the lazy dog.",
+      "student": "student_00.wav",
+      "roundtrip": "autoencoder_roundtrip.wav"
+    },
+    {
+      "index": 1,
+      "text": "She opened the window and listened to the rain.",
+      "student": "student_01.wav",
+      "roundtrip": null
+    },
+    {
+      "index": 2,
+      "text": "We should leave before the traffic gets bad.",
+      "student": "student_02.wav",
+      "roundtrip": null
+    },
+    {
+      "index": 3,
+      "text": "He wrote the letter twice and sent the second one.",
+      "student": "student_03.wav",
+      "roundtrip": null
+    },
+    {
+      "index": 4,
+      "text": "The little engine climbed the hill without stopping.",
+      "student": "student_04.wav",
+      "roundtrip": null
+    },
+    {
+      "index": 5,
+      "text": "Dinner is at seven, so do not be late.",
+      "student": "student_05.wav",
+      "roundtrip": null
+    }
+  ]
+}

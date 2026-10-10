@@ -45,3 +45,6 @@ Thumbs.db
 
 # the DirectML experiment venv (Python 3.11, torch-directml; ~700 MB)
 /.venv-dml/
+
+# the listenable demo pack is small and is the artifact (regenerate: scripts/demo_pack.py)
+!docs/demo/*.wav
