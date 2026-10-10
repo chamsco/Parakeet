@@ -276,6 +276,55 @@ def derive_n_voices_from_cache(cache_dir: Optional[str | Path]) -> Optional[int]
     return max(1, len(voices)) if voices else None
 
 
+def derive_latent_rate_from_cache(
+    cache_dir: Optional[str | Path], latent_dim: int = 24
+) -> Optional[int]:
+    """How many sub-latents per text token the cache holds, read from the data itself.
+
+    The cache builder takes ``--latent-rate``, so a cache can hold 24-dim or 72-dim ``latent_token``
+    targets depending on how it was built, while the model's head width comes from the config.  Getting
+    them out of step produces a shape error deep inside the loss (``tensor a (24) must match tensor b
+    (72)``) that says nothing about the cause -- measured twice in this project, once in the round-23
+    objective change and once in round 33.  Reading the width off the first cache item removes the whole
+    class of mistake, the same way the voice table is derived.
+    """
+    if not cache_dir:
+        return None
+    root = Path(cache_dir)
+    width = None
+    index_path = root / "index.json"
+    if index_path.exists():
+        try:
+            index = json.loads(index_path.read_text(encoding="utf-8"))
+            entries = index if isinstance(index, list) else (
+                index.get("items") or index.get("shards") or []
+            )
+            first = entries[0] if entries else None
+            if isinstance(first, dict):
+                width = first.get("latent_token_width") or first.get("token_dim")
+        except (json.JSONDecodeError, OSError, TypeError):
+            width = None
+    if width is None:
+        # fall back to reading one shard's tensor shape; the index does not have to carry the width
+        try:
+            import torch
+
+            shards = sorted(root.glob("*.pt"))
+            if not shards:
+                return None
+            payload = torch.load(shards[0], map_location="cpu", weights_only=False)
+            items = payload.get("items") if isinstance(payload, dict) else payload
+            if items:
+                token = items[0].get("latent_token")
+                width = int(token.shape[-1]) if token is not None else None
+        except (OSError, KeyError, IndexError, TypeError, RuntimeError, AttributeError):
+            return None
+    if not width:
+        return None
+    rate = int(round(int(width) / max(1, int(latent_dim))))
+    return rate if rate >= 1 else None
+
+
 def infer_model_geometry(state: Dict[str, Any]) -> Dict[str, int]:
     """Read the *widths* a checkpoint implies, so a model can be built to match it.
 
@@ -292,6 +341,49 @@ def infer_model_geometry(state: Dict[str, Any]) -> Dict[str, int]:
     if head is not None and hasattr(head, "shape") and len(head.shape) == 2:
         geometry["latent_head_width"] = int(head.shape[0])
     return geometry
+
+
+def calibrate_head_scale(
+    model, batch: Dict[str, Any], target_key: str = "latent_token", head_name: str = "latent_head"
+) -> Dict[str, float]:
+    """Rescale a regression head so its *initial* output matches the target's scale.
+
+    Round 33 measured why this matters.  AdamW moves a parameter by roughly the learning rate per step
+    regardless of gradient size, so the distance from the initialisation to the target sets a floor on
+    the steps needed.  The text side's `latent_head` starts with an output standard deviation of
+    **0.249** against a target of **0.897** -- a factor of 3.6, i.e. ~18 000 steps at lr 2e-4 just to
+    reach the right *magnitude*, before any structure can be learned.  Runs of 1 600-2 400 steps
+    therefore learned the mean (cheap) and not the variation (expensive), which is exactly the round-30
+    fit diagnosis (flattened cosine 0.805, per-dimension correlation 0.126).
+
+    Multiplying the head's last linear weight *and* bias by the ratio scales its output by exactly that
+    ratio, so training starts where it needs to end up.  Returns the measurement for the log.
+    """
+    head = getattr(model, head_name, None)
+    if head is None or not hasattr(head, "__getitem__"):
+        return {}
+    with torch.no_grad():
+        side = model.text_side(batch["ids"], batch.get("text_mask"), batch.get("voice"))
+        predicted = side[target_key]
+        target = batch[target_key]
+        predicted_std = float(predicted.std())
+        target_std = float(target.std())
+        if predicted_std < 1e-8 or target_std < 1e-8:
+            return {"predicted_std": predicted_std, "target_std": target_std, "ratio": 1.0}
+        ratio = target_std / predicted_std
+        last = head[-1]
+        for parameter in (last.weight, last.bias):
+            if parameter is not None:
+                parameter.mul_(ratio)
+        after = float(
+            model.text_side(batch["ids"], batch.get("text_mask"), batch.get("voice"))[target_key].std()
+        )
+    return {
+        "predicted_std": predicted_std,
+        "target_std": target_std,
+        "ratio": ratio,
+        "predicted_std_after": after,
+    }
 
 
 def write_run_metadata(

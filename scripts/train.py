@@ -22,7 +22,10 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from parakeet.config import load_config  # noqa: E402
-from parakeet.train.common import derive_n_voices_from_cache  # noqa: E402
+from parakeet.train.common import (  # noqa: E402
+    derive_latent_rate_from_cache,
+    derive_n_voices_from_cache,
+)
 from parakeet.data.dataset import make_batch_source  # noqa: E402
 from parakeet.models import build_model, count_parameters  # noqa: E402
 from parakeet.train.stages import STAGE_STEPS, run_stage  # noqa: E402
@@ -134,6 +137,14 @@ def main() -> int:
         print(f"[train] n_voices {cfg.n_voices} -> {derived_voices} (from the cache's voice names)")
         cfg.n_voices = derived_voices
 
+    # The cache decides the sub-latent width too.  `latent_rate` must match or the loss fails deep
+    # inside with "tensor a (24) must match tensor b (72)", which says nothing about the cause.
+    derived_rate = derive_latent_rate_from_cache(args.cache, int(cfg.autoencoder.latent_dim))
+    if derived_rate is not None and derived_rate != int(cfg.autoencoder.latent_rate):
+        print(f"[train] latent_rate {cfg.autoencoder.latent_rate} -> {derived_rate} "
+              f"(from the cache's latent_token width)")
+        cfg.autoencoder.latent_rate = derived_rate
+
     model = build_model(cfg)
     if args.warm_start:
         payload = torch.load(args.warm_start, map_location="cpu", weights_only=False)
@@ -189,6 +200,25 @@ def main() -> int:
                 f"flow conditioning: pair_references={not args.no_pair_references} "
                 f"max_ref_frames={cfg.train.max_ref_frames}"
             )
+
+    # Calibrate the text side's regression heads to the data's scale *before* training (round 33).
+    # AdamW closes about one learning rate per step, so an output that starts 3.6x too small needs
+    # ~18 000 steps merely to reach the right magnitude -- and the earlier runs were 1 600-2 400 steps,
+    # which is why the latent was learned in the mean and not in its variation (round 30: flattened
+    # cosine 0.805, per-dimension correlation 0.126).  Only the head's last linear layer is touched.
+    if not args.dry_run and args.cache and args.stage in {"distill-audio", "distill-text"}:
+        try:
+            probe = next(iter([source()])) if callable(source) else None
+            if probe is not None and "latent_token" in probe:
+                from parakeet.train.common import calibrate_head_scale
+
+                measured = calibrate_head_scale(model, probe)
+                if measured:
+                    print(f"[train] latent head scale: predicted std {measured['predicted_std']:.4f} "
+                          f"-> target {measured['target_std']:.4f} (x{measured['ratio']:.2f}); "
+                          f"after calibration {measured.get('predicted_std_after', float('nan')):.4f}")
+        except Exception as exc:  # noqa: BLE001 - a calibration must never take the run down
+            print(f"[train] head calibration skipped: {type(exc).__name__}: {exc}")
 
     def log_fn(logs):
         printable = " ".join(

@@ -458,10 +458,11 @@ def run_stage(
     logs["trainable_params"] = float(trainable)
     logs["frozen_modules"] = float(len(frozen))
     if log_fn is not None:
+        # No "loss" key: this is a banner, not a measurement, and the placeholder used to be
+        # `float("nan")` -- which reads as a diverging run and cost time to investigate twice.
         log_fn(
             {
                 "step": 0,
-                "loss": float("nan"),
                 "trainable_params": float(trainable),
                 "total_params": float(total_params),
                 "frozen": ",".join(frozen) if frozen else "none",
