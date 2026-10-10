@@ -1,0 +1,66 @@
+{
+  "question": "does a mean-invariant latent term close the gap to intelligibility?",
+  "arms": {
+    "before": {
+      "diagnosis": "runs/fit_diag_char.json",
+      "train_eval": "runs/eval_char_train/report.json",
+      "holdout_eval": "runs/eval_mixed_kokoro/report.json"
+    },
+    "after": {
+      "diagnosis": "runs/fit_diag_contrast.json",
+      "train_eval": "runs/eval_contrast_train/report.json",
+      "holdout_eval": "runs/eval_contrast_kokoro/report.json"
+    }
+  },
+  "values": {
+    "latent_dim_correlation_train": {
+      "before": 0.12564088803828274,
+      "after": 0.19981993738243553
+    },
+    "latent_dim_correlation_validation": {
+      "before": 0.10651589425358704,
+      "after": 0.17845089145374812
+    },
+    "latent_cosine_train": {
+      "before": 0.804753765463829,
+      "after": 0.8390955875317255
+    },
+    "f0_mae_train": {
+      "before": 0.15894916001707315,
+      "after": 0.10968723194673657
+    },
+    "energy_mae_train": {
+      "before": 0.17871825955808163,
+      "after": 0.13291208383937678
+    },
+    "duration_mae_train": {
+      "before": 2.312192067503929,
+      "after": 2.216912259658178
+    },
+    "wer_train_prompts": {
+      "before": 1.0,
+      "after": 0.9943181818181818
+    },
+    "wer_unseen_kokoro": {
+      "before": 1.0,
+      "after": 1.0
+    }
+  },
+  "improved": {
+    "latent_dim_correlation_train": true,
+    "latent_dim_correlation_validation": true,
+    "latent_cosine_train": true,
+    "f0_mae_train": true,
+    "energy_mae_train": true,
+    "duration_mae_train": true,
+    "wer_train_prompts": true,
+    "wer_unseen_kokoro": false
+  },
+  "verdict": "The term did what it was built for: per-dimension correlation rose on both splits and the prosody errors fell.  Intelligibility did not follow, because the correlation is still only ~0.2 -- a one-shot regression from a small character encoder has a ceiling well below what the decoder needs, no matter how the objective is weighted.  That points at the acoustic stage's architecture (flow matching / AR decoding, as the papers do) rather than the loss.",
+  "checks": {
+    "the_terms_target_moved": true,
+    "prosody_errors_moved": true,
+    "the_targeted_quantity_moved_without_reaching_intelligibility": true,
+    "controls_hold": true
+  }
+}

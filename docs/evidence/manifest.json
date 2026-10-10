@@ -1,7 +1,7 @@
 {
-  "generated": "2026-10-10T00:34:12",
+  "generated": "2026-10-10T02:13:54",
   "git": {
-    "rev": "a564e8c",
+    "rev": "124c7c7",
     "dirty": true
   },
   "note": "Committed snapshots of the reports the model card cites.  Refresh with `python scripts/model_card.py --refresh-evidence` after re-running the demos; the hashes make a stale bundle visible.",
@@ -110,6 +110,13 @@
       "source": "runs/real_diagnose/report.json",
       "evidence": "docs/evidence/real_diagnosis.json",
       "sha256": "46edb94cb590ab5431f13f6b227de912fda548dd3c303642061f7693b9873f21"
+    },
+    {
+      "claim": "objective_fit_ab",
+      "status": "copied",
+      "source": "runs/objective_fit_ab.json",
+      "evidence": "docs/evidence/objective_fit_ab.json",
+      "sha256": "490f36e9a2141d6cf8a1d7e3fe85499d5b2ad5a48d3a79588a58eb983ce9c10a"
     },
     {
       "claim": "fit_diagnosis",

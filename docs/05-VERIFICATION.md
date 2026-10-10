@@ -1595,6 +1595,30 @@ the corrected objective for 2400 steps, and it will be judged on the **fit diagn
 per-dimension correlation climb?) rather than on WER, because WER is far less sensitive to exactly the
 defect being fixed.
 
+### The result: the term worked, and it was not enough
+
+2400 steps on the same mixture, warm-started, with `audio_aux = 1.0` and `signal_latent_contrast = 1.0`:
+
+| metric | before | after |
+|---|---|---|
+| per-dimension correlation, train | 0.126 | **0.200** (+59 %) |
+| per-dimension correlation, validation | 0.107 | **0.178** (+66 %) |
+| flattened cosine, train | 0.805 | 0.839 |
+| F0 MAE (train) | 0.159 | **0.110** (−31 %) |
+| energy MAE (train) | 0.179 | **0.133** (−26 %) |
+| duration MAE (train) | 2.312 | 2.217 |
+| WER, training prompts | 1.000 | 0.994 |
+| WER, unseen Kokoro prompts | 1.000 | **1.000** |
+
+The training logs agree with the diagnosis: `aux_latent` 0.618 → 0.340 and `aux_duration` 0.693 → 0.441.
+
+**The term moved exactly the quantity it was built for, and intelligibility did not follow.** The
+correlation is still only ~0.2, so the honest reading is that a one-shot regression from a small
+character encoder to 72-dimensional token latents has a *ceiling* well below what the decoder needs —
+one that no re-weighting of the objective reaches. That is what the papers avoid by running a
+flow-matching or autoregressive decoder over the acoustic tokens, which this repository's Small path
+already implements. The next move is that architecture, not another weight.
+
 ## 35. Smoke test output (measured)
 
 ```
@@ -1646,7 +1670,7 @@ overhead — it is not a valid throughput measurement until the model predicts s
 learning demo (§2) trains properly but on 15 seconds of *synthetic* audio, so it demonstrates that
 the machinery learns, not that the model is good.
 
-## 36. Deliberate engineering checks worth calling out
+## 37. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
@@ -1682,7 +1706,7 @@ the machinery learns, not that the model is good.
   `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
   else, rather than surfacing a cryptic `torch.stft` message.
 
-## 37. Environment notes
+## 38. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).

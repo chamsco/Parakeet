@@ -171,6 +171,14 @@ CLAIMS: List[Dict[str, Any]] = [
         "fmt": "reference WER {value:.2f} < autoencoder round-trip {other:.2f}",
     },
     {
+        "id": "objective_fit_ab",
+        "statement": "the mean-invariant latent term **worked** (per-dim correlation 0.126 → 0.200, F0 −31 %) and **still did not reach intelligibility** (WER 1.000) — so the ceiling is the acoustic stage's architecture, not the loss weighting",
+        "report": ["runs/objective_fit_ab.json"],
+        "field": "checks",
+        "op": "all_true",
+        "fmt": "{passed}/{total} checks",
+    },
+    {
         "id": "fit_diagnosis",
         "statement": "the text side matches the latent's **mean** (cosine 0.81) with almost **no per-token structure** (per-dim correlation 0.13) and under-predicts length (0.77x)",
         "report": ["runs/fit_diag_char.json"],
