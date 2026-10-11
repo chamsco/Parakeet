@@ -4007,7 +4007,53 @@ target whose text-determined share is **43 %** of the variance (§106). The gap 
 suggested, the ruled-out interventions are ruled out at every timestep rather than on average, and what must change
 is **what the field is asked to do** — not how hard it is pushed, nor where in `t` it is pushed.
 
-## 108. Environment notes
+## 108. The plan route is dead — and that points at the one structural change with a measured floor (round 116)
+
+Before spending 3–9 CPU-hours training the residual/plan form, its ceiling is free to measure: unfold the plan to
+frames and correlate it with the target (`scripts/plan_ceiling.py`). I wrote in the script's own docstring that the
+plan carries "the token route's ρ 0.37"; the measurement says otherwise:
+
+```
+plan vs target tokens : rho -0.0137
+plan vs target frames : rho -0.0111   (median -0.0099, max +0.0160)
+```
+
+**The plan head has learned nothing.** The 0.37 belongs to the **token route** — a separately trained model (the
+`distill-text` stage). The flow's own `plan_head` is a small auxiliary head supervised by `plan_weight` against the
+*same* cached token latents, and it reaches ρ ≈ 0. Its loss falls to ~0.7 while its predictions stay uncorrelated
+with the target: it minimises MSE by predicting the mean — the identical marginal-first failure measured everywhere
+else in this project, now reproduced in a head with a fixed, supervised, well-posed target.
+
+**Consequences:**
+
+1. **The residual/plan route is dead** — and cheaply. `flow.plan_residual` asks the field to model `x1 − plan`; if the
+   plan is uncorrelated with the target, that is just `x1` with extra noise. This closes the one structural idea the
+   project had implemented but never judged by a sampler's metric, for two minutes instead of a training run.
+2. **It was not an under-measurement.** I half-suspected the residual form was mis-read (round 64 judged it by ρ on 2
+   items). It was not — the plan it depends on is empty.
+3. **The comparison is the interesting part.** The *same* task — predict cached token latents from text — reaches
+   **ρ 0.37** in the token route and **ρ ≈ 0** in this head. Same corpus, same targets, comparable capacity. The
+   difference is **where the encoder is trained**: the token route's text encoder is trained against that regression
+   and nothing else, while the flow's is trained only through the flow objective — which the marginal satisfies. *A
+   text encoder trained through a marginal-first objective learns nothing a head can use.*
+4. **So the structural change with a mechanism and a measured floor** is to take the plan from a model that *has*
+   learned the mapping rather than from the flow's dead head:
+
+   ```
+   x1_residual = x1 - unfold(token_route(ids))     # rho 0.37, measured, checkpoint on disk
+   flow models(x1_residual)                        # the field refines a 0.37-conditioned prior
+   ```
+
+   The floor is **0.37, measured not assumed**, and the field can only add to it. It is the first structural proposal
+   here whose floor is above zero — and it explains why warm-starting the flow's encoder from the token route did
+   nothing (§96): the encoder was never the bottleneck *at sampling time*; nothing forces its output into the
+   sample. A residual built off that encoder does.
+
+**Not claimed:** that 0.37 is enough. It is below the 0.75 intelligibility bar, so this route needs the field to add
+substantially — which is exactly what the field has so far failed to do for anything. But it is the only route left
+with a measured, nonzero floor, and establishing that floor took two minutes.
+
+## 109. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
