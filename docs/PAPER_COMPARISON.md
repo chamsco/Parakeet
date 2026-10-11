@@ -53,3 +53,44 @@ Reporting on this project's own terms, the one thing it has that the paper does 
 discipline**: ρ as a calibrated target (≥ 0.75 for intelligibility, failing at 0.60), the flow term's text
 dependence as a conditioning gate, and four instrumentation flaws found and fixed rather than inherited. That
 does not make a model, but it does mean the next 945 hours would be spent on the right thing.
+
+## What was adopted from each paper, and where it lives
+
+The brief was to read these three and find the best way to mix them. This is that answer, item by item, with the
+code that carries it and what measuring it established — including the cases where the paper's idea was adopted
+and did **not** work here, which is the more useful half.
+
+**[Paradee](https://www.alphaxiv.org/abs/2610.06817)** — Kokoro → 8M, two halves trained separately against a
+cached teacher corpus.
+
+| adopted | where | measured outcome |
+|---|---|---|
+| two halves trained **separately** against a frozen cached teacher | `make_teacher_corpus.py` + `runs/*/latent_cache`; stages `distill-text` and `flow` | it is what made CPU training tractable at all: the teacher is paid for once, then every experiment reads a cache |
+| **low spectral weight** and adversarial decoding | `parakeet/models/` + the AE stage's adversarial term | the autoencoder's round trip is *perfect* (WER 0.000), so this half is solved |
+| **weight-only int8** | `export_onnx.py --pipeline` | 9.63M → **20.3 MB** at **85× real time**, waveform cosine 0.9952 |
+| direct feature supervision of the text half | the token route (`distill-text`) | ρ 0.37 on held-out prompts, with the ceiling explained as the one-to-many mapping rather than capacity |
+
+**[SupertonicTTS](https://www.alphaxiv.org/abs/2503.23108)** — 44M, 945 h, the closest architectural match.
+
+| adopted | where | measured outcome |
+|---|---|---|
+| 24-dim continuous latent + temporal compression `Kc = 6` | `autoencoder.latent_dim`, `flow.compress` | the velocity field models **144 dims at 15.6 Hz** against the paper's ~14 Hz — the axes match |
+| ConvNeXt blocks, character-level text, implicit alignment | `parakeet/models/flow.py`, `text.mode` | implemented, no G2P, no aligner |
+| **context-sharing batch expansion `Ke = 4`** | `flow.context_expansion`, applied in `flow_loss` | implemented as designed |
+| the papers' reason for **sampling** rather than regressing | the flow stage | it is why the deterministic route's plateau (ρ 0.37) is a dead end rather than a tuning problem |
+| — | — | **what did not transfer:** its conditioning, at this scale. Eight interventions (§§94–101) left the flow term at 2–7 % and ρ indistinguishable from zero. The difference is 945 h against 8 h |
+
+**[PilotTTS](https://www.alphaxiv.org/abs/2605.27258)** — factorised conditioning, cross-sample paired training.
+
+| adopted | where | measured outcome |
+|---|---|---|
+| **factorised conditioning**: identity separated from style | `speaker.py` + `voice_embed` + style tokens | identity/style conditioning is live (a change of reference moves the conditioning by 0.2254, §12) |
+| **cross-sample paired training** — a *different* utterance of the same voice as the reference, plus a different-voice negative | `LatentShardBatchSource(pair_references=True)` | implemented; it also fixed a real bug (the reference was being dropped at collation, leaving zero gradient) |
+| style as a **separation** loss rather than same-speaker consistency | the style term | consistency leaked identity into the style channel; separation is what the paper's factorisation implies |
+| teacher-generated data for scarce capabilities | the Orpheus tag vocabulary, and this month's Kokoro expansion | the tag taxonomy is in the manifest; the expansion added ~6 h of free audio and is what the corpus work rests on |
+
+**The mixture itself, measured.** The one experiment that tests "mixing teachers" as a mechanism rather than a
+config value: a sweep between two synthetic teachers at 92 Hz and 215 Hz moves the student's predicted F0
+monotonically **87 → 200 Hz**, with the fit degrading to the low teacher in the same order (§7). So the mixture
+is real and controllable, not a label — which is what makes the Kokoro + Speechify corpus a *distillation* of two
+teachers rather than one teacher plus filler.
