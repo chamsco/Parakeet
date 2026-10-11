@@ -3434,7 +3434,33 @@ corpus), then train the flow with the gate on. Each step is skipped if its outpu
 interruption costs only the step it was in. Verified: it parses cleanly and its guards report the correct state
 of the filesystem right now.
 
-## 89. Environment notes
+## 90. Pre-registered decision rule for the expanded-corpus flow run (round 90)
+
+The corpus is about to reach ~4 533 items / ~8.0 h and the flow will train on it for 12 000 steps with the gate
+printed every 2 000. Written before any reading exists, because the same rule invented afterwards is not a rule.
+
+What is known, and therefore what would count as news:
+
+* the corpus-size effect was measured on a small regime — flow-term dependence **1.9 % (4 utterances) → 2.3 %
+  (16) → 4.1 % (64) → 7.4 % (200)** at fixed steps (§65);
+* at ~2 000 utterances it read **+4.0 % (step 2 000) / +3.8 % (step 4 000)** and flat (§76) — which is *lower*
+  than the 200-utterance point, so either the 7.4 % was noise (its own run-to-run spread is ±3 points) or the
+  curve had already turned over;
+* so this run tests whether **2.3× more items than that flat run** moves the field, not whether a 50× range
+  does.
+
+| gate at step 12 000 | reading | decision |
+|---|---|---|
+| **≥ 8 %** | the corpus lever is real and still rising at this scale | keep buying data; the gap identified in §77 is the right one to attack |
+| **5–8 %** | a modest but genuine gain | continue with data, and prioritise the text-warm-start A/B (§82) as the cheaper next lever |
+| **≤ 4.5 %** | no movement from 2.3× the items | the corpus-size effect saturates below this regime: stop buying data, and either attack the marginal's cheapness or accept and document the ceiling |
+
+Secondary readout, reported alongside: **validation ρ** on the 32 held-out utterances. Any value meaningfully
+above 0 would be the first time this flow's samples have tracked the right latent rather than only the
+marginal (§56), so it is worth recording whatever it is — including if it stays at ~0, which is what the 2 %
+field dependence predicts.
+
+## 91. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
