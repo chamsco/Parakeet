@@ -84,6 +84,39 @@ def test_synthesis_inverts_exactly_what_the_dataset_applied(tmp_path):
         assert restored.shape == item["latent"].shape
 
 
+def test_refitting_a_cache_does_not_produce_no_op_statistics(tmp_path):
+    """A regression with teeth: fitting twice must give the same statistics.
+
+    The dataset applies whatever table the cache carries, so a fit that reads *through* the dataset measures
+    already-normalised data and writes back mean 0 / std 1 -- which is invisible on a first fit and wrong on
+    every refit.  Merging a second expansion refits, so this would have landed a whole corpus at its raw
+    scale: the exact failure mode per-voice normalisation exists to prevent.
+    """
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+
+    from fit_voice_norm import fit_voice_norm
+
+    _cache(tmp_path / "cache", {"loud": (0.4, 1.6), "quiet": (-0.3, 0.6)})
+    first = fit_voice_norm(tmp_path / "cache", min_items=1)
+    assert first, "the first fit must produce statistics"
+
+    # write them back the way fit_voice_norm's CLI does, then refit
+    meta_path = tmp_path / "cache" / "cache_meta.json"
+    meta = json.loads(meta_path.read_text("utf-8"))
+    meta["voice_norm"] = first
+    meta_path.write_text(json.dumps(meta), "utf-8")
+
+    second = fit_voice_norm(tmp_path / "cache", min_items=1)
+    for name in first:
+        assert second[name]["std"] == first[name]["std"], f"{name}: refit changed the statistics"
+        assert second[name]["mean"] == first[name]["mean"], f"{name}: refit changed the statistics"
+    # and the statistics are the real ones, not a no-op
+    assert abs(first["loud"]["std"][0] - 1.6) < 0.6, first["loud"]["std"][0]
+
+
 def test_a_wider_voice_table_keeps_the_voices_a_checkpoint_learned(tmp_path):
     """A shape-filtered load skips `voice_embed.weight` when the table grows, silently losing every voice.
 

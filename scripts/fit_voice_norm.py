@@ -35,7 +35,11 @@ def fit_voice_norm(cache: Path, min_items: int = 4) -> Dict[str, Dict[str, List[
     invert. Tokens follow the same statistics per voice, and the token route's own head is calibrated
     against whatever scale it is given.
     """
-    dataset = LatentShardDataset(cache)
+    # Read the RAW latents: the dataset applies whatever table the cache already carries, so fitting through
+    # it on a refit measures already-normalised data and returns no-op statistics (mean 0, std 1).  That is
+    # silent on a first fit and wrong on every subsequent one -- merging a second expansion refits, which is
+    # how it was found: an 117-item chained merge left every voice at its raw scale.
+    dataset = LatentShardDataset(cache, apply_voice_norm=False)
     meta = json.loads((cache / "cache_meta.json").read_text(encoding="utf-8"))
     names = list(meta.get("voice_names") or [])
     per_voice: Dict[int, List[torch.Tensor]] = {}

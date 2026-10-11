@@ -102,14 +102,22 @@ class LatentShardDataset(Dataset):
         cache_dir: str | Path,
         max_frames: Optional[int] = None,
         indices: Optional[Sequence[int]] = None,
+        apply_voice_norm: bool = True,
     ) -> None:
         """Latent-shard dataset.
 
         ``indices`` selects a subset (train/val splits).  Without it there is no held-out
         evaluation anywhere in the project, which is how a capacity comparison can appear to show
         that a smaller model "fits as well" when it is merely overfitting less.
+
+        ``apply_voice_norm=False`` reads the **raw** latents while leaving the table in place.  Fitting
+        per-voice statistics needs this: the table is applied on read, so fitting through a dataset that
+        already carries one measures already-normalised data and produces no-op statistics (mean 0, std 1).
+        That is invisible in a single fit and only shows up when a cache is refitted -- which is exactly what
+        merging a second expansion does, and it silently left every voice at its raw scale.
         """
         self.cache_dir = Path(cache_dir)
+        self.apply_voice_norm = apply_voice_norm
         index = json.loads((self.cache_dir / "index.json").read_text(encoding="utf-8"))
         self.shards = [index[i : i + 1] for i in range(len(index))]
         self._items: List[Dict[str, torch.Tensor]] = []
@@ -147,7 +155,7 @@ class LatentShardDataset(Dataset):
             # NOTE: log_mel is the *reference prompt*, not a target, so it is deliberately not
             # truncated here -- reference length is capped separately at collation
         stats = self.voice_norm.get(int(item["voice"])) if self.voice_norm else None
-        if stats is not None:
+        if stats is not None and self.apply_voice_norm:
             # per-voice normalisation, applied to the flow's frame target and to the token target: both are
             # the same 24-dimensional signal, so one voice's statistics describe both
             item = dict(item)
