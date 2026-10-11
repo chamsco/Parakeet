@@ -40,11 +40,13 @@ the measured reason, in order of discovery:
   number now prints itself inside training, every 2 000 steps, with a measured noise floor of ±3–4 points.
 * **every cheap conditioning lever has now been tested, and none of them moved it.** Cross-attention gain,
   the pooled conditioning token, coarse-to-fine plan conditioning, the residual plan, logit-normal timestep
-  sampling, a **4.2× larger corpus**, and finally a *pretrained text encoder* — the token route's text half,
-  which regresses text → acoustics at ρ 0.37 — warmed into the flow under an identical A/B. That last one is
-  the cleanest negative in the project: the two arms track each other to within **0.2 points** at every shared
-  checkpoint, so giving the field a working text representation to start from makes no measurable difference.
-  **The field is not short of a text representation; it is not using one** at this scale.
+  sampling, a **4.2× larger corpus**, a *pretrained text encoder* — the token route's text half, which
+  regresses text → acoustics at ρ 0.37 — warmed into the flow under an identical A/B (the two arms track to
+  within **0.2 points**), and **classifier-free guidance** swept from 1.0 to 8.0, where ρ *falls* monotonically
+  while the output gets 2.5× louder. That last one is the cleanest negative: it is inference-only, so the
+  training noise floor cannot explain it, and it says the text direction the field learned is not the direction
+  that identifies the utterance. **The field is not short of a text representation; it is not using one** at
+  this scale.
 * **the architecture itself matches the papers, and the gap is data.** SupertonicTTS processes
   "144-dimensional vectors at a reduced frame rate of approximately 14 Hz"; this project's velocity field
   models **144-dim vectors at 15.6 Hz** (24 dims at 93.75 Hz, folded by `compress: 6`). The latent size, the

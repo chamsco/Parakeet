@@ -3648,7 +3648,39 @@ the machine appears to have ended the process. The primary readout is unaffected
 checkpoints, where the arms differ by at most 0.2 points — but a paired ρ comparison is not available and is not
 claimed.
 
-## 98. Environment notes
+## 98. Classifier-free guidance does not help either — and this is the cleanest negative in the project (round 99)
+
+CFG is the standard remedy for weak conditioning, and it was already implemented (config default 1.5) but had
+never been *swept* against the calibrating metric. It costs nothing but inference, so the noisy-training excuse
+does not apply:
+
+| cfg | frame ρ | output peak |
+|---|---|---|
+| 1.00 | **+0.0113** | 3.13 |
+| 1.50 | +0.0109 | 3.58 |
+| 2.00 | +0.0106 | 4.00 |
+| 4.00 | +0.0094 | 5.41 |
+| 8.00 | +0.0069 | 7.91 |
+
+**Monotone decrease in ρ while the output magnitude grows 2.5×.** Guidance amplifies the text direction the field
+learned — and that direction is *not* the direction that identifies the utterance. Extrapolating along it makes
+the samples louder and no closer to the target.
+
+**Why this one is worth more than the rest.** Every previous conditioning result involved training, and training
+carries the ±3–4 point noise floor measured in §96, which left each of them arguable. This one is inference-only,
+five weights, one checkpoint, same probe items, same seed: nothing but the guidance weight changes, and the effect
+is monotone over an 8× range. It closes the last inference-side explanation for the flow's ρ ≈ 0.01 — the problem
+is not that the field's text influence is under-weighted at sampling time; it is that no text-conditional
+direction was learned during training.
+
+**The conditioning question is now closed at this scale**, with eight interventions: cross-attention gain, the
+pooled conditioning token, coarse-to-fine plan conditioning, the residual plan, logit-normal `t` sampling, a
+4.2× larger corpus, a pretrained text encoder, and classifier-free guidance from 1.0 to 8.0. None moved the flow
+term out of the 2–7 % band; none moved sampled ρ above 0.09. What the measurements jointly say is that this
+velocity field, at this size and step budget, fits the marginal distribution and does not learn the text →
+acoustic mapping — and §77's comparison is the explanation: matching architecture, **945 h against 8 h**.
+
+## 99. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
