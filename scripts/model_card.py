@@ -648,8 +648,11 @@ def render(results: List[Dict[str, Any]], args) -> str:
         "* Disinformation, fraud, or bypassing a platform's synthetic-media policy.  Audio produced by "
         "this code is synthetic and should be labelled as such; `write_run_metadata` records the "
         "provenance needed to do that.\n"
-        "* Safety-critical or accessibility-critical use: there is no trained checkpoint, no "
-        "intelligibility evaluation (WER) and no naturalness evaluation (UTMOS) here.\n"
+        "* Safety-critical or accessibility-critical use: **the speech is not intelligible**.  WER *has* "
+        "been measured and the numbers are in this card -- 0.00 for the autoencoder's own round trip, 1.000 "
+        "for both trained text-to-speech paths, against 0.000 for the teacher -- so the honest statement is "
+        "not that no evaluation exists but that the evaluation is negative.  No naturalness score (UTMOS) "
+        "has been computed.\n"
         "* Using the output of a restricted teacher.  `teacher.check_teacher` refuses MiniMax unless "
         "its terms are explicitly acknowledged; see `docs/LEGAL.md`."
     )
