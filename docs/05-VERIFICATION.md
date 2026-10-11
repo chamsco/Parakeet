@@ -3304,7 +3304,39 @@ arm B warm-started from the token route. The readout is the **flow term's own** 
 
 Written now, before either arm has finished, because a rule invented afterwards is not a rule.
 
-## 83. Environment notes
+## 84. Auditing the no-op-normalisation class, and a hypothesis it produced (round 79)
+
+Round 78's bug was "a reader that fits through a dataset which already applies the table". Every other caller
+of `LatentShardDataset` was audited for the same class:
+
+| caller | applies the table? | correct? |
+|---|---|---|
+| `merge_caches` | **never constructs the dataset** — it reads shards with `torch.load` and copies `payload["items"]` | **yes**, so merged caches store *raw* latents and nothing is normalised twice |
+| `fit_voice_norm` | now reads raw (`apply_voice_norm=False`) | fixed |
+| `expand_corpus.verify` | applies it, then checks the pooled scale | yes — this is what caught the bug |
+| training and evaluation scripts (`overfit_flow`, `overfit_text`, `rho_curve`, `fit_diagnosis`, `real_eval`, …) | apply it | yes: they must train and measure in the space the model learns in |
+| `latent_autocorrelation`, `bottleneck_ceiling` | apply it | harmless: an affine per-dimension map leaves per-dimension autocorrelation unchanged |
+
+So the bug was confined to the one place that **refits** — which is why it survived from round 62 until a refit
+actually happened, and why rehearsing the chained merge is what found it. The important row is `merge_caches`:
+had the merge read through the dataset, all 3 326 new utterances would carry a double normalisation and every
+guard would still pass, because the guards check scale, not provenance.
+
+### A hypothesis the audit produced
+
+`scripts/target_ceiling.py` measures same-text **cross-voice** agreement — the 0.248 (token) / 0.171 (frame)
+figures from round 61, read as "the target is inconsistent, so a deterministic model cannot do better". That
+was measured on an **unfitted** cache. Per-voice normalisation applies an affine map per voice, and an affine
+map changes cross-voice correlation: it removes the per-voice scale difference the model is *told about*
+through the voice embedding, so the ceiling on a fitted cache should be **higher** than 0.248.
+
+If that is right it changes the read on the token route's plateau: ρ 0.37 was measured on a cache with no
+per-voice normalisation, i.e. with a nuisance the text cannot predict sitting in the target. The token route is
+the *production* candidate here — 9.63M parameters, 85× real time in int8 — so "retrain it on the normalised
+corpus and see whether 0.37 moves" is a cheap, direct test rather than a hope, and it is the same lever the flow
+needs. Worth 1–2 CPU-hours before any longer run.
+
+## 85. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
