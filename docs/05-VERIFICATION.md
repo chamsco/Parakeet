@@ -3258,7 +3258,8 @@ touched, which is now the rule: any doc change gets read back.
 **I killed the corpus generation.** To stop a void experimental arm I ran "the highest-CPU python process",
 which was the generator — 40 minutes older than the arm. The correct tool was `job_kill` with a job id. 725
 utterances were lost; the resume generates only the remainder (2 601 prompts into `data/kokoro_v3b`) and both
-halves merge, so the work is not discarded.
+halves merge, so the work is not discarded. The split was verified rather than assumed: 725 + 2 601 = 3 326
+prompts, **zero overlap, zero missing** against the original file, so the recovery is exact.
 
 **The A/B arm was void and only a printed count said so.** Warming the flow's text encoder from the token
 checkpoint loaded **0 of 85 text tensors**: the autoencoder checkpoint's geometry is 256×4, the token route's
