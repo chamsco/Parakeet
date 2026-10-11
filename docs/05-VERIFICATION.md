@@ -3155,7 +3155,34 @@ rejects this teacher's own audio, §64), `--latent-rate 3` (the merge now *refus
 normalisation (the scale trap of §69, fixed in §74), and a merge that remaps voices and keeps the base
 normaliser.
 
-## 79. Deliberate engineering checks worth calling out
+## 79. The expansion pipeline, integration-tested before the big run (round 71)
+
+`scripts/expand_corpus.py` was run for real — not just unit-tested — on the 117-utterance Kokoro set already on
+disk, end to end:
+
+```
+latent rate overridden to 3 (token width 72)
+n_voices 4 -> 11 for the cache write
+merged: {"base": 1207, "extra": 117, "total": 1324, "voices": 21, "shards": 3}
+fitted per-voice statistics for 19 voices
+{
+  "items": 1324, "new_items": 117, "voices": 21,
+  "voices_with_normalisation": 19,
+  "token_widths": [72],
+  "worst_pooled_scale_error": 0.0688
+}
+```
+
+Every guard that matters passed on live data: the cache was built at the right token width, the merge remapped
+9 new voices onto the existing table, the normaliser was fitted, and the worst fitted voice pools within
+**0.069** of unit scale against a 0.15 limit.
+
+That is the whole chain that took four rounds to get right (56, 58–62) now being one command, and it means the
+3 326-utterance run does not have to discover any of it again. Expected cost for the real corpus: the cache
+build is ~5–8 min per 771 utterances, so roughly **20–30 minutes** for 3 326, then the merge and fit are
+seconds.
+
+## 80. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
