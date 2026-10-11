@@ -69,14 +69,22 @@ steps, only the corpus size changing):
 | 64 | 4.1 % |
 | 200 | **7.4 %** |
 
-Monotone over a 50× range, and the **opposite** of the prediction this measurement was built to test (that a
-bigger corpus would make the marginal cheaper and starve the conditioning further). So more data does feed the
-conditioning — slowly. Treat the levels as noisy (the same 200-utterance size measured 2–3 % at batch 16
-against 7.4 % at batch 8, so ±3 points), and the *trend* over the full range as the reliable part.
-
-**This is where compute could pay**, and the number to move is the flow term's text dependence. The honest
-expectation: it moves slowly, so budget a long run rather than a short one, and read the flow term every
-1 000 steps before spending more.
+> **Corrected after that measurement was tested — read the next two paragraphs before acting on this table.**
+> The curve was taken at one checkpoint per size, and the per-checkpoint noise floor was later measured at
+> **±3–4 points** (`§96`), so its 1.9 → 7.4 spread is within a single reading's error for the *individual* points;
+> only the monotone ordering across four sizes was ever suggestive.
+>
+> **It does not extend to this project's scale.** On 2.3× more utterances (4 533 against 1 978) the flow term
+> measured **2.4 %**, not more, and eight conditioning interventions — cross-attention gain, the pooled token,
+> plan and residual-plan conditioning, logit-normal `t`, the 4.2× corpus, a pretrained text encoder, and
+> classifier-free guidance from 1.0 to 8.0 — produced **no measurable change** (`§§94–101`). Sampled ρ stayed
+> indistinguishable from zero with its spread measured (`§100`).
+>
+> So the sentence that used to follow this table — "this is where compute could pay" — is **withdrawn**. What the
+> evidence supports now is narrower: at this model size and the step budgets tested (2 000–4 000 steps), nothing
+> available here moves the flow's conditioning, and the remaining candidate is the paper's own regime — 945 h of
+> audio and the compute to use it — not another few CPU-hours on 8 h. The one cheap test still open is simply
+> *more steps*, which is what `runs/flow_v3_long` is running with a pre-registered endpoint (§101).
 
 ## What would change the picture
 
