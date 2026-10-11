@@ -3460,7 +3460,42 @@ above 0 would be the first time this flow's samples have tracked the right laten
 marginal (§56), so it is worth recording whatever it is — including if it stays at ~0, which is what the 2 %
 field dependence predicts.
 
-## 91. Environment notes
+## 91. The corpus is built and the flow run has started (round 91)
+
+Generation finished cleanly at **2 601 / 2 601 utterances and 4.75 h**, and its manifest *was* written at the end
+-- so the round-82 rebuild was not needed, and uild_expanded_v3.ps1's guard skipped it. That is the guard
+working: it is there to handle the interrupted case, not to insist on running.
+
+The chain then executed in one command:
+
+`
+corpus: 4533 items | training on 4501, holding out 32
+override text.dim = 512 / text.n_layers = 6 / flow.text_dim = 512 / flow.cond_dim = 512
+before training: sampled latent rho on 24 of the 4501 training utterances = -0.0004
+holdout: 32 utterances never trained on (rho before = +0.0059)
+schedule: 12000 steps with 600 warmup
+`
+
+Measured corpus accounting, which confirms the round-89 correction:
+
+| | items | audio |
+|---|---|---|
+| mixed_v2 | 1 207 | 1.88 h |
+| kokoro_v3 | 725 | 1.32 h |
+| kokoro_v3b | 2 601 | 4.75 h |
+| **total** | **4 533** | **7.95 h** — a **4.2×** increase |
+
+**One thing to state plainly:** the run is **39.2M parameters (34.2M trainable)**, not the 21.3M in
+docs/PAPER_COMPARISON.md. The --set text.dim=512 / n_layers=6 overrides were carried over from the
+text-warm-start A/B, where matching the token route's geometry is what makes a warm start load at all. A corpus
+run does not need them, and they roughly double the text encoder. So the documented architecture is the 256×4
+build at 21.3M; this is a larger research variant of it, and the comparison table's parameter row should say
+which build it describes.
+
+The gate readings are due every 2 000 steps against the rule pre-registered in §90, which was written before
+any of them existed.
+
+## 92. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
