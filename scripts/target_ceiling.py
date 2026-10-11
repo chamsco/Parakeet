@@ -83,13 +83,23 @@ print(f"text groups with more than one rendition: {len(groups)} "
       f"(largest {max((len(v) for v in groups.values()), default=0)} renditions)")
 
 same_text_token, same_text_frame, same_text_voices = [], [], []
+same_voice_token, same_voice_frame = [], []      # text AND voice shared: the flow's own information set
 for ids, members in sorted(groups.items(), key=lambda kv: -len(kv[1]))[:6]:
     voices = {int(dataset[i]["voice"]) for i in members}
     for a in range(len(members)):
         for b in range(a + 1, len(members)):
             x, y = dataset[members[a]], dataset[members[b]]
-            same_text_token.append(correlate(x["latent_token"], y["latent_token"]))
-            same_text_frame.append(correlate_frames(x["latent"], y["latent"]))
+            token_score = correlate(x["latent_token"], y["latent_token"])
+            frame_score = correlate_frames(x["latent"], y["latent"])
+            same_text_token.append(token_score)
+            same_text_frame.append(frame_score)
+            # The flow is given the voice as well as the text, so the ceiling that applies to it is the
+            # agreement of two renditions sharing BOTH.  Comparing that with the cross-voice figure says how
+            # much of the target the voice alone resolves -- and therefore how high a conditioned model could
+            # reach, which is the number the flow's rho should be judged against.
+            if int(x["voice"]) == int(y["voice"]):
+                same_voice_token.append(token_score)
+                same_voice_frame.append(frame_score)
     same_text_voices.append((len(members), len(voices)))
 
 control_token, control_frame = [], []
@@ -105,6 +115,13 @@ print(f"\nSAME TEXT, different voices : token rho {mean(same_text_token):+.3f} "
       f"(n={len(same_text_token)}) | frame rho {mean(same_text_frame):+.3f}")
 print(f"DIFFERENT text (control)    : token rho {mean(control_token):+.3f} "
       f"(n={len(control_token)}) | frame rho {mean(control_frame):+.3f}")
+if same_voice_token:
+    print(f"SAME TEXT, SAME voice       : token rho {mean(same_voice_token):+.3f} "
+          f"(n={len(same_voice_token)}) | frame rho {mean(same_voice_frame):+.3f}")
+    print("  ^ the flow is given the voice as well as the text, so THIS is the ceiling that applies to it:")
+    print("    whatever remains here is the part of the acoustics that neither the text nor the voice fixes.")
+else:
+    print("SAME TEXT, SAME voice       : no such pairs in this cache (each text was rendered once per voice)")
 print(f"\nmodel's validation token rho at 10 000 steps: +0.402 (item split) / +0.371 (text-grouped split)")
 print("\n  MEASURED RESULT (round 60), and it refutes the hypothesis this script was written to test:")
 print("  the model's validation rho is HIGHER than the same-text cross-voice agreement.  So that agreement")

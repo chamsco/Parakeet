@@ -3822,7 +3822,38 @@ measuring.
 Seven classes of intervention, none of which moves the velocity field's use of the text. What the architecture
 comparison leaves is the one axis that differs from the paper: **945 h against 8 h**, and the compute to use it.
 
-## 103. Environment notes
+## 103. The flow's own ceiling, and it reaches about 1 % of it (round 109)
+
+`scripts/target_ceiling.py` already measured SAME TEXT / DIFFERENT VOICES agreement — 0.248 token, 0.171 frame —
+which has been read since round 61 as "the target's text-determined share". But **the flow is given the voice as
+well as the text**, so the ceiling that actually applies to it is the agreement of two renditions sharing *both*.
+One added arm (four lines) measures it:
+
+| pair type | token ρ | frame ρ |
+|---|---|---|
+| SAME TEXT, **different** voices | +0.248 (n=108) | +0.171 |
+| SAME TEXT, **SAME** voice | **+0.723** (n=4) | **+0.445** |
+| DIFFERENT text (control) | +0.035 (n=120) | +0.045 |
+
+**The flow's applicable ceiling is 0.445, and it achieves 0.0045 — about 1 % of it, on the very items its ρ is
+measured on** (the probe uses training items). This is a different and much sharper statement than "the target is
+one-to-many, so a deterministic model cannot do better", which is how the plateau has been explained:
+
+* it does **not** say the architecture is wrong. The field fits its objective (flow loss 2.8 → 1.2) while its
+  samples carry no target identity — the marginal-first behaviour measured since §56;
+* it **does** rule out "there is nothing here to learn": there is an order of magnitude of headroom, on data the
+  model has seen, from information it is given;
+* it sharpens what remains: 4× the steps did not move ρ (§102), 4.2× the data did not (§94), and neither did any
+  of eight conditioning interventions. **Optimisation is now the only open question.**
+
+Caveats, since the sample is small and the metric is a sampler: n=4 same-voice pairs, and ρ comes from 4-NFE
+samples, so sampling noise degrades it independently of how well the field is fitted. Both push toward the ceiling
+being *under*-estimated, which makes the 1 % gap conservative.
+
+One number deliberately not revised: the token route's 0.723 ceiling is for **seen** texts while its 0.37
+validation figure is on held-out texts, so they are not comparable and the plateau's explanation stands.
+
+## 104. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
