@@ -1,0 +1,54 @@
+{
+  "checkpoint": "runs\\text_continue\\distill-text_step5000.pt",
+  "cache": "runs/mixed_v2/latent_cache",
+  "text_mode": "char",
+  "latent_rate": 3,
+  "samples": 24,
+  "train_items": {
+    "duration_mae_frames": 2.448849635819594,
+    "duration_ratio": 0.7649953406330638,
+    "f0_mae": 0.12251539047186573,
+    "energy_mae": 0.10174841006907324,
+    "latent_cosine": 0.8339580570658048,
+    "latent_dim_correlation": 0.37914026010750806
+  },
+  "validation_items": {
+    "duration_mae_frames": 2.2615260334763057,
+    "duration_ratio": 0.7856372847630889,
+    "f0_mae": 0.11814416494841377,
+    "energy_mae": 0.11866654269397259,
+    "latent_cosine": 0.8591218764583269,
+    "latent_dim_correlation": 0.4017315906963869
+  },
+  "composition": {
+    "train_voices": {
+      "9": 1,
+      "0": 2,
+      "1": 6,
+      "3": 6,
+      "4": 5,
+      "2": 4
+    },
+    "validation_voices": {
+      "2": 2,
+      "1": 8,
+      "0": 5,
+      "3": 8,
+      "9": 1
+    }
+  },
+  "gap": {
+    "duration_mae_frames": 0.18732360234328826,
+    "duration_ratio": -0.02064194413002507,
+    "f0_mae": 0.004371225523451955,
+    "energy_mae": -0.016918132624899343,
+    "latent_cosine": -0.025163819392522102,
+    "latent_dim_correlation": -0.022591330588878855
+  },
+  "note": "the train items are the corpus's own utterances; the validation items are the tail of the cache (a proxy -- a proper val cache would be better).  Both low means underfitting; high train with low validation means the model memorised.",
+  "checks": {
+    "durations_are_not_collapsed": true,
+    "latent_tokens_correlate_with_the_target": true,
+    "the_two_splits_are_measurable": true
+  }
+}

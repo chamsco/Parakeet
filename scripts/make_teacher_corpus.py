@@ -127,6 +127,22 @@ def main() -> int:
             cfg.autoencoder.latent_rate = int(args.latent_rate)
             print(f"latent rate overridden to {cfg.autoencoder.latent_rate} (token width "
                   f"{cfg.autoencoder.latent_dim * cfg.autoencoder.latent_rate})")
+        # The voice-embedding guard belongs to *training*, not to writing a cache: `cache_teacher_corpus`
+        # raises when the corpus has more voices than `n_voices`, which is right before a training run and
+        # wrong here -- a Kokoro expansion with 11 voices against an autoencoder checkpoint that carries 4
+        # was refused after writing 500 of 771 items.  Widen the table for the write and say so.
+        corpus_voices = set()
+        manifest = corpus / "manifest.jsonl"
+        if manifest.exists():
+            for line in manifest.read_text(encoding="utf-8").splitlines():
+                if line.strip():
+                    voice = json.loads(line).get("voice")
+                    if voice:
+                        corpus_voices.add(str(voice))
+        if len(corpus_voices) > int(cfg.n_voices):
+            print(f"n_voices {cfg.n_voices} -> {len(corpus_voices)} for the cache write "
+                  f"(the corpus has {len(corpus_voices)} voices; training infers its own table)")
+            cfg.n_voices = len(corpus_voices)
         # the mixture is read from the corpus provenance, so the cache cannot silently lose it
         out = cache_teacher_corpus(
             corpus,

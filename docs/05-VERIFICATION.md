@@ -2891,7 +2891,44 @@ The validation plan is already-tested tooling, in order:
 4. retrain warm-started from the best checkpoint and compare validation ρ through the **shuffled** split
    (0.388 baseline), not the tail split that misled round 57.
 
-## 71. Deliberate engineering checks worth calling out
+## 71. The token route is plateauing, and the expansion's cause is still unidentified (round 59)
+
+**The climb is slowing.** With the split flaw fixed, validation ρ on the base corpus:
+
+| total steps | validation ρ |
+|---|---|
+| 3 000 (warm start) | ~0.19 |
+| 5 000 | 0.388 |
+| 10 000 | **0.402** |
+
++0.014 over 5 000 steps, with training ρ moving 0.375 → 0.379. That is a plateau around **0.40**, not a
+route to 0.75 — and 0.40 is below the 0.60 at which the recogniser already fails. More steps on this target
+is no longer a plan.
+
+**The expansion's cause is not found, and everything tried is ruled out.** The free Kokoro expansion (771
+utterances, 1.38 h, Apache-2.0, local) reproduces the *paid* expansion's gap **exactly** — 0.697 against the
+corpus's 1.151, a gap of 0.453 in both cases. That was a useful clue, and I followed it to the end of what
+the budget allowed:
+
+| hypothesis | test | result |
+|---|---|---|
+| the paid teacher / API | same prompts through local Kokoro | **same gap** — not the teacher |
+| the voice | `DEFAULT_VOICES["speechify"]` wired to the corpus's voices | closes ~¼, not it |
+| prompt length | 117 prompts at 30–90 chars (corpus median is 71) | **0.698 against 1.151** — not length |
+| audio level | rms/peak/crest on both | 1.68 dB level, 0.11 dB crest — not level |
+| the autoencoder checkpoint | re-encode cached waveforms with four different AEs | **identical** ratios, so not the checkpoint |
+| the encode front-end | same builder path used for both | ruled out (all AEs agree with each other) |
+
+So the corpus's Kokoro items and my Kokoro items — same teacher, same voices, same builder, same code path —
+encode at 1.15 and 0.70. **Unresolved**, and recorded as unresolved rather than papered over. What that costs
+the objective: the 770 paid utterances and the 771 free ones are both unusable as-is, and the remaining
+~297k characters of allowance should not be spent reproducing the same shape.
+
+`scripts/cache_encode_consistency.py` (kept from the paid-expansion probe) and
+`scripts/expansion_levels.py` are the two tools that did this work, so the next person starts where this
+stopped instead of at the beginning.
+
+## 72. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
