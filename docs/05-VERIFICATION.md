@@ -3128,7 +3128,34 @@ mapping can appear only after several thousand steps — so the run continues an
 … is what decides. Recorded now, before the later points are known, because "flat so far" is the honest
 description.
 
-## 78. Deliberate engineering checks worth calling out
+## 78. Acting on the paper comparison: the CPU goes to data (round 69)
+
+Round 68 established where the gap is — 945 hours of generative training data against ~1.9 h here — so the
+CPU moved from training to *data*, and the flow run was paused rather than left to spend 7 more CPU-hours
+with a flat gate (its readings at 2 000 and 4 000 steps are on record in §77).
+
+The free teacher makes this the one lever that costs nothing but wall clock. Kokoro is local, Apache-2.0, and
+was already used for 304 corpus utterances; eight public-domain books (~9.3 MB) provide the text, and the
+prompt builder excludes every sentence already used (1 407 prompts) so the new material is genuinely new:
+
+| | |
+|---|---|
+| new prompts | **3 326**, 400 031 characters, ~50k from each of 8 books |
+| measured rate | 261 utterances in ~10 min; 0.36 h of audio per 200 utterances |
+| projected | **~4.6 hours of teacher audio** in ~2.1 h of CPU |
+| corpus after | **~9.7 h** (1.9 h original + 3.2 h expansions + 4.6 h) |
+
+Still two orders of magnitude short of the paper, and stated that way. But it is a 5× increase for zero
+dollars, it uses the one teacher with no permission question, and round 65 measured that the flow's
+conditioning **grows with corpus size** (1.9 % → 7.4 % over a 50× range) — so this is the lever the evidence
+points at, not a hopeful one.
+
+The pipeline for it is already tested end to end: `--no-curate` (the gate's proposed 5 kHz bandwidth floor
+rejects this teacher's own audio, §64), `--latent-rate 3` (the merge now *refuses* a width mismatch), per-voice
+normalisation (the scale trap of §69, fixed in §74), and a merge that remaps voices and keeps the base
+normaliser.
+
+## 79. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
