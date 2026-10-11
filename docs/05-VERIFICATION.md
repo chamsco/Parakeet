@@ -3575,7 +3575,41 @@ unconditional term is — so the field's low text share is not a defect to be st
 shows is narrower and more honest: **more data at this scale does not strengthen the conditioning**, and the
 mechanism that has worked is the trained text encoder, which is what the A/B now tests.
 
-## 96. Environment notes
+## 96. The gate's noise floor, measured by the A/B's own control arm — and a claim withdrawn (round 95)
+
+Arm A (fresh, 4 501 training utterances, 512×6) sampled the gate every 500 steps, which is the resolution no
+previous run had:
+
+| step | flow-term text dependence | total | plan |
+|---|---|---|---|
+| 500 | −2.4 % | −4.9 % | −7.2 % |
+| 1 000 | **+6.6 %** | +20.8 % | +33.0 % |
+| 1 500 | **+4.1 %** | +12.8 % | +19.5 % |
+| 2 000 | **−1.4 %** | +1.3 % | +3.3 % |
+
+**A ~9-point swing within a single run.** Every previous use of this gate sampled it once per run, and the
+"±0.6" figure I have been quoting came from repeat measurements *of one checkpoint* — a different quantity
+entirely. The per-checkpoint noise is ±3–4 points, and the run-to-run spread is at least that.
+
+**Claim withdrawn.** §94 read round 93's step-2 000 values as "the velocity field's dependence went *down*, 2.4 %
+against 4.0 % on 2.3× less data, outside the ±0.6 spread so a decrease rather than noise". With the measured
+noise floor, 2.4 against 4.0 is **inside** it. What survives is the weaker, honest statement: **on this corpus
+the flow term sits in the same 2–7 % band as before, so the 4.2× corpus expansion produced no measurable change
+in the conditioning** — which is still §90's ≤ 4.5 %-band conclusion (no improvement, stop buying data), but it
+is "no measurable change", not "a decrease".
+
+Two consequences, both applied from here:
+
+* the gate is only interpretable from **several points in one run**, not from a single checkpoint — which the
+  in-loop printing was built for and which this round finally used;
+* a difference between runs has to exceed ~5 points before it means anything, so round 65's monotone 1.9 → 7.4 %
+  across corpus sizes remains suggestive (it is a trend across four sizes) but is weaker evidence than it read.
+
+One genuine positive, recorded because it is the secondary readout and it is not zero: **ρ after 2 000 steps on
+this corpus is +0.0882**, against ~0 for the equivalent run on the smaller corpus. Small, single-run, and not yet
+reproduced on arm B — but it is the first non-zero flow ρ at 2 000 steps this project has measured.
+
+## 97. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
