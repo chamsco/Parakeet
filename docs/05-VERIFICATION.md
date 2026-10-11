@@ -3541,7 +3541,41 @@ Five more readings are due (4 000 … 12 000); if the trajectory stays in this b
 to stop spending on data and attack the marginal's cheapness instead — that is, make the unconditional solution
 worse so the text's few percent becomes worth learning.
 
-## 95. Environment notes
+## 95. Both readouts agree at step 2 000, so the run was stopped and the A/B took its place (round 94)
+
+The secondary pre-registered readout, on the same checkpoint:
+
+```
+step  2000:  rho trained -0.0007   rho held-out +0.0049
+```
+
+**~0**, which is exactly what a velocity field with 2.4 % text dependence should produce. So both readouts
+agree, and they agree on a negative:
+
+| readout | value | band / expectation |
+|---|---|---|
+| flow-term text dependence | **+2.4 %** | the §90 **≤ 4.5 %** branch: no movement from a larger corpus |
+| sampled-latent ρ | **−0.0007 / +0.0049** | ~0, as predicted — the samples carry the marginal, not the target |
+
+**The remaining 10 000 steps were cancelled, deliberately.** The earlier run on 2.3× less data was flat from
+step 2 000 to 4 000, both readouts are already decisive at 2 000, and the run had ~7 CPU-hours left. Finishing it
+would have bought a trajectory shape, not a decision. That is the pre-registration doing work in the *other*
+direction: it let a decisive negative be recognised at step 2 000 rather than after another day of compute.
+
+**What replaced it: the text-warm-start A/B**, relaunched on this corpus rather than the small one (§82
+pre-registered it; round 75 voided its first attempt on a geometry mismatch, and round 84 built the guard that
+catches that). It is the one mechanism here that has demonstrably learned the mapping — the token route's text
+encoder regresses text → acoustics at ρ 0.37 — so warming the flow from it tests whether the field can be given
+a head start instead of being asked to discover the mapping from noise. Both arms, same corpus, same 512×6
+geometry, 2 000 steps, gate every 500 for four points each, plus validation ρ.
+
+One correction to §94's wording while it is fresh: "attack the marginal's cheapness" was my phrase, and it is
+probably the wrong frame. A flow-matching objective is *supposed* to fit the marginal — that is what the
+unconditional term is — so the field's low text share is not a defect to be starved out. What the measurement
+shows is narrower and more honest: **more data at this scale does not strengthen the conditioning**, and the
+mechanism that has worked is the trained text encoder, which is what the A/B now tests.
+
+## 96. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
