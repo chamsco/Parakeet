@@ -3225,7 +3225,73 @@ seconds.
   `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
   else, rather than surfacing a cryptic `torch.stft` message.
 
-## 81. Environment notes
+## 82. Integrity pass, and two self-inflicted errors (rounds 73–75)
+
+### The docs audit: a shell replacement that matches nothing is a no-op that looks like success
+
+Round 73 found that **`docs/ROADMAP.md` had never been updated** by rounds of anchor-based shell replacements.
+The replacement matched nothing, `Set-Content` wrote identical content, and the commit still succeeded because
+*other* files had changed — so nothing ever failed loudly. Auditing what the commits actually touched:
+
+| file | state |
+|---|---|
+| `docs/05-VERIFICATION.md` | **every section present (73–81), 2 560 lines** |
+| `docs/PLAN.md` | updated |
+| `docs/PAPER_COMPARISON.md` | new |
+| `docs/ROADMAP.md` | **never changed** |
+
+The authoritative record was never at risk — the measurements all live in this file. What was wrong is the
+forward-looking checklist and the reports claiming it was current. Both are fixed, and the roadmap's section is
+labelled as a reconstruction.
+
+Round 74 then audited *this* file the same way and found the identical bug inside it: a duplicate `## 53.`
+and `## 62. Environment notes` sitting at the end, after §80 — because several rounds reported "renumbering
+Environment notes to 81" while the replacement targeted `## 80.` and the heading said `62`. Content intact;
+labels fixed (53.1, 81) and re-audited clean. Numbers 35 and 38 have never existed and stay gaps: renumbering
+twenty-five sections would break the cross-references that cite them.
+
+**Either failure alone looks like nothing.** Both were caught only by asking what the commits had actually
+touched, which is now the rule: any doc change gets read back.
+
+### Two errors of my own in round 75
+
+**I killed the corpus generation.** To stop a void experimental arm I ran "the highest-CPU python process",
+which was the generator — 40 minutes older than the arm. The correct tool was `job_kill` with a job id. 725
+utterances were lost; the resume generates only the remainder (2 601 prompts into `data/kokoro_v3b`) and both
+halves merge, so the work is not discarded.
+
+**The A/B arm was void and only a printed count said so.** Warming the flow's text encoder from the token
+checkpoint loaded **0 of 85 text tensors**: the autoencoder checkpoint's geometry is 256×4, the token route's
+text encoder is 512×6, and the loader filters by exact shape equality. Round 73's probe *had* verified 85-of-85
+compatibility — under a configuration the script does not use, because the probe set `text.dim` and
+`n_layers` itself. **Verified-then-trusted.**
+
+Both are fixed with the failure as the reason:
+
+* `overfit_flow.py --set section.field=value`, applied **after** the checkpoint geometry and **before**
+  `build_model`. The first attempt applied it after the warm-start load; the new guard fired again and caught
+  the ordering bug — the override belongs where the model is *built*, not where weights are *loaded into*;
+* a warm start that matches **no** text tensors when the checkpoint has them is now **fatal**, not a printed
+  statistic. With the geometry matched: `loaded 190 tensors, 85 of them from the text encoder`.
+
+The shared shape of both errors: a check that ran under conditions the real code does not use, and a kill that
+targeted a proxy instead of an identity.
+
+### Pre-registered decision rule for the text-warm-start A/B
+
+Both arms run on identical data (1 978 items, `runs/expanded_v2`) and identical geometry (512×6): arm A fresh,
+arm B warm-started from the token route. The readout is the **flow term's own** text dependence at steps
+2 000 and 4 000, against arm A's earlier readings of **+4.0 %** and **+3.8 %**.
+
+| arm B at step 4 000 | reading | what it means |
+|---|---|---|
+| **≥ 8 %** | the warm start roughly doubles the field's use of the text | keep it, and retrain the corpus run from it |
+| **5–8 %** | a real but modest gain | keep it only if it also holds on the new corpus |
+| **≤ 4.5 %** | indistinguishable from arm A | drop it; round 43's null result survives the scale test |
+
+Written now, before either arm has finished, because a rule invented afterwards is not a rule.
+
+## 83. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
