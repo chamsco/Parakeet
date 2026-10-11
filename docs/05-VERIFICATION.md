@@ -4138,7 +4138,48 @@ statement about the **loss**, and the loss was never where the text's contributi
 benefit shows up in **ρ** (0.406 floor against the flow's 0.0045), not in the loss, so a gate reading would have said
 "no change" even if it worked. Its evaluation must be **ρ and WER on `plan + field`**, never the gate.
 
-## 111. Environment notes
+## 111. The residual route is closed by arithmetic, before spending the CPU (round 119)
+
+Every number needed to bound it was already measured:
+
+| quantity | value | source |
+|---|---|---|
+| the token route's frames — the route's **floor** | ρ **0.406** | §109 |
+| the text+voice reproducibility ceiling | ρ **0.445** | §103 |
+| the deterministic route's fail threshold | ρ **0.60** | round 40 |
+| what any field trained here has ever added | ~**nothing** | everywhere |
+
+**The ceiling is below the fail threshold.** The plan already uses text *and* voice — that is its whole input — and
+the field's inputs are the same two things. So the field cannot add information the plan does not have, and the
+route's ceiling is the reproducibility of the target from (text, voice): **0.445**. A deterministic route reads a
+latent perfectly at 0.75 and fails outright at 0.60, so 0.445 is not "a bit short of intelligible" — it is *below
+the level at which the recogniser already fails*.
+
+The floor is 0.406 and the ceiling 0.445: a **0.039 window**, against a field whose measured contribution to
+everything else here has been indistinguishable from zero. Training it for 3–9 CPU-hours to sample somewhere inside
+that window would move WER from 1.000 to 1.000.
+
+**What the route would have bought, stated fairly:** ρ 0.0045 → ~0.4, a **90×** move on the metric this project has
+used to track target agreement — a real improvement in a metric, and (per §110) the wrong metric: intelligibility
+follows *structure*, and a sampler draws a different valid rendition rather than reproducing the recording (§104).
+So the 90× would have moved a number that does not predict audibility, at the cost of a training run.
+
+**A category error now named**, because it has sat in this project's framing for dozens of rounds. The
+"ρ ≥ 0.75 to be intelligible" bar was calibrated on a **deterministic regressor judged against the recording**
+(round 40). For a **sampler** it is not a meaningful target: a sampler that produces a perfectly valid, perfectly
+intelligible utterance still scores ~0 against a *particular* recording of the same sentence. That is why the flow
+has read "0.0045 against a 0.75 bar" for eighty rounds without its audio being any worse than the token route's
+0.406 — the bar does not apply to it. The metric that applies to a sampler is **WER**, and both routes sit at
+1.000.
+
+**So the remaining path is only scale**, and this closes the last cheap structural idea rather than deferring it:
+the architecture matches SupertonicTTS axis by axis (§77); the conditional signal exists (43 % of variance, §106)
+and the deterministic route already extracts most of it (91 % of the applicable ceiling, §109); the flow's field
+fits the marginal and no intervention moves it; and both routes produce unintelligible audio at WER 1.000. The
+difference from the paper is **945 h against 8**, and the compute to use it — which `docs/PLAN.md` now costs, with
+three ordered runs and their criteria.
+
+## 112. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
