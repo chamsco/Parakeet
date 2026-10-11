@@ -33,7 +33,7 @@ fold is exactly the mechanism that closes the gap, and it is already implemented
 | text | raw characters, no G2P, implicit alignment by cross-attention | raw characters, no G2P, implicit alignment | matches |
 | alignment acceleration | context-sharing batch expansion `Ke = 4` | `context_expansion: 4`, applied in `flow_loss` | matches |
 | NFE at inference | 32 preferred; 4 needs distillation | `nfe: 32`, `distilled_nfe: 4`, `reflow` stage present (not yet run) | matches, unexercised |
-| parameters | 44M (0.5M duration + 18.5M text→latent + 25M latent→speech) | 21.3M total, 16.2M trainable | **smaller** |
+| parameters | 44M (0.5M duration + 18.5M text→latent + 25M latent→speech) | **21.2M** total / 18.8M trainable at the documented 256×4 text side (measured); **39.2M** / 34.2M at 512×6 | **smaller**, at the documented geometry |
 | **training data (generative module)** | **945 hours** | **~8 h** (1.9 h corpus + 6.1 h generated this month) | **~120× short** |
 | hardware | RTX 4090 | CPU only (both GPU routes closed with evidence) | — |
 
