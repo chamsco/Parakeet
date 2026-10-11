@@ -3119,9 +3119,10 @@ mechanism that closes the gap, and it has been in the config all along. The full
 rate, ConvNeXt, character-level text, implicit alignment, `Ke = 4`, NFE 32 — and this model is **smaller**,
 21.3M against 44M) and the one that does not:
 
-**945 hours** of generative training data in the paper against **~1.9 h** here (~3.2 h of expansions, usable
-since the per-voice fix). That reframes the remaining work from "find the missing architectural trick" to
-"more teacher audio, or more compute, with the same architecture".
+**945 hours** of generative training data in the paper against **~1.9 h** in the corpus before this month's
+generation (which added ~6.1 h; see §86 for the corrected arithmetic, and note that the corpus already contains
+the earlier Speechify and Kokoro expansions). That reframes the remaining work from "find the missing
+architectural trick" to "more teacher audio, or more compute, with the same architecture".
 
 ### The long run's second gate reading
 
@@ -3388,8 +3389,15 @@ statistic estimated from 725 items rather than 117 should do. The guards that ma
 correct token width, nine new voices remapped onto the existing table, and every fitted voice within 4 % of unit
 scale.
 
-So the corpus stands at **1 932 items (~4.5 h)** right now, and the second half (2 601 utterances, ~4.8 h) will
-be merged onto this result when the generator finishes. Expected final corpus: ~11 h against the original 1.9.
+So the corpus stands at **1 932 items (~3.2 h of audio)** right now, and the second half (2 601 utterances,
+~4.8 h) merges onto this result when the generator finishes.
+
+> **Corrected in round 89.** This paragraph first said "~4.5 h" here and "~11 h" for the final corpus. Both were
+> a double count: `runs/mixed_v2/latent_cache` is 1 207 items / **1.88 h** and *already contains* the earlier
+> Speechify and Kokoro work, which I was adding a second time as "~3.2 h of expansions". Measured hours give
+> **1.88 + 1.32 + ~4.81 = ~8.0 h** for ~4 533 items — a **4.3×** increase, not 6×. The same wrong figure reached
+> `README.md`, `docs/PLAN.md` and `docs/PAPER_COMPARISON.md`, and all four are corrected. The lesson is the one
+> from round 73: a number computed in prose and never checked against the cache itself.
 
 The chain is the same one rehearsed in round 78 -- which is why this was one command and no surprises.
 

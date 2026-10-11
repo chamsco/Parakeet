@@ -37,19 +37,24 @@ the measured reason, in order of discovery:
   against 0.901) while correlating ~0 with the *right* latent. The share of its **velocity field's** own
   objective that comes from the text is **2–4 %**, measured by shuffling the text and watching only the flow
   term (a total that looks like 37 % turns out to be almost entirely the supervised plan head), and it grew
-  from **1.9 % to 7.4 %** as the corpus grew 50×. Conditioning, not architecture, is its problem.
+  from **1.9 % to 7.4 %** as the corpus grew 50×. Conditioning, not architecture, is its problem — and that
+  measurement now runs *inside* training, printed every 2 000 steps, so the trend cannot be missed.
 * **the architecture itself matches the papers, and the gap is data.** SupertonicTTS processes
   "144-dimensional vectors at a reduced frame rate of approximately 14 Hz"; this project's velocity field
   models **144-dim vectors at 15.6 Hz** (24 dims at 93.75 Hz, folded by `compress: 6`). The latent size, the
   folded rate, ConvNeXt blocks, character-level text, implicit alignment, `Ke = 4` and NFE 32 all line up,
-  and this model is *smaller* (21.3M against 44M). The axis that does not line up is **945 hours of
-  generative training data against ~1.9 h here** — which is why the current work is generating more teacher
-  audio with the local, permissive teacher rather than searching for a missing trick. See
-  [docs/PAPER_COMPARISON.md](docs/PAPER_COMPARISON.md).
+  and this model is *smaller* (21.3M against 44M). The axis that does not line up was **945 hours of
+  generative training data against ~1.9 h here** — which is why the work since has been generating more
+  teacher audio with the local, permissive teacher rather than searching for a missing trick. That corpus is
+  now **~8 h across ~4 500 utterances** (a ~4× increase), built with `scripts/expand_corpus.py`, which
+  caches, merges and per-voice-normalises in one command and fails loudly on each of the ways an expansion
+  went wrong before. See [docs/PAPER_COMPARISON.md](docs/PAPER_COMPARISON.md).
 * **what is already solved:** size and speed. **9.63M parameters**, **42× real time** in fp32 and **85×**
   in int8 dynamic quantisation at **20.3 MB** with waveform cosine 0.9952; the full int8 ONNX pipeline runs
   at **103× real time**. The audio autoencoder's own round trip is *perfect* (WER 0.000), so the codec and
-  the decoder are not the weak links.
+  the decoder are not the weak links. Measured cost of training here, for anyone budgeting: the flow is
+  **1.76 s/step** with 160-frame crops at batch 16 while something else uses the CPU, about **0.9 s/step**
+  alone — `docs/PLAN.md` carries the method, not just the number.
 
 Two engineering notes that matter to anyone reading the numbers: every metric here has been audited, and
 **four instrumentation flaws were found and fixed** (a cache read in the wrong latent space, a validation

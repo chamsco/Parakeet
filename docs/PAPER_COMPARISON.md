@@ -34,7 +34,7 @@ fold is exactly the mechanism that closes the gap, and it is already implemented
 | alignment acceleration | context-sharing batch expansion `Ke = 4` | `context_expansion: 4`, applied in `flow_loss` | matches |
 | NFE at inference | 32 preferred; 4 needs distillation | `nfe: 32`, `distilled_nfe: 4`, `reflow` stage present (not yet run) | matches, unexercised |
 | parameters | 44M (0.5M duration + 18.5M text→latent + 25M latent→speech) | 21.3M total, 16.2M trainable | **smaller** |
-| **training data (generative module)** | **945 hours** | **~1.9 h** (plus ~3.2 h of expansions, now usable after the per-voice fix) | **~200× short** |
+| **training data (generative module)** | **945 hours** | **~8 h** (1.9 h corpus + 6.1 h generated this month) | **~120× short** |
 | hardware | RTX 4090 | CPU only (both GPU routes closed with evidence) | — |
 
 ## What the comparison actually says

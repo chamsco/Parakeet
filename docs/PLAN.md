@@ -81,8 +81,8 @@ expectation: it moves slowly, so budget a long run rather than a short one, and 
 ## What would change the picture
 
 * **more teacher audio.** This is the measured gap, not a hunch: SupertonicTTS trained its generative module
-  on **945 hours** and this project has ~1.9 h (plus ~3.2 h of expansions, usable now that the per-voice scale
-  is normalised). See [PAPER_COMPARISON.md](PAPER_COMPARISON.md) — the architectural axes line up one by one
+  on **945 hours** and this project has **~8 h** (1.9 h corpus plus 6.1 h generated since, per-voice normalised
+  so it is usable). See [PAPER_COMPARISON.md](PAPER_COMPARISON.md) — the architectural axes line up one by one
   (144-dim folded latents at ~15 Hz, ConvNeXt, character-level text, implicit alignment, `Ke = 4`, NFE 32), so
   the difference is data and compute rather than a missing trick;
 * **a GPU** (any CUDA card, even rented for a few hours): the code is device-agnostic, plain fp32, with no
