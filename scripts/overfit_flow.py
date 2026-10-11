@@ -103,6 +103,8 @@ def main() -> int:
                     help="checkpoint interval.  Default is a quarter of the run, which is useless for a "
                          "multi-day run: a long run needs regular checkpoints so rho can be read as it "
                          "goes and so an interruption does not lose hours")
+    ap.add_argument("--set", action="append", metavar="SECTION.FIELD=VALUE",
+                    help="override config after the checkpoint geometry, e.g. text.dim=512")
     ap.add_argument("--plan-residual", action="store_true",
                     help="model the RESIDUAL x1 - upsample(plan) instead of using the plan as conditioning.  The textual QUESTION is whether the velocity field's own objective then depends on the text -- which the decomposed text_dependence.py can now measure.")
     args = ap.parse_args()
@@ -122,6 +124,20 @@ def main() -> int:
     payload = torch.load(args.autoencoder, map_location="cpu", weights_only=False)
     state = (payload.get("ema") or {}).get("shadow") or payload["model"]
     apply_checkpoint_geometry(cfg, state)
+    for override in args.set or []:
+        # Applied AFTER the checkpoint geometry and BEFORE the model is built, because the autoencoder
+        # checkpoint carries its own text_dim/text_layers and would otherwise overwrite the setting.  This
+        # matters for a warm start: the token route's text encoder is 512x6 while that geometry says 256x4,
+        # and the mismatch is otherwise silent (it loads nothing and reports "0 from the text encoder").
+        key, _, value = override.partition("=")
+        section, _, field = key.partition(".")
+        if not field:
+            raise SystemExit(f"--set needs section.field=value, got {override!r}")
+        target = getattr(cfg, section)
+        current = getattr(target, field)
+        setattr(target, field, type(current)(value) if not isinstance(current, bool)
+                else value.lower() in {"1", "true", "yes"})
+        print(f"override {key} = {getattr(target, field)}")
     # the *cache* is authoritative for the voice table: the autoencoder checkpoint predates the corpus
     # growing and carries a narrower embedding, which would make voice indices out of range
     cfg.n_voices = derive_n_voices_from_cache(args.cache) or max(
@@ -143,6 +159,16 @@ def main() -> int:
         text_keys = [k for k in usable if k.startswith("text.")]
         print(f"warm start: loaded {len(usable)} tensors, {len(text_keys)} of them from the text encoder "
               f"({args.warm_start})")
+        # A warm start can silently load NONE of the text encoder, because shapes are filtered by equality and
+        # the autoencoder checkpoint's geometry (256x4) differs from the token route's (512x6).  Round 75
+        # launched a whole A/B arm that way.  The count was printed and easy to miss; make it fatal instead.
+        available_text = [k for k in warm_state if k.startswith("text.")]
+        if available_text and not text_keys:
+            raise SystemExit(
+                f"the checkpoint has {len(available_text)} text-encoder tensors but none matched this model, so "
+                f"the geometry differs.  Pass --set text.dim=... --set text.n_layers=... to match it (the token "
+                f"route's is 512x6).  Loading nothing here would silently make this a fresh run."
+            )
     if args.plan_residual:
         cfg.flow.plan_residual = True
         print("plan mode: RESIDUAL (the field models x1 - upsample(plan))")
