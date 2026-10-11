@@ -73,11 +73,13 @@ expectation: it moves slowly, so budget a long run rather than a short one, and 
 
 ## What would change the picture
 
-* a **lower-rate learned acoustic bottleneck** (the papers' actual design: ~10–50 dims at 12.5–25 Hz). This
-  project's frame latent is 24 dims at 93.75 Hz — 2 250 dims/s — so the flow's target is unusually large and
-  its marginal unusually cheap to fit. The token latents are *not* a substitute: they measure ρ 0.95 against
-  the frame latents, i.e. nearly lossless, so they inherit the same problem;
+* **more teacher audio.** This is the measured gap, not a hunch: SupertonicTTS trained its generative module
+  on **945 hours** and this project has ~1.9 h (plus ~3.2 h of expansions, usable now that the per-voice scale
+  is normalised). See [PAPER_COMPARISON.md](PAPER_COMPARISON.md) — the architectural axes line up one by one
+  (144-dim folded latents at ~15 Hz, ConvNeXt, character-level text, implicit alignment, `Ke = 4`, NFE 32), so
+  the difference is data and compute rather than a missing trick;
 * **a GPU** (any CUDA card, even rented for a few hours): the code is device-agnostic, plain fp32, with no
   CUDA-specific assumptions and a verified `--resume`, so it would move as-is;
-* a **larger, more diverse corpus** — with the caveat that `docs/05-VERIFICATION.md` §69 records why the two
-  expansions built so far were not usable, and that per-voice normalisation (§74) fixed the scale half of it.
+* ~~a lower-rate learned acoustic bottleneck~~ — **retracted.** The velocity field already models 144-dim
+  vectors at 15.6 Hz, which is what SupertonicTTS does. The autoencoder's 93.75 Hz frame rate looked like the
+  problem, but the `compress: 6` fold is exactly the mechanism that closes it.
