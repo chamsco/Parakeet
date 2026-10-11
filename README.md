@@ -14,6 +14,46 @@ whole recipe reproducible without licence risk.
 > `scripts/learn_demo.py` shows the stages actually **learn and compose** on structured synthetic
 > speech, with before/after metrics and pass/fail criteria.
 
+## Where it actually stands
+
+The pipeline is built, measured and honest about the one thing it cannot yet do. Read this before the
+architecture table, because the table is about design and this is about evidence.
+
+**The speech is not intelligible yet.** Both routes synthesise audio, and on held-out prompts the
+recogniser returns **WER 1.000** where the teacher's own audio returns **0.000**. Everything below is
+the measured reason, in order of discovery:
+
+* **the intelligibility bar is a number, not a feeling.** The recogniser reads a decoded latent
+  *perfectly* at per-dimension correlation **ρ ≥ 0.75** and fails at 0.60, so ρ is the progress metric —
+  and unlike a mel-spectrogram proxy it cannot be satisfied by noise. The flow once measured ρ ≈ 0 with a
+  log-mel cosine of **0.90**, which is why the envelope looks right and the words are absent.
+* **a one-shot text→latent regressor cannot get there, and that is now explained rather than assumed.**
+  The text side memorises 8 utterances to ρ **0.998** in 300 steps, so capacity and optimisation are fine;
+  on the full corpus it plateaus at **ρ ≈ 0.37** with validation ≈ training — i.e. it fits as well as it
+  can and the limit is the *mapping*: one text admits many acoustics, and a deterministic regressor must
+  average them. That is the papers' reason for **sampling** the acoustics rather than predicting them.
+* **the sampling route is therefore the right tool, and its blocker is measured too.** It learns the
+  marginal distribution first — its samples carry teacher-like temporal autocorrelation (lag-1 0.885
+  against 0.901) while correlating ~0 with the *right* latent — and the text carries only **14 %** of its
+  objective. Conditioning, not compute, is its problem.
+* **what is already solved:** size and speed. **9.63M parameters**, **42× real time** in fp32 and **85×**
+  in int8 dynamic quantisation at **20.3 MB** with waveform cosine 0.9952; the full int8 ONNX pipeline runs
+  at **103× real time**. The audio autoencoder's own round trip is *perfect* (WER 0.000), so the codec and
+  the decoder are not the weak links.
+
+Two engineering notes that matter to anyone reading the numbers: every metric here has been audited, and
+**four separate instrumentation flaws were found and fixed** (a cache read in the wrong latent space by
+sampling, a validation split that was really a *source* comparison, a validation split that leaked the
+same sentence into both halves, and a speech-likeness gate that rejects perfectly intelligible audio). The
+logs record them, including the claims that were retracted.
+
+One licence note, stated plainly: the Speechify teacher's written permission covers
+**demonstration/quantization work**, which is narrower than "train on the audio and publish derivative
+weights". See [docs/LEGAL.md](docs/LEGAL.md) — it is recorded rather than assumed away.
+
+The full record, with every number and every correction, is in
+[docs/05-VERIFICATION.md](docs/05-VERIFICATION.md).
+
 ---
 
 ## The idea in one table
