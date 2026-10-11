@@ -144,6 +144,74 @@ current model's honest score is **WER 1.000 against the teacher's 0.000** at NFE
 you have samples worth measuring, is ρ ≥ 0.75 *for a deterministic route*; for the sampler, WER is the test that
 cannot be gamed.
 
+## Scaling to 7B, and adding a conversational (duplex) mode
+
+Two separate problems, with very different costs. The short version: **7B is a GPU question and a fine-tuning
+question, not a from-scratch question — and the conversational part does not need 7B at all.**
+
+### The arithmetic, from measured rates
+
+The 39.2M flow runs at ~**2.7 s/step** on this CPU (batch 16, 160-frame crops, measured). Parameters scale that
+linearly at best, and attention scales worse with sequence length:
+
+| model | parameters | CPU s/step (projected) | 10 000 steps |
+|---|---|---|---|
+| the 39.2M research flow (measured) | 39.2M | 2.7 | 8 hours |
+| **7B** | 7000M (**179×**) | ~480 (8 min) | **~56 days** |
+
+So on this machine 7B is not slow, it is **off the table** — a single step takes eight minutes, and an epoch is not
+a thing that happens. The production candidate (9.63M) is 727× smaller than 7B again; "scale to 7B" is not a
+continuation of this project's model line, it is a different model.
+
+### What 7B would actually be
+
+Not this architecture inflated. The model worth reaching is **Moshi-shaped**, because that is what PersonaPlex
+fine-tuned and what a duplex conversational model has to be:
+
+| piece | this project today | a duplex 7B |
+|---|---|---|
+| I/O | text → continuous latent → audio (TTS) | **two parallel streams** (user + assistant), full duplex |
+| acoustics | 24 dims @ 93.75 Hz, folded to 144 @ 15.6 Hz | **Mimi**: 12.5 Hz, 8 codebooks (~100 tokens/s) |
+| backbone | ConvNeXt text encoder + flow | Helium-class LLM, 7B, with an **inner/depth transformer** for the codebook axis |
+| conditioning | voice embedding, optional plan | **text role prompt** + **voice embedding**, as PersonaPlex does |
+| training | offline cached teacher corpus, single stream | streaming, interleaved, with turn-taking supervision |
+
+What carries over, and is not nothing: the autoencoder work (a Mimi-like codec is the same problem this project
+already solved to WER 0.000 round trip), the blockwise **streaming** inference and its measured cost, the whole
+evaluation discipline, and `expand_corpus.py`'s pipeline for building a corpus without hitting the traps.
+
+### The realistic path, in cost order
+
+1. **Do not train 7B from scratch.** PersonaPlex did not either — it fine-tuned **Moshi**, whose weights are open.
+   Start there. Fine-tuning a 7B is a **one-to-eight-GPU** job: full fine-tune with Adam wants ~80–120 GB of
+   optimizer+gradient+activation state (≈8× A100/H100); **QLoRA on the frozen base fits a single 24–48 GB card**,
+   which is a rented afternoon rather than a cluster.
+2. **Add the two conditioning channels PersonaPlex has and this project does not**: a **text role prompt** and a
+   **voice embedding**. Both are small, additive changes to a Moshi-shaped model, and both are things this project
+   has already built separately (role-prompt text handling; per-voice conditioning with a measured effect).
+3. **Then distil *down***, which is the actual objective. The point of a 7B duplex teacher is that its licence is
+   permissive (NVIDIA Open Model Licence — whose derivative clause has **not** been read; `docs/LEGAL.md` records
+   it as unverified) and that it *converses*, which no teacher here does. A distilled 7B→small student with duplex
+   capability is a coherent target; a from-scratch 7B is not this project's goal.
+
+### The conversational part, without 7B
+
+This is the half that can be tested **here and now**, and its hypothesis is the one untested item in `PLAN.md`
+above: every corpus element in this project is **narration** — one speaker, one register, smooth prosody, no
+turn-taking — an unusually *easy* distribution to model unconditionally, which is exactly what makes the text look
+worthless to a flow that only has to fit the marginal.
+
+Started: `scripts/expansion_dialogue.py` extracts spoken turns from public-domain plays (Gutenberg: Hamlet,
+Macbeth, The Importance of Being Earnest, A Doll's House) into `data/prompts/dialogue.txt` — **1 461 turns,
+119 729 characters**, emitted **in play order** so that the generator's round-robin voice assignment makes
+consecutive prompts **alternate between speakers**. Generated with the *same* 11-voice round-robin as the narration
+corpus, so the only variable that changes is utterance style.
+
+**Honest limitation:** Kokoro *reads* those turns. This is dialogue-shaped text in narration delivery — shorter
+utterances, more register variation, turn boundaries — not spontaneous prosody, backchannels or overlap. It is a
+**weaker** version of the hypothesis than a real duplex corpus, and it is the version this hardware can produce.
+A true test needs either Moshi/PersonaPlex output (GPU) or a licensed conversational set.
+
 **What not to spend time on.** Cross-attention gain, the pooled conditioning token, plan or residual-plan
 conditioning, logit-normal `t`, more sampling steps (NFE 4 → 32 changed nothing), and a pretrained text encoder:
 all measured here, all null (`docs/05-VERIFICATION.md` §§94–104). More corpus on the *narration* domain is also
