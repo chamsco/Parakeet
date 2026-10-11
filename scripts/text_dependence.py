@@ -61,9 +61,14 @@ def main() -> int:
     source = LatentShardBatchSource(dataset, batch_size=args.batch_size, shuffle=False, self_reference=True)
 
 
-    def loss_with(text_mode: str) -> float:
-        """Mean flow-matching loss over a few batches; `text_mode` is `right` or `shuffled`."""
-        values = []
+    def loss_with(text_mode: str) -> tuple:
+        """Mean losses; `text_mode` is `right` or `shuffled`.  Returns ``(total, flow_only, plan)``.
+
+        The decomposition matters: with a plan head the total includes a *supervised* text -> token
+        regression, which is text-dependent by construction.  Reporting the total alone would credit the
+        velocity field with the plan's work -- and it did, until this was separated.
+        """
+        totals, flows, plans = [], [], []
         for _ in range(3):
             batch = source()
             ids, mask = batch["ids"], batch.get("text_mask")
@@ -73,25 +78,37 @@ def main() -> int:
                 ids = ids[order]
                 mask = None if mask is None else mask[order]
             torch.manual_seed(0)
-            loss, _aux = model.flow_loss(
+            loss, aux = model.flow_loss(
                 ids, mask, batch["latent"], voice=batch.get("voice"),
                 latent_token=batch.get("latent_token"),
             )
-            values.append(float(loss))
-        return sum(values) / len(values)
+            plan = aux.get("plan")
+            plan_value = float(plan) if plan is not None else 0.0
+            totals.append(float(loss))
+            plans.append(plan_value)
+            flows.append(float(loss) - plan_value)
+        mean = lambda v: sum(v) / len(v)
+        return mean(totals), mean(flows), mean(plans)
 
 
-    right = loss_with("right")
-    shuffled = loss_with("shuffled")
-    print(f"\nflow loss with the RIGHT text     : {right:.4f}")
-    print(f"flow loss with a SHUFFLED text    : {shuffled:.4f}")
-    delta = shuffled - right
-    print(f"difference                        : {delta:+.4f} "
-          f"({100 * delta / max(right, 1e-9):+.1f}% of the loss)")
-    if abs(delta) < 0.01 * right:
-        print("  -> the objective is TEXT-INDEPENDENT: there is nothing for training to learn here")
+    right_total, right_flow, right_plan = loss_with("right")
+    shuffled_total, shuffled_flow, shuffled_plan = loss_with("shuffled")
+    print(f"\n{'':24s} {'right':>10s} {'shuffled':>10s} {'difference':>11s} {'share':>8s}")
+    for label, right, shuffled in (
+        ("total (flow + plan)", right_total, shuffled_total),
+        ("flow term only", right_flow, shuffled_flow),
+        ("plan term (supervised)", right_plan, shuffled_plan),
+    ):
+        delta = shuffled - right
+        print(f"{label:24s} {right:10.4f} {shuffled:10.4f} {delta:+11.4f} "
+              f"{100 * delta / max(right, 1e-9):+7.1f}%")
+    delta = shuffled_flow - right_flow
+    print(f"\n  the velocity field's OWN text dependence: "
+          f"{100 * delta / max(right_flow, 1e-9):+.1f}% (the plan's gradient is excluded)")
+    if abs(delta) < 0.01 * right_flow:
+        print("  -> the velocity field's objective is TEXT-INDEPENDENT: the plan was carrying the signal")
     else:
-        print("  -> the objective does depend on the text; the gap is optimisation or scale")
+        print("  -> the velocity field itself uses the text; the gap is optimisation or scale")
 
     # one backward is enough to see which paths receive gradient at all
     groups = {

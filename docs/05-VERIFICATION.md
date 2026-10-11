@@ -3033,7 +3033,40 @@ the corpus, verified by synthesising through base voices (0, 3) and expansion vo
 21-row table. The corpus can now grow without a per-voice confound, which is the thing that has blocked every
 expansion attempt since round 55.
 
-## 75. Deliberate engineering checks worth calling out
+## 75. The velocity field ignores the text, measured properly — and a mid-round self-correction (round 64)
+
+The flow's conditioning was measured once (round 51, "the text carries 14 %") by shuffling the text and
+watching the loss. That number was misleading, because the loss it measured **includes the plan term**, and a
+plan head is a *supervised* text → token regression: it is text-dependent by construction. This round
+decomposed it (`scripts/text_dependence.py` now reports total, flow-only and plan separately), and the
+picture changes completely:
+
+| 200 items, 160-frame crops | total | **flow term only** | plan term |
+|---|---|---|---|
+| advisory, step 1 000 | +19.3 % | **+3.4 %** | +67.0 % |
+| advisory, step 2 000 | +37.4 % | **+2.0 %** | +111.1 % |
+| residual, step 1 000 | +18.5 % | **+1.8 %** | +64.5 % |
+| pre-fix architecture, step 1 000 | +4.4 % | — | — |
+
+Read in order, this is the round's story:
+
+* **I nearly reported a breakthrough.** The total rose 4.4 % → 19.3 % → 37.4 % across checkpoints and the
+  obvious reading was "the conditioning is growing 4.4×". The decomposition, run because the number looked
+  too good, shows the rise is **entirely the plan**, and the velocity field's own dependence is **2–3 %** —
+  *lower* than the baseline's total, and flat or falling as the plan improves. The claim is retracted before
+  it left the round;
+* **the residual form does not fix it either**: making the target `x1 − upsample(plan)` was supposed to force
+  the field to consume the plan, and it measures **+1.8 %** — no better than advisory. Two architectures,
+  same answer, measured with an instrument that can now tell them apart;
+* **so the flow's blocker is precisely stated**: the field's objective is ~2 % text-dependent, which is
+  exactly consistent with ρ ≈ 0 on its samples. It is not that conditioning *cannot* be learned — the 2-item
+  regime reached ρ 0.25, where the marginal has little to offer — it is that at this scale the marginal
+  solution is cheap and the text's 2 % is not worth learning.
+
+The tool is the durable part: any future conditioning change can be judged in one command by the **flow
+term's** share, rather than by a total that a supervised auxiliary can inflate.
+
+## 76. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero

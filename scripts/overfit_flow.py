@@ -93,8 +93,7 @@ def main() -> int:
                          "(dim 256, 4 layers) is shared with the Tiny variant, so a text side trained to "
                          "regress latents gives the flow's cross-attention a meaningful memory from step 0 "
                          "instead of a random one")
-    ap.add_argument("--t-sampling", default=None, choices=["uniform", "logit_normal"],
-                    help="timestep distribution for flow matching; `logit_normal` concentrates t around "
+    ap.add_argument("--t-sampling", default=None, choices=["uniform", "logit_normal"],                    help="timestep distribution for flow matching; `logit_normal` concentrates t around "
                          "0.5 (the SD3 trick) instead of spending most samples near the noise end")
     ap.add_argument("--holdout", type=int, default=0,
                     help="evaluate rho on this many cache items *after* the training range, giving the "
@@ -104,6 +103,8 @@ def main() -> int:
                     help="checkpoint interval.  Default is a quarter of the run, which is useless for a "
                          "multi-day run: a long run needs regular checkpoints so rho can be read as it "
                          "goes and so an interruption does not lose hours")
+    ap.add_argument("--plan-residual", action="store_true",
+                    help="model the RESIDUAL x1 - upsample(plan) instead of using the plan as conditioning.  The textual QUESTION is whether the velocity field's own objective then depends on the text -- which the decomposed text_dependence.py can now measure.")
     args = ap.parse_args()
 
     cfg = load_config(args.config)
@@ -132,6 +133,9 @@ def main() -> int:
         text_keys = [k for k in usable if k.startswith("text.")]
         print(f"warm start: loaded {len(usable)} tensors, {len(text_keys)} of them from the text encoder "
               f"({args.warm_start})")
+    if args.plan_residual:
+        cfg.flow.plan_residual = True
+        print("plan mode: RESIDUAL (the field models x1 - upsample(plan))")
     if args.t_sampling:
         cfg.flow.t_sampling = args.t_sampling
         print(f"timestep sampling: {args.t_sampling}")
