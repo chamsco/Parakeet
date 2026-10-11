@@ -3748,6 +3748,25 @@ The 8 000-step continuation of arm A (effective 2 000 + run steps) has produced 
 | 3 000 | **+1.7 %** | — |
 | 4 000 | — | **+0.0045 ± 0.0395**, range [−0.0294, +0.0479] |
 
+Three more gate readings have landed since, each 1 000 run-steps apart (round 105):
+
+| run step | flow-term gate | total | plan |
+|---|---|---|---|
+| 1 000 | +1.7 % | +14.4 % | +23.6 % |
+| 2 000 | −2.7 % | +2.5 % | +6.4 % |
+| 3 000 | **−0.0 %** | +5.3 % | +8.4 % |
+
+Mean +0.3 % against a measured ±3–4 point per-checkpoint floor: no trend, and nothing beyond what arm A showed
+at 500-step resolution before this run began. The gate has now been sampled eight times across two runs on this
+corpus, always inside the same band.
+
+**The rate was mis-estimated a third time**, which is worth recording as a pattern rather than an anecdote: I
+projected the 4 000-step checkpoint for ~17:30 and the run reached step 2 900 at 17:32, i.e. ~2.8 s/step against
+the 1.8 measured on arm A with identical settings. The difference is conditions — arm A's timing was taken on a
+quiet machine, this run has shared the CPU with dev probes. All three optimistic estimates (rounds 88, 92, 105)
+came from measuring under conditions other than the run's, and "seconds per step" is evidently not a property of
+the configuration.
+
 Both readouts are in the same place they have been all along: the gate inside the 2–7 % band, and ρ
 **indistinguishable from zero** with its spread measured.
 
