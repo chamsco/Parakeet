@@ -204,3 +204,56 @@ ormalize) and the fitted statistics were **never persisted**, so denormalize was
 Total to a released pair of checkpoints: **~2–3 GPU-weeks**, dominated by the autoencoder and the
 Small flow model. Re-measure steps/second early in P2 and correct this table — it is an estimate,
 not a measurement.
+
+---
+
+## Rounds 56–73: what the measurements changed
+
+**Note on this section.** The items below were reported as "added to the roadmap" in several rounds and were
+not: the appends were done with an anchor-based text replacement that silently matched nothing in this file,
+so `ROADMAP.md` stayed at its old content while the commit messages claimed otherwise. The authoritative
+record — `docs/05-VERIFICATION.md` §§ 1–80 — received every entry and is intact; this section is the
+reconstruction, written after auditing which files the commits actually touched.
+
+### Measured and closed
+
+* **Per-voice latent normalisation (§74).** A voice's latent scale is a property of that *voice*: the corpus's
+  Kokoro voices pool at 0.83–0.85 while eleven other Kokoro voices pool at 0.44–0.52 — same teacher, same
+  builder, 1.7× apart. That is why two expansions measured *worse* when mixed in. Fitted per-voice statistics
+  now go into `cache_meta.json` (presence enables them), the dataset applies them to frames and tokens, and
+  `denormalize_voice` inverts them in all three synthesis paths. Every fitted voice pools at 1.000.
+* **A wider voice table no longer discards what was learned (§74).** A shape-filtered load *skips*
+  `voice_embed.weight` when the table grows, so a 12-voice checkpoint resumed on a 21-voice corpus rebuilt
+  every voice from scratch — visible as a loss of 1.45 at step 150 against ~0.9. Now the corresponding rows
+  are copied, in the shared helper **and** in `train.py`, which had its own copy of the logic.
+* **The flow's conditioning, measured properly (§75).** The share of the *velocity field's* own objective
+  that comes from the text is **2–4 %**; a total that looks like 37 % is almost entirely the supervised plan
+  head. The residual plan variant measures the same, so it is not a plan-mode problem.
+* **Conditioning grows with corpus size (§76, §65).** 1.9 % → 2.3 % → 4.1 % → 7.4 % across 4, 16, 64 and 200
+  utterances at fixed steps — monotone over 50×, and the opposite of the "the marginal is cheap" prediction.
+  This is what makes more data the indicated spend.
+* **The architecture already matches the papers (§77).** SupertonicTTS processes "144-dimensional vectors at a
+  reduced frame rate of approximately 14 Hz"; this project's velocity field models **144-dim vectors at
+  15.6 Hz** (24 dims at 93.75 Hz, folded by `compress: 6`). Latent size, folded rate, ConvNeXt, character-level
+  text, implicit alignment, `Ke = 4` and NFE 32 all line up, and this model is *smaller* (21.3M vs 44M). The
+  retracted recommendation to change the bottleneck is recorded in `docs/PLAN.md`.
+* **The gap is data (§77).** 945 hours for the paper's generative module against ~1.9 h here.
+* **Corpus growth is mechanical (§78–79).** `scripts/expand_corpus.py` caches (`--latent-rate 3`), merges
+  (voice remap, base normaliser kept), fits per-voice statistics and verifies — failing loudly on the three
+  symptoms that each cost a round. Integration-tested on live data: 1 207 + 117 → 1 324 items, 21 voices,
+  worst pooled-scale error 0.0688 against a 0.15 limit.
+* **Generated audio is checked before ingest (§72).** `scripts/generated_audio_qa.py` passes on the first 500
+  utterances of the new corpus: rms −24.4 dB, peak −7.1 dB, crest 16.9 dB, 6.0 s median, 24 kHz.
+
+### In flight, and next
+
+* [ ] **The 5× corpus.** 3 326 new prompts (400 031 characters, 8 books, all 1 407 used sentences excluded)
+      generating with the free local teacher — about 4.6 h of audio, taking the corpus to ~9.7 h.
+* [ ] **Retrain the flow on it**, then read the flow term at 2 000/4 000 steps. That number is the whole test
+      of this spend.
+* [ ] **Pre-registered A/B (round 73).** The token route's text encoder loads into the flow with 85 of 85
+      tensors shape-compatible. Round 43 tested warm-starting it on the 2-item task, which rounds 64–65 then
+      showed cannot discriminate anything — so it is untested at scale. Arm A fresh, arm B
+      `--warm-start runs/text_continue/distill-text_step5000.pt`, gate = the flow term.
+* [ ] **The token route stays parked.** ρ 0.37 with validation ≈ training and ρ 0.998 on 8 memorised
+      utterances: it fits as well as it can, and the remaining error is the one-to-many mapping.
