@@ -4053,7 +4053,57 @@ else in this project, now reproduced in a head with a fixed, supervised, well-po
 substantially — which is exactly what the field has so far failed to do for anything. But it is the only route left
 with a measured, nonzero floor, and establishing that floor took two minutes.
 
-## 109. Environment notes
+## 109. The residual route's floor is 0.406, measured — and the token route is at 91 % of its ceiling (round 117)
+
+Round 116 proposed a residual against the token route's output and quoted a floor of 0.37 — which was the token
+route's **token** ρ. A residual route inherits its **frame** ρ, never measured until now. Two minutes:
+
+```
+token route vs target FRAMES : rho +0.4064   (median +0.3565, max +0.8081)
+token route vs target TOKENS : rho +0.4155
+```
+
+Measured **with the true durations supplied**, so this asks whether the predicted latents track the target frames
+rather than whether the duration head is accurate — and a residual route would use predicted durations, which can
+only lower the floor, never raise it.
+
+**The comparison this makes possible**, all on the same corpus and items:
+
+| quantity | value | share of the ceiling |
+|---|---|---|
+| ceiling for a model with text+voice (two renditions agreeing, §103) | 0.445 | — |
+| the **token route's** frames | **0.406** | **91 %** |
+| the **flow's** samples | 0.0045 | 1 % |
+
+So the deterministic route — described in this project since round 61 as "at its ceiling, explained by the
+one-to-many mapping" — is at **91 %** of the ceiling that actually applies to it. That description was written
+against a 0.402 figure and a *different* ceiling (the cross-voice 0.171): 0.402 was validation ρ on held-out texts,
+0.171 was the text-only share. Against the text+voice ceiling — the information set *both* models have — the token
+route is nearly saturated and the flow is nowhere near it.
+
+**What this does and does not change:**
+
+* it does **not** make the token route intelligible: 0.406 is far below the 0.60 where the recogniser fails
+  outright and the 0.75 where it reads a latent perfectly, and its own WER is 1.000. The plateau reading stands as
+  a statement about quality;
+* it **does** fix the residual route's floor at **0.406, measured** rather than 0.37 assumed, and makes the route's
+  shape concrete:
+
+  ```
+  plan        = token_route(ids)                    # rho 0.406 frames, checkpoint on disk, no training needed
+  x1_residual = x1 - plan                           # what the flow models instead of x1
+  sample      = plan + flow_field(x0 -> residual)   # the output starts at 0.406 and the field can only add
+  ```
+
+  Even if the field adds nothing — which is what fields have done in this project — the samples would score **0.406
+  instead of 0.0045**, a **90×** move on the metric that tracks the target, and the field's job becomes modelling a
+  residual whose text-conditional part is carried by something that demonstrably learns.
+
+For the honest record: this is the first *measured* route in this project with a nonzero floor, and the two
+measurements that established it (the plan head is empty, the token route's frames are not) cost under five minutes
+between them — both taken **before** building anything.
+
+## 110. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
