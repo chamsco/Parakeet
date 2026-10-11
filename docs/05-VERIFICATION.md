@@ -3780,7 +3780,49 @@ the mirror image of the mistake the pre-registration exists to prevent.
 So it runs on. The cost is ~2.5 CPU-hours; the alternative is a conclusion drawn from an extrapolation of two
 points whose intervals overlap the boundary.
 
-## 102. Environment notes
+## 102. Training time: tested, and the last untested dimension is closed (round 108)
+
+The 8 000-step continuation was stopped at run-step 4 000 (effective 6 000 from arm A) because the pre-registered
+ρ branch was determined. Both readouts, complete:
+
+| effective steps | flow-term gate | sampled ρ (mean ± std) |
+|---|---|---|
+| 2 000 | +6.6 % (arm A's step 1 000) | +0.0003 ± 0.0129, 5 seeds |
+| 3 000 | +1.7 % | — |
+| 4 000 | −2.7 % | +0.0045 ± 0.0395, range [−0.029, +0.048] |
+| 5 000 | −0.0 % | — |
+| 6 000 | **+7.9 %** | **+0.0045 ± 0.0081**, range [−0.004, +0.013] |
+
+**The verdict is the rule's third branch: ρ ≤ 0.05, flat — the route is closed at this model size, whatever the
+step budget.** The reason the endpoint was not needed: ρ moved **0.0000** between effective 4 000 and 6 000, and
+its interval's upper bound at 6 000 (**+0.013**) sits **4× below** the branch's 0.05 threshold, so 4 000 more
+steps cannot change the branch. The 8 000-step endpoint was pre-registered and would have been run if the
+interval overlapped the boundary — that is what happened at 4 000 (+0.048), which is precisely why the run was
+continued then and stopped now.
+
+**Two things worth recording about the gate's behaviour.** It swung across the whole band — +1.7, −2.7, −0.0,
++7.9 — including the highest reading this project has ever measured (+7.9 %), *with no corresponding change in
+ρ*. That combination is not a contradiction: loss and ρ have been measured as decoupled throughout (§45), and the
+gate has a ±3–4 point per-checkpoint floor (§96). It is the cleanest illustration yet of why the ρ readout, with
+its interval, is the one that decides, and the gate is the cheap early indicator that tells you when to bother
+measuring.
+
+**So the complete map of what has been tested and closed on the conditioning question, at this scale:**
+
+| lever | outcome |
+|---|---|
+| cross-attention gain, pooled conditioning token | no effect |
+| coarse-to-fine plan, residual plan | no effect |
+| logit-normal `t` sampling | no effect |
+| corpus ×4.2 (narration-style) | no measurable change |
+| pretrained text encoder (ρ 0.37 source) | arms track within 0.2 points |
+| classifier-free guidance 1.0 → 8.0 | ρ falls monotonically while output grows 2.5× |
+| **training time (this round)** | **ρ flat at ~0.004 with interval 4× below threshold** |
+
+Seven classes of intervention, none of which moves the velocity field's use of the text. What the architecture
+comparison leaves is the one axis that differs from the paper: **945 h against 8 h**, and the compute to use it.
+
+## 103. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
