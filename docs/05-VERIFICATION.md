@@ -3278,6 +3278,18 @@ Both are fixed with the failure as the reason:
 The shared shape of both errors: a check that ran under conditions the real code does not use, and a kill that
 targeted a proxy instead of an identity.
 
+### The A/B was paused for the corpus, on measured grounds (round 77)
+
+Arm A was consuming **22.5 CPU-seconds per step** under contention against 6 uncontended, so the two arms
+would have taken about six hours and would have finished *after* the corpus that they were meant to inform.
+The paper comparison (§77) puts the gap at data, not at conditioning levers, so the A/B was stopped by job id
+-- the correct tool, after round 75 used a CPU proxy and killed the generator instead -- and the whole CPU went
+to generation. Measured effect, ten minutes either side: **~10 wavs/min shared, 23 wavs/min alone**, cutting
+the remaining generation from ~3 h to ~1.3 h.
+
+The A/B reruns at full speed once the corpus is in, and the decision rule below still stands. pausing a
+one-off experiment so the identified bottleneck finishes sooner is the trade this project's evidence supports.
+
 ### Pre-registered decision rule for the text-warm-start A/B
 
 Both arms run on identical data (1 978 items, `runs/expanded_v2`) and identical geometry (512×6): arm A fresh,
