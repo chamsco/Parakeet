@@ -109,13 +109,14 @@ def main() -> int:
 
     cfg = load_config(args.config)
     dataset = LatentShardDataset(args.cache, indices=list(range(args.items)))
-    # Fail loudly when the requested item count exceeds the cache.  This cost 40 minutes: the harness
-    # defaults to the *base* cache (1207 items) and `--items 1978` silently produced a dataset whose
-    # `indices` ran past its `_items`, so the failure surfaced 20 minutes later as an IndexError inside the
-    # batch source, with the cache never named.
-    if len(dataset) < args.items:
+    # Fail loudly when the requested item count exceeds what the cache actually holds.  `len(dataset)` is the
+    # number of *indices requested*, so the comparison has to be against the loaded items.  This cost 40
+    # minutes: the harness defaults to the base cache (1207 items), `--items 1978` silently produced indices
+    # past the end, and the failure surfaced later as a bare IndexError inside the batch source.
+    available = len(getattr(dataset, "_items", []))
+    if available < args.items:
         raise SystemExit(
-            f"--items {args.items} exceeds the {len(dataset)} items in --cache {args.cache}. "
+            f"--items {args.items} exceeds the {available} items in --cache {args.cache}. "
             f"Pass the cache that has them (the expanded one is runs/expanded_v2)."
         )
     payload = torch.load(args.autoencoder, map_location="cpu", weights_only=False)
