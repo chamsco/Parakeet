@@ -3891,7 +3891,38 @@ is small, *and* the sampler's output is unintelligible by the metric that can te
 The bottom line is unchanged — size and speed solved and measured, the speech unintelligible by WER — but the
 correct next measurement for any flow attempt is **WER on its sampled audio**, not ρ against a recording.
 
-## 105. Environment notes
+## 105. The right metric, applied to the most-trained flow: WER 1.000 (round 111)
+
+Round 110 established that ρ-against-a-recording cannot decide anything about a sampler and that WER can. This
+applies it to the best flow checkpoint this project has — effective 6 000 steps of training on the ~8 h corpus,
+sampled at **NFE 32** (full integration, the paper's preferred setting) — with the teacher control:
+
+```
+student WER 1.000   (faster-whisper base.en @16k)
+teacher WER 0.000   <- control: the recogniser works on this text
+```
+
+All five checks pass: synthesis produces audio, DNSMOS and WER are available, the naturalness metric separates
+teacher from student, and the recogniser transcribes the teacher. The instrument works and the answer is
+unambiguous.
+
+**Why this closes the loop.** Round 110's correction left one legitimate doubt: if the flow draws a different valid
+rendition each time, a low ρ proves nothing — perhaps the audio is fine and merely not that recording. WER is
+draw-independent, so the flow's audio being unintelligible is a real failure and not a metric artifact.
+
+**The complete, corrected picture at this scale:**
+
+| | |
+|---|---|
+| **what works** | autoencoder round trip WER 0.000; 9.63M parameters; 85× real time in int8 at 20.3 MB |
+| **what fails** | text→acoustic *sampling*: WER 1.000 at NFE 32, after 6 000 effective steps on 8 h of audio |
+| **why (measured)** | the velocity field's own objective is 2–7 % text-dependent; 4.2× data, 4× steps, 4× sampling steps and eight conditioning interventions all leave it there |
+| **why (compared)** | the architecture matches SupertonicTTS axis by axis (§77); the one axis that differs is **945 h against 8 h** |
+
+What to measure next, stated so it is not re-litigated: **WER on sampled audio with the teacher control**, on any
+future flow attempt — not ρ against a recording.
+
+## 106. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
