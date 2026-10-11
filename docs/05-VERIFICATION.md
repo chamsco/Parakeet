@@ -3738,7 +3738,30 @@ Recorded honestly: `sampled_rho_with_error` has no unit test. A stub model for i
 calls `conditions`, `text`, `predict_latent_frames` and `vf`), so it is verified by the measurement above
 rather than by a test -- weaker than the rest of this suite and said out loud.
 
-## 101. Environment notes
+## 101. Training time: the interim readout, and why the run continues rather than being cancelled (round 103)
+
+The 8 000-step continuation of arm A (effective 2 000 + run steps) has produced its first two data points:
+
+| effective steps | flow-term gate | sampled ρ (mean ± std, 3 seeds) |
+|---|---|---|
+| 2 000 (arm A) | +6.6 % at its own step 1 000 | +0.0003 ± 0.0129 (5 seeds, §100) |
+| 3 000 | **+1.7 %** | — |
+| 4 000 | — | **+0.0045 ± 0.0395**, range [−0.0294, +0.0479] |
+
+Both readouts are in the same place they have been all along: the gate inside the 2–7 % band, and ρ
+**indistinguishable from zero** with its spread measured.
+
+**Why not cancel it here.** I have cancelled runs on decisive evidence twice (§94), and the pre-registered rule
+for this one keys its three branches to **step 8 000**. At 4 000 steps the point estimate is +0.0045 — safely in
+the ≤ 0.05 branch — but the *upper* end of its own interval is +0.048, sitting on the branch boundary, and the
+movement from 2 000 to 4 000 (+0.0003 → +0.0045) is a small positive slope. A 4 000-to-8 000 continuation could
+therefore plausibly land in the 0.05–0.20 branch, and cancelling now would be reading a trend as an endpoint —
+the mirror image of the mistake the pre-registration exists to prevent.
+
+So it runs on. The cost is ~2.5 CPU-hours; the alternative is a conclusion drawn from an extrapolation of two
+points whose intervals overlap the boundary.
+
+## 102. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
