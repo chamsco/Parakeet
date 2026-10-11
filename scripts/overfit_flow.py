@@ -109,6 +109,15 @@ def main() -> int:
 
     cfg = load_config(args.config)
     dataset = LatentShardDataset(args.cache, indices=list(range(args.items)))
+    # Fail loudly when the requested item count exceeds the cache.  This cost 40 minutes: the harness
+    # defaults to the *base* cache (1207 items) and `--items 1978` silently produced a dataset whose
+    # `indices` ran past its `_items`, so the failure surfaced 20 minutes later as an IndexError inside the
+    # batch source, with the cache never named.
+    if len(dataset) < args.items:
+        raise SystemExit(
+            f"--items {args.items} exceeds the {len(dataset)} items in --cache {args.cache}. "
+            f"Pass the cache that has them (the expanded one is runs/expanded_v2)."
+        )
     payload = torch.load(args.autoencoder, map_location="cpu", weights_only=False)
     state = (payload.get("ema") or {}).get("shadow") or payload["model"]
     apply_checkpoint_geometry(cfg, state)
@@ -174,11 +183,26 @@ def main() -> int:
     if args.lr is not None:
         cfg.train.lr = args.lr
     print(f"schedule: {args.steps} steps with {cfg.train.warmup_steps} warmup at lr {cfg.train.lr}")
-    logs = run_stage(
-        "flow", cfg, model=model, batches=source, max_steps=args.steps, out_dir=args.out,
-        device="cpu", log_fn=lambda l: print("  ", {k: round(v, 4) if isinstance(v, float) else v
-                                                   for k, v in l.items()}),
-    )
+    print(f"[diag] dataset {len(dataset)} | source.dataset {len(source.dataset)} "
+          f"| source order {len(source.order)}", flush=True)
+    try:
+        logs = run_stage(
+            "flow", cfg, model=model, batches=source, max_steps=args.steps, out_dir=args.out,
+            device="cpu", log_fn=lambda l: print("  ", {k: round(v, 4) if isinstance(v, float) else v
+                                                       for k, v in l.items()}),
+        )
+    except IndexError as exc:
+        # This harness has produced an IndexError from the batch source at full corpus size that does not
+        # reproduce when the same dataset and source are built standalone.  Capture the state rather than
+        # guess: the order, its maximum, and both lengths say immediately which one is out of step.
+        order = getattr(source, "order", [])
+        print(f"[diag] IndexError: {exc}")
+        print(f"[diag] source.dataset len {len(source.dataset)} | source.dataset.indices "
+              f"{None if source.dataset.indices is None else len(source.dataset.indices)} "
+              f"| source.dataset._items {len(source.dataset._items)}")
+        print(f"[diag] order len {len(order)} | max index {max(order) if order else None} "
+              f"| pos {getattr(source, 'pos', None)} | batch_size {source.batch_size}")
+        raise
     after = sampled_rho(model, cfg, dataset, probe)
     holdout_after = (
         sampled_rho(model, cfg, holdout, min(args.holdout, 24)) if holdout is not None else None
