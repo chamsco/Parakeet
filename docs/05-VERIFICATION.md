@@ -3404,7 +3404,29 @@ commit message and to the method: pytest -p no:warnings and read the N passed li
 count in this log from now on comes from. It is a small thing, but "I reported a number I had not read" is the
 same failure as the roadmap rounds, in miniature.
 
-## 88. Environment notes
+## 88. The second half's manifest will reconstruct exactly, and the finish is one command (round 87)
+
+data/kokoro_v3b was generated before the round-82 durability fix, so it is in the same state the first half
+was: wavs present, no manifest, and therefore unusable to the cache build. The same reconstruction applies, and
+its alignment was **checked rather than assumed** before committing to it:
+
+| check | result |
+|---|---|
+| wav indices | 0 .. 1596 contiguous, 1597 files |
+| prompts_v3_rest.txt length | 2 601 (matches the 2 601 prompts it was cut for) |
+| prompts_v3.txt[725] == prompts_v3_rest.txt[0] | **true** -- so index i maps to the right prompt |
+
+So ebuild_manifest.py --texts data/prompts/prompts_v3_rest.txt produces correct records for that directory,
+and the recovery that saved the first half works for the second.
+
+scripts/build_expanded_v3.ps1 puts the whole finish in one command, in an order where every step has failed at
+least once here: rebuild the manifest, cache with --latent-rate 3 (or the merge refuses), merge onto the
+**existing** uns/expanded_v3a (whose voices are already remapped and whose normaliser covers the base
+corpus), then train the flow with the gate on. Each step is skipped if its output already exists, so an
+interruption costs only the step it was in. Verified: it parses cleanly and its guards report the correct state
+of the filesystem right now.
+
+## 89. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
