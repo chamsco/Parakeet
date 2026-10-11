@@ -1,0 +1,50 @@
+before training: sampled latent rho on 24 of the 1978 training utterances = -0.0034
+schedule: 40000 steps with 1000 warmup at lr 0.0005
+[diag] dataset 1978 | source.dataset 1978 | source order 0
+   {'step': 0, 'trainable_params': 16212974.0, 'total_params': 21245992.0, 'frozen': 'autoencoder'}
+   {'flow': 2.7311, 'length': 1.7659, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.6548, 'loss': 4.497, 'lr': 0.0, 'step': 50}
+   {'flow': 2.3503, 'length': 0.2256, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.6458, 'loss': 2.5759, 'lr': 0.0, 'step': 100}
+   {'flow': 2.0374, 'length': 0.0004, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.6241, 'loss': 2.0378, 'lr': 0.0001, 'step': 150}
+   {'flow': 1.8518, 'length': 0.0003, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.6245, 'loss': 1.8521, 'lr': 0.0001, 'step': 200}
+   {'flow': 1.7198, 'length': 0.0001, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.6177, 'loss': 1.7199, 'lr': 0.0001, 'step': 250}
+   {'flow': 1.6339, 'length': 0.0001, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.6268, 'loss': 1.634, 'lr': 0.0001, 'step': 300}
+   {'flow': 1.5672, 'length': 0.0001, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.6279, 'loss': 1.5673, 'lr': 0.0002, 'step': 350}
+   {'flow': 1.511, 'length': 0.0001, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.6175, 'loss': 1.5112, 'lr': 0.0002, 'step': 400}
+   {'flow': 1.4522, 'length': 0.0001, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.6124, 'loss': 1.4524, 'lr': 0.0002, 'step': 450}
+   {'flow': 1.4453, 'length': 0.0003, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.6214, 'loss': 1.4456, 'lr': 0.0002, 'step': 500}
+   {'flow': 1.4175, 'length': 0.001, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.6238, 'loss': 1.4185, 'lr': 0.0003, 'step': 550}
+   {'flow': 1.3842, 'length': 0.0005, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.6111, 'loss': 1.3847, 'lr': 0.0003, 'step': 600}
+   {'flow': 1.3687, 'length': 0.001, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.6143, 'loss': 1.3697, 'lr': 0.0003, 'step': 650}
+   {'flow': 1.3595, 'length': 0.0007, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.6158, 'loss': 1.3602, 'lr': 0.0003, 'step': 700}
+   {'flow': 1.3239, 'length': 0.001, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.6015, 'loss': 1.3249, 'lr': 0.0004, 'step': 750}
+   {'flow': 1.2951, 'length': 0.0002, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.5962, 'loss': 1.2953, 'lr': 0.0004, 'step': 800}
+   {'flow': 1.3051, 'length': 0.0005, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.6114, 'loss': 1.3055, 'lr': 0.0004, 'step': 850}
+   {'flow': 1.2919, 'length': 0.0002, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.6122, 'loss': 1.2921, 'lr': 0.0004, 'step': 900}
+   {'flow': 1.2666, 'length': 0.0002, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.5896, 'loss': 1.2668, 'lr': 0.0005, 'step': 950}
+   {'flow': 1.2675, 'length': 0.0003, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.6051, 'loss': 1.2678, 'lr': 0.0005, 'step': 1000}
+   {'flow': 1.232, 'length': 0.0001, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.5869, 'loss': 1.2321, 'lr': 0.0005, 'step': 1050}
+   {'flow': 1.2424, 'length': 0.0001, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.6006, 'loss': 1.2425, 'lr': 0.0005, 'step': 1100}
+   {'flow': 1.2063, 'length': 0.0002, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.5884, 'loss': 1.2065, 'lr': 0.0005, 'step': 1150}
+   {'flow': 1.2092, 'length': 0.0002, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.5979, 'loss': 1.2094, 'lr': 0.0005, 'step': 1200}
+   {'flow': 1.2124, 'length': 0.0, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.5975, 'loss': 1.2124, 'lr': 0.0005, 'step': 1250}
+   {'flow': 1.1929, 'length': 0.0001, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.5968, 'loss': 1.193, 'lr': 0.0005, 'step': 1300}
+   {'flow': 1.1824, 'length': 0.0, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.5894, 'loss': 1.1824, 'lr': 0.0005, 'step': 1350}
+   {'flow': 1.1711, 'length': 0.0001, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.582, 'loss': 1.1712, 'lr': 0.0005, 'step': 1400}
+   {'flow': 1.1628, 'length': 0.0, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.5829, 'loss': 1.1629, 'lr': 0.0005, 'step': 1450}
+   {'flow': 1.1848, 'length': 0.0, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.6046, 'loss': 1.1849, 'lr': 0.0005, 'step': 1500}
+   {'flow': 1.1645, 'length': 0.0, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.5846, 'loss': 1.1645, 'lr': 0.0005, 'step': 1550}
+   {'flow': 1.1577, 'length': 0.0, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.5878, 'loss': 1.1577, 'lr': 0.0005, 'step': 1600}
+   {'flow': 1.1626, 'length': 0.0, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.5938, 'loss': 1.1626, 'lr': 0.0005, 'step': 1650}
+   {'flow': 1.1512, 'length': 0.0, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.5858, 'loss': 1.1512, 'lr': 0.0005, 'step': 1700}
+   {'flow': 1.1541, 'length': 0.0, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.5992, 'loss': 1.1541, 'lr': 0.0005, 'step': 1750}
+   {'flow': 1.1446, 'length': 0.0, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.5878, 'loss': 1.1446, 'lr': 0.0005, 'step': 1800}
+   {'flow': 1.1334, 'length': 0.0001, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.5833, 'loss': 1.1335, 'lr': 0.0005, 'step': 1850}
+   {'flow': 1.1432, 'length': 0.0, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.588, 'loss': 1.1432, 'lr': 0.0005, 'step': 1900}
+   {'flow': 1.1282, 'length': 0.0, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.5933, 'loss': 1.1283, 'lr': 0.0005, 'step': 1950}
+   {'flow': 1.0924, 'length': 0.0001, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.5664, 'loss': 1.0925, 'lr': 0.0005, 'step': 2000}
+   {'flow': 1.1259, 'length': 0.0, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.5823, 'loss': 1.1259, 'lr': 0.0005, 'step': 2050}
+   {'flow': 1.1085, 'length': 0.0, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.5693, 'loss': 1.1085, 'lr': 0.0005, 'step': 2100}
+   {'flow': 1.1252, 'length': 0.0, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.5838, 'loss': 1.1253, 'lr': 0.0005, 'step': 2150}
+   {'flow': 1.1046, 'length': 0.0, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.5759, 'loss': 1.1046, 'lr': 0.0005, 'step': 2200}
+   {'flow': 1.107, 'length': 0.0, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.5771, 'loss': 1.107, 'lr': 0.0005, 'step': 2250}
+   {'flow': 1.092, 'length': 0.0, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.5741, 'loss': 1.092, 'lr': 0.0005, 'step': 2300}

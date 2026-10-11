@@ -3066,7 +3066,33 @@ Read in order, this is the round's story:
 The tool is the durable part: any future conditioning change can be judged in one command by the **flow
 term's** share, rather than by a total that a supervised auxiliary can inflate.
 
-## 76. Deliberate engineering checks worth calling out
+## 76. The long flow run's first gate reading (round 67)
+
+The indicated spend is running: the flow on the **expanded, per-voice-normalised** corpus (1 978 items, 21
+voices), 40 000 steps at ~0.74 s/step — about 8 CPU-hours — with a checkpoint every 2 000 so the gate can be
+read as it goes. At step 2 000:
+
+| | right text | shuffled text | share |
+|---|---|---|---|
+| total (flow + plan) | 1.2703 | 1.3957 | +9.9 % |
+| **flow term only** | 0.5839 | 0.6072 | **+4.0 %** |
+| plan term (supervised) | 0.6863 | 0.7885 | +14.9 % |
+
+4.0 % sits inside the 1.9–7.4 % band that `conditioning_vs_scale.py` measured, so nothing has changed yet and
+the *trajectory* is the signal to watch over the next checkpoints. Two things are worth having on record
+before reading that trajectory:
+
+* the reference points are noisy — the same 200-utterance size measured 2–3 % (batch 16) and 7.4 % (batch 8) —
+  so a single reading means little and a monotone trend across several checkpoints means something;
+* the run is also the first with **per-voice-normalised targets** and 1 541 recovered utterances, so if the
+  trajectory differs from round 65's curve, those are the two things that changed.
+
+Also verified this round, because it is the one place a missing per-voice inversion would not crash: the
+**flow's** synthesis path inverts it correctly end to end. `load_latent_norm_from_cache` installs 19 voice
+tables, and one-shot synthesis succeeds for base voices (0, 3) *and* expansion voices (12, 20), as does
+blockwise streaming — wrong-scale latents with no error would have been the alternative.
+
+## 77. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
