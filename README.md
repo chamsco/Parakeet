@@ -35,10 +35,16 @@ the measured reason, in order of discovery:
 * **the sampling route is therefore the right tool, and its blocker is measured too.** It learns the
   marginal distribution first — its samples carry teacher-like temporal autocorrelation (lag-1 0.885
   against 0.901) while correlating ~0 with the *right* latent. The share of its **velocity field's** own
-  objective that comes from the text is **2–4 %**, measured by shuffling the text and watching only the flow
-  term (a total that looks like 37 % turns out to be almost entirely the supervised plan head), and it grew
-  from **1.9 % to 7.4 %** as the corpus grew 50×. Conditioning, not architecture, is its problem — and that
-  measurement now runs *inside* training, printed every 2 000 steps, so the trend cannot be missed.
+  objective that comes from the text is **2–7 %** — measured by shuffling the text and watching only the flow
+  term, because the *total* can look like 37 % while being almost entirely the supervised plan head — and that
+  number now prints itself inside training, every 2 000 steps, with a measured noise floor of ±3–4 points.
+* **every cheap conditioning lever has now been tested, and none of them moved it.** Cross-attention gain,
+  the pooled conditioning token, coarse-to-fine plan conditioning, the residual plan, logit-normal timestep
+  sampling, a **4.2× larger corpus**, and finally a *pretrained text encoder* — the token route's text half,
+  which regresses text → acoustics at ρ 0.37 — warmed into the flow under an identical A/B. That last one is
+  the cleanest negative in the project: the two arms track each other to within **0.2 points** at every shared
+  checkpoint, so giving the field a working text representation to start from makes no measurable difference.
+  **The field is not short of a text representation; it is not using one** at this scale.
 * **the architecture itself matches the papers, and the gap is data.** SupertonicTTS processes
   "144-dimensional vectors at a reduced frame rate of approximately 14 Hz"; this project's velocity field
   models **144-dim vectors at 15.6 Hz** (24 dims at 93.75 Hz, folded by `compress: 6`). The latent size, the

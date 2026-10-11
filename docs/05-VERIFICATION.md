@@ -3640,6 +3640,14 @@ interventions tested (gain, pooled token, plan, residual plan, `t`-sampling, pre
 from SupertonicTTS is not conditioning *mechanism* — those now match the paper one by one (§77) — it is the
 **945 h against 8 h** and the compute to use it.
 
+**How complete the A/B actually is**, stated because it is not a clean finish: arm A ran all four checkpoints and
+reported ρ = +0.0882. Arm B produced readings at 500/1 000/1 500 — the three that carry the comparison — and then
+stopped at ~step 1 900, before its first checkpoint (`--save-every 2000`) and before the post-training ρ, so arm
+B's ρ is missing rather than measured. No traceback was written and the wrapper never printed its completion line;
+the machine appears to have ended the process. The primary readout is unaffected — that is the gate at the shared
+checkpoints, where the arms differ by at most 0.2 points — but a paired ρ comparison is not available and is not
+claimed.
+
 ## 98. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
