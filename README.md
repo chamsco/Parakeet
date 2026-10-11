@@ -52,7 +52,9 @@ One licence note, stated plainly: the Speechify teacher's written permission cov
 weights". See [docs/LEGAL.md](docs/LEGAL.md) — it is recorded rather than assumed away.
 
 The full record, with every number and every correction, is in
-[docs/05-VERIFICATION.md](docs/05-VERIFICATION.md).
+[docs/05-VERIFICATION.md](docs/05-VERIFICATION.md). What a serious run would cost on this machine — measured
+step rates, the metrics to watch in order, and which of the two candidate routes is worth compute — is in
+[docs/PLAN.md](docs/PLAN.md).
 
 ---
 
