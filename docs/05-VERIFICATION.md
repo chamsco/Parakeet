@@ -2978,6 +2978,7 @@ token-route analogue of `overfit_flow.py`):
 |---|---|
 | before | +0.04 (a model that has never seen these items) |
 | **after 300 steps** | **+0.9977** |
+| after 3 000 steps, 64 utterances | **+0.9944** (from +0.8705: those items were already in its training corpus) |
 
 **300 steps to ρ 0.998 on eight utterances.** Capacity and optimisation are therefore *adequate for fitting*:
 the 22.6M text side is not too small and the schedule is not stuck. So the plateau at ~0.37 on the full

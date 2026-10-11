@@ -108,11 +108,14 @@ def main() -> int:
         else "partially memorises"
     )
     print(f"  {verdict}")
-    Path("runs/overfit_text.json").write_text(json.dumps({
-        "items": len(dataset), "steps": args.steps, "lr": args.lr,
-        "rho_before": before, "rho_after": after,
-        "last_logs": (logs[-3:] if isinstance(logs, list) else logs),
-    }, indent=2), encoding="utf-8", default=str)
+    Path("runs/overfit_text.json").write_text(
+        json.dumps({
+            "items": len(dataset), "steps": args.steps, "lr": args.lr,
+            "rho_before": before, "rho_after": after,
+            "last_logs": (logs[-3:] if isinstance(logs, list) else logs),
+        }, indent=2, default=str),
+        encoding="utf-8",
+    )
     return 0
 
 
