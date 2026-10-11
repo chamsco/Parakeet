@@ -60,39 +60,13 @@ def main() -> int:
 
     source = LatentShardBatchSource(dataset, batch_size=args.batch_size, shuffle=False, self_reference=True)
 
+    from parakeet.eval.gates import text_dependence
 
-    def loss_with(text_mode: str) -> tuple:
-        """Mean losses; `text_mode` is `right` or `shuffled`.  Returns ``(total, flow_only, plan)``.
-
-        The decomposition matters: with a plan head the total includes a *supervised* text -> token
-        regression, which is text-dependent by construction.  Reporting the total alone would credit the
-        velocity field with the plan's work -- and it did, until this was separated.
-        """
-        totals, flows, plans = [], [], []
-        for _ in range(3):
-            batch = source()
-            ids, mask = batch["ids"], batch.get("text_mask")
-            if text_mode == "shuffled":
-                # a different utterance's text, same batch slot count: this is the control
-                order = torch.roll(torch.arange(ids.shape[0]), shifts=1)
-                ids = ids[order]
-                mask = None if mask is None else mask[order]
-            torch.manual_seed(0)
-            loss, aux = model.flow_loss(
-                ids, mask, batch["latent"], voice=batch.get("voice"),
-                latent_token=batch.get("latent_token"),
-            )
-            plan = aux.get("plan")
-            plan_value = float(plan) if plan is not None else 0.0
-            totals.append(float(loss))
-            plans.append(plan_value)
-            flows.append(float(loss) - plan_value)
-        mean = lambda v: sum(v) / len(v)
-        return mean(totals), mean(flows), mean(plans)
-
-
-    right_total, right_flow, right_plan = loss_with("right")
-    shuffled_total, shuffled_flow, shuffled_plan = loss_with("shuffled")
+    result = text_dependence(model, source)
+    right_total, right_flow, right_plan = (result["right_total"], result["right_flow"], result["right_plan"])
+    shuffled_total = result["shuffled_total"]
+    shuffled_flow = result["shuffled_flow"]
+    shuffled_plan = result["shuffled_plan"]
     print(f"\n{'':24s} {'right':>10s} {'shuffled':>10s} {'difference':>11s} {'share':>8s}")
     for label, right, shuffled in (
         ("total (flow + plan)", right_total, shuffled_total),

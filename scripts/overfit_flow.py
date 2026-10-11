@@ -103,6 +103,8 @@ def main() -> int:
                     help="checkpoint interval.  Default is a quarter of the run, which is useless for a "
                          "multi-day run: a long run needs regular checkpoints so rho can be read as it "
                          "goes and so an interruption does not lose hours")
+    ap.add_argument("--gate-every", type=int, default=2000,
+                    help="print the flow-term text dependence every N steps (0 disables)")
     ap.add_argument("--set", action="append", metavar="SECTION.FIELD=VALUE",
                     help="override config after the checkpoint geometry, e.g. text.dim=512")
     ap.add_argument("--plan-residual", action="store_true",
@@ -212,11 +214,35 @@ def main() -> int:
     print(f"schedule: {args.steps} steps with {cfg.train.warmup_steps} warmup at lr {cfg.train.lr}")
     print(f"[diag] dataset {len(dataset)} | source.dataset {len(source.dataset)} "
           f"| source order {len(source.order)}", flush=True)
+    # The conditioning gate, printed as the run proceeds.  Every conditioning result in this project needed a
+    # separate command afterwards, which means the trend was only visible if someone remembered to look.  The
+    # measurement is three forward passes under a shuffled-text control, so it is cheap enough to run inside
+    # the loop; `flow_share` is the number to move, with the plan's supervised regression excluded.
+    from parakeet.eval.gates import text_dependence
+
+    gate_state = {"last": None}
+
+    def log_line(entry: dict) -> None:
+        print("  ", {k: round(v, 4) if isinstance(v, float) else v for k, v in entry.items()}, flush=True)
+        step = int(entry.get("step", -1))
+        if not args.gate_every or step <= 0 or step % args.gate_every != 0 or gate_state["last"] == step:
+            return
+        gate_state["last"] = step
+        was_training = model.training
+        model.eval()
+        try:
+            with torch.no_grad():
+                gate = text_dependence(model, source, repeats=2)
+            print(f"  [gate] step {step}: FLOW-TERM text dependence {gate['flow_share']:+.1f}% "
+                  f"(total {gate['total_share']:+.1f}%, plan {gate['plan_share']:+.1f}%)", flush=True)
+        finally:
+            model.train(was_training)
+
+    model.train()
     try:
         logs = run_stage(
             "flow", cfg, model=model, batches=source, max_steps=args.steps, out_dir=args.out,
-            device="cpu", log_fn=lambda l: print("  ", {k: round(v, 4) if isinstance(v, float) else v
-                                                       for k, v in l.items()}),
+            device="cpu", log_fn=log_line,
         )
     except IndexError as exc:
         # This harness has produced an IndexError from the batch source at full corpus size that does not
