@@ -2967,7 +2967,32 @@ Two things follow, and they matter more than the small correction:
 `fit_diagnosis` now splits by text group by default and reports the group count, so a leak of this kind
 cannot quietly return.
 
-## 73. Deliberate engineering checks worth calling out
+## 73. The model *can* fit — so the plateau is the mapping, not the model (round 61)
+
+Round 60 left a three-way ambiguity: the text side plateaus at ~0.37 with training ρ no higher, which could be
+insufficient capacity, an optimisation problem, or a mapping that text alone does not determine. They call for
+different spending, and memorisation separates them for a few minutes of CPU (`scripts/overfit_text.py`, the
+token-route analogue of `overfit_flow.py`):
+
+| 8 utterances, warm-started, lr 1e-3 | token ρ |
+|---|---|
+| before | +0.04 (a model that has never seen these items) |
+| **after 300 steps** | **+0.9977** |
+
+**300 steps to ρ 0.998 on eight utterances.** Capacity and optimisation are therefore *adequate for fitting*:
+the 22.6M text side is not too small and the schedule is not stuck. So the plateau at ~0.37 on the full
+corpus is not a capacity problem — with round 60's result that the model already beats the same-text
+cross-voice agreement, it is the **mapping**: one text admits many acoustics, and a deterministic regressor
+must average them.
+
+That closes a circle this project has walked several times. The papers do not predict acoustics from text
+with a regressor; they *sample* them, precisely because the mapping is one-to-many. The deterministic route
+was worth testing — it is a quarter of the size, one forward pass, no sampler — and it has now been measured
+to its ceiling (~0.37–0.40), with the cause identified rather than assumed. The sampling route is the
+structurally correct tool for this target; its own failure was diagnosed separately as the marginal being
+learned first with weak conditioning (rounds 39–51), not as this.
+
+## 74. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
