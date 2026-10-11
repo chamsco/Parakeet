@@ -12,6 +12,20 @@ lawyer, not an engineer.
 | **Kokoro-82M** | Apache-2.0 | Apache-2.0 | Yes | allowed |
 | **MiniMax speech-2.8-turbo** | proprietary, API only | proprietary; you own the output but grant MiniMax a free worldwide licence to use it to improve the service | **No** — terms bar "developing foundation models using MiniMax Voice" without prior written permission; a separate platform clause bans "create derivative works of … our services" and "attempting to discover or decode … the algorithms" | **refused by default** (`TeacherLicenseError`) |
 | **Speechify speech API** (`simba-3.2`) | proprietary, API only | proprietary hosted service | **Scoped permission.** The operator obtained written permission from the provider, *stated to cover demonstration/quantization purposes for this task*. That is narrower than "train on the audio and publish derivative weights", which is why the distinction is recorded here and in the teacher spec rather than assumed away | allowed, with the permission recorded on every corpus record (`license`) and printed in the model card |
+| **PersonaPlex** (`nvidia/personaplex-7b-v1`) | MIT ([repo](https://github.com/NVIDIA/personaplex)) | **`nvidia-open-model-license`**, gated behind HF terms acceptance, with "ADDITIONAL INFORMATION: CC-BY-4.0" for the Moshi base it finetunes | **Not established — read the licence before use.** The weights are openly published, which is more permissive than Speechify's scoped email, but *"open model"* is not *"open source"*: the NVIDIA Open Model License is the governing document and its derivative/redistribution clause is the one that decides whether a student trained on its audio may be published. This row records the licence **name and where to check**, not a permission | not yet wired in — no `TeacherSpec` entry exists, so the code cannot use it by accident |
+
+### PersonaPlex: why the row says "not established"
+
+The licence URL is <https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-open-model-license/> and the
+weights are gated at <https://huggingface.co/nvidia/personaplex-7b-v1>. Both were fetched while writing this and
+neither returned the licence *text* — the NVIDIA page served its product navigation — so the clause that matters
+has **not** been read. Recording "probably fine because it is open" would be exactly the assumption this document
+exists to prevent: the Speechify entry above is what a permission looks like when it is written down precisely,
+and this one is not there yet.
+
+What *is* established: the code is MIT; the weights are published under a named licence with a gated click-through;
+the model is a **7B audio-to-audio** conversational model, so anything distilled from it would be a derivative of
+it. Before using it as a teacher, read the derivative clause and add a `TeacherSpec` entry with the result.
 
 ### Speechify: what the permission does and does not establish
 

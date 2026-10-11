@@ -94,3 +94,39 @@ config value: a sweep between two synthetic teachers at 92 Hz and 215 Hz moves t
 monotonically **87 → 200 Hz**, with the fit degrading to the low teacher in the same order (§7). So the mixture
 is real and controllable, not a label — which is what makes the Kokoro + Speechify corpus a *distillation* of two
 teachers rather than one teacher plus filler.
+
+## A fourth model, considered: NVIDIA PersonaPlex
+
+Suggested as something that "might help a lot". Assessed against what this project has *measured*, rather than
+against how impressive it is — it is impressive, and on four of the five axes below that does not matter.
+
+What it is ([repo](https://github.com/NVIDIA/personaplex), [weights](https://huggingface.co/nvidia/personaplex-7b-v1),
+[paper](https://arxiv.org/abs/2602.06053)): a **7B full-duplex speech-to-speech** conversational model, finetuned
+from **Moshi** on top of the **Helium** LLM, with role prompts for persona and fixed voice embeddings for timbre.
+Task tag on the model card: `audio-to-audio`. Licence: MIT code, `nvidia-open-model-license` weights, gated.
+
+| question | answer | consequence |
+|---|---|---|
+| is it a TTS model? | **no** — it consumes speech and *responds*, so it cannot read a given sentence | its audio cannot be paired with the Gutenberg prompts the way Kokoro's is |
+| size | **7B** | versus this project's 9.63M production candidate and 21–39M flow: a teacher, not a student |
+| does it run here? | **no GPU on this machine** (both routes closed with evidence) | 7B duplex inference on CPU is not a practical corpus generator |
+| licence | open weights under a named licence whose derivative clause has **not been read** | recorded in `docs/LEGAL.md` as *not established* rather than assumed |
+| what would it actually give us? | **conversational audio** — spontaneous prosody, turn-taking, backchannels — which the current 8 h corpus has none of | the one hypothesis worth testing, below |
+
+**The hypothesis it enables, which is the only reason to care.** This project's blocker is measured precisely: the
+velocity field fits the **marginal** and ignores the text (`§§94–101`), and adding 4.2× more *narration-style*
+audio did not change that. All of that audio was read-aloud prose from Kokoro and Speechify, which is unusually
+*easy* to model unconditionally — one speaker, one register, smooth prosody, little turn-taking. PersonaPlex's
+domain is the opposite: spontaneous conversation is the case where the acoustic outcome depends most strongly on
+*what* is being said and *when*. If the marginal's cheapness is why the text term is not worth learning, then
+**conversational targets should raise the flow term's share** — and that is a measurement this project already has
+the instrument for (`scripts/text_dependence.py`, printed in-loop, with its noise floor characterised).
+
+**The cheap version of that test does not need a 7B model.** Any conversational corpus does it, and Moshi's own
+open weights or a small conversational dataset would answer the question far sooner than standing up PersonaPlex.
+PersonaPlex is the *best* source of that domain, not the first one to try.
+
+**What I did with it now:** recorded it as a teacher *candidate* with its licence state, and changed nothing about
+the run in flight. A resource that would need a GPU, a licence reading and a new corpus domain does not get to
+interrupt a measurement, and the honest summary is that it helps the *next* session — a GPU one — more than this
+one.
