@@ -1,0 +1,81 @@
+manifest already present -- skipping the rebuild
+
+=== cache the second half ===
+teacher orpheus: local_hf | weights: apache-2.0 tag, gated download, Llama-3.2-3B-Instruct base -> Meta Llama 3.2 Community License
+teacher kokoro: local_pkg | weights: Apache-2.0
+WARNING: no --ae-checkpoint, latents come from a randomly-initialised encoder
+latent rate overridden to 3 (token width 72)
+n_voices 1 -> 11 for the cache write (the corpus has 11 voices; training infers its own table)
+wrote latent cache -> runs\kokoro_v3b_cache
+  teachers ['kokoro'] | mixture {'kokoro': 1.0} | voices ['af_heart', 'af_bella', 'af_nicole', 'af_sarah', 'af_sky', 'af_nova', 'af_river', 'af_alloy', 'af_aoede', 'af_jessica', 'af_kore']
+
+=== chained merge onto the existing expanded corpus ===
+merged: {"base": 1932, "extra": 2601, "voices_added": 0, "total": 4533, "voices": 21, "shards": 10}
+fitted per-voice statistics for 19 voices
+{
+  "items": 4533,
+  "base_items": 1932,
+  "new_items": 2601,
+  "voices": 21,
+  "voices_with_normalisation": 19,
+  "token_widths": [
+    72
+  ],
+  "worst_pooled_scale_error": 0.0616,
+  "hint": "the expansion's own voices are the last ones in the voice table"
+}
+
+=== train the flow with the conditioning gate ===
+corpus: 4533 items | training on 4501, holding out 32
+override text.dim = 512
+override text.n_layers = 6
+override flow.text_dim = 512
+override flow.cond_dim = 512
+before training: sampled latent rho on 24 of the 4501 training utterances = -0.0004
+holdout: 32 utterances never trained on (rho before = +0.0059)
+schedule: 12000 steps with 600 warmup at lr 0.0005
+[diag] dataset 4501 | source.dataset 4501 | source order 0
+   {'step': 0, 'trainable_params': 34181102.0, 'total_params': 39214120.0, 'frozen': 'autoencoder'}
+   {'flow': 2.7696, 'length': 0.987, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.7154, 'loss': 3.7566, 'lr': 0.0, 'step': 50}
+   {'flow': 2.4184, 'length': 0.0004, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.7468, 'loss': 2.4187, 'lr': 0.0001, 'step': 100}
+   {'flow': 2.1381, 'length': 0.0001, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.7268, 'loss': 2.1382, 'lr': 0.0001, 'step': 150}
+   {'flow': 1.9476, 'length': 0.0, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.717, 'loss': 1.9476, 'lr': 0.0001, 'step': 200}
+   {'flow': 1.9085, 'length': 0.0001, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.7833, 'loss': 1.9085, 'lr': 0.0002, 'step': 250}
+   {'flow': 1.7573, 'length': 0.0029, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.7297, 'loss': 1.7601, 'lr': 0.0002, 'step': 300}
+   {'flow': 1.671, 'length': 0.0002, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.7265, 'loss': 1.6712, 'lr': 0.0003, 'step': 350}
+   {'flow': 1.6334, 'length': 0.0004, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.7359, 'loss': 1.6338, 'lr': 0.0003, 'step': 400}
+   {'flow': 1.5865, 'length': 0.0013, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.7335, 'loss': 1.5878, 'lr': 0.0004, 'step': 450}
+   {'flow': 1.5235, 'length': 0.0014, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.7153, 'loss': 1.5249, 'lr': 0.0004, 'step': 500}
+   {'flow': 1.5477, 'length': 0.0013, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.7529, 'loss': 1.549, 'lr': 0.0004, 'step': 550}
+   {'flow': 1.5177, 'length': 0.0007, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.7417, 'loss': 1.5184, 'lr': 0.0005, 'step': 600}
+   {'flow': 1.4683, 'length': 0.0004, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.7218, 'loss': 1.4687, 'lr': 0.0005, 'step': 650}
+   {'flow': 1.4363, 'length': 0.0016, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.7196, 'loss': 1.4379, 'lr': 0.0005, 'step': 700}
+   {'flow': 1.4727, 'length': 0.0001, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.7621, 'loss': 1.4728, 'lr': 0.0005, 'step': 750}
+   {'flow': 1.3641, 'length': 0.0002, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.699, 'loss': 1.3643, 'lr': 0.0005, 'step': 800}
+   {'flow': 1.4027, 'length': 0.0003, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.735, 'loss': 1.403, 'lr': 0.0005, 'step': 850}
+   {'flow': 1.3908, 'length': 0.0002, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.7382, 'loss': 1.391, 'lr': 0.0005, 'step': 900}
+   {'flow': 1.3925, 'length': 0.0001, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.744, 'loss': 1.3926, 'lr': 0.0005, 'step': 950}
+   {'flow': 1.3697, 'length': 0.0002, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.7278, 'loss': 1.37, 'lr': 0.0005, 'step': 1000}
+   {'flow': 1.3485, 'length': 0.0001, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.7235, 'loss': 1.3486, 'lr': 0.0005, 'step': 1050}
+   {'flow': 1.3629, 'length': 0.0002, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.7442, 'loss': 1.3632, 'lr': 0.0005, 'step': 1100}
+   {'flow': 1.3328, 'length': 0.0, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.7255, 'loss': 1.3328, 'lr': 0.0005, 'step': 1150}
+   {'flow': 1.3449, 'length': 0.0002, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.7399, 'loss': 1.3451, 'lr': 0.0005, 'step': 1200}
+   {'flow': 1.3464, 'length': 0.0, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.7523, 'loss': 1.3464, 'lr': 0.0005, 'step': 1250}
+   {'flow': 1.2699, 'length': 0.0001, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.6898, 'loss': 1.27, 'lr': 0.0005, 'step': 1300}
+   {'flow': 1.3409, 'length': 0.0001, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.7548, 'loss': 1.341, 'lr': 0.0005, 'step': 1350}
+   {'flow': 1.2923, 'length': 0.0001, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.7186, 'loss': 1.2924, 'lr': 0.0005, 'step': 1400}
+   {'flow': 1.2739, 'length': 0.0002, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.7106, 'loss': 1.2741, 'lr': 0.0005, 'step': 1450}
+   {'flow': 1.3108, 'length': 0.0, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.7356, 'loss': 1.3108, 'lr': 0.0005, 'step': 1500}
+   {'flow': 1.2912, 'length': 0.0, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.7191, 'loss': 1.2913, 'lr': 0.0005, 'step': 1550}
+   {'flow': 1.3223, 'length': 0.0001, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.7539, 'loss': 1.3224, 'lr': 0.0005, 'step': 1600}
+   {'flow': 1.2908, 'length': 0.0002, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.7265, 'loss': 1.2909, 'lr': 0.0005, 'step': 1650}
+   {'flow': 1.2748, 'length': 0.0001, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.7304, 'loss': 1.2749, 'lr': 0.0005, 'step': 1700}
+   {'flow': 1.3156, 'length': 0.0, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.7637, 'loss': 1.3156, 'lr': 0.0005, 'step': 1750}
+   {'flow': 1.2565, 'length': 0.0, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.7106, 'loss': 1.2566, 'lr': 0.0005, 'step': 1800}
+   {'flow': 1.2773, 'length': 0.0002, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.7315, 'loss': 1.2775, 'lr': 0.0005, 'step': 1850}
+   {'flow': 1.2822, 'length': 0.0, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.7382, 'loss': 1.2822, 'lr': 0.0005, 'step': 1900}
+   {'flow': 1.2389, 'length': 0.0, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.7062, 'loss': 1.2389, 'lr': 0.0005, 'step': 1950}
+   {'flow': 1.2734, 'length': 0.0, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.7317, 'loss': 1.2734, 'lr': 0.0005, 'step': 2000}
+  [gate] step 2000: FLOW-TERM text dependence +2.4% (total +23.1%, plan +39.9%)
+   {'flow': 1.2554, 'length': 0.0, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.714, 'loss': 1.2555, 'lr': 0.0005, 'step': 2050}
+   {'flow': 1.2448, 'length': 0.0001, 't_latent': 160.0, 'tc': 26.0, 'plan': 0.7145, 'loss': 1.2448, 'lr': 0.0005, 'step': 2100}

@@ -3510,7 +3510,38 @@ The run continues rather than restarting — 900 steps and a falling loss (3.76 
 gate trend is what answers the question, not the exact step count. The readings at 2 000/4 000/6 000 still
 satisfy §90's rule; the wall clock is now stated as ~9 CPU-hours rather than leaving the earlier figure standing.
 
-## 93. Environment notes
+## 94. The first gate reading on the expanded corpus: no gain, and the widest total/flow gap yet (round 93)
+
+```
+[gate] step 2000: FLOW-TERM text dependence +2.4% (total +23.1%, plan +39.9%)
+```
+
+Read against the two references this project already has, at the same step:
+
+| run | items | audio | flow-term dependence at step 2 000 |
+|---|---|---|---|
+| `flow_long_crop` | 1 978 | ~1.9 h | **+4.0 %** |
+| **`flow_v3`** | **4 533** | **7.95 h** | **+2.4 %** |
+
+**2.3× the corpus, 4.2× the audio, and the velocity field's own text dependence went *down*.** 2.4 % against
+4.0 % is outside the ±0.6 run-to-run spread this metric shows, so it is a decrease rather than noise. Applied to
+the pre-registered rule in §90 — whose thresholds are stated for step 12 000, making this an intermediate
+reading — the value sits in the **≤ 4.5 % band**: no movement from a larger corpus, which is the branch that
+says stop buying data.
+
+**The total would have said the opposite.** +23.1 % is more than double the smaller run's +9.9 %, and a reader
+looking at the total alone would report that the conditioning had more than doubled. The velocity field's share
+is 2.4 % of it — the plan head accounts for essentially all the rest. This is round 64's trap at its widest
+divergence yet (23.1 against 2.4, or 10:1), and it is the clearest argument for the gate being automated and
+decomposed rather than measured by hand when convenient.
+
+**What it means, provisionally.** The corpus-size effect measured in §65 (1.9 % → 7.4 % across 4 to 200
+utterances) does not extend to this regime: from ~2 000 to ~4 500 utterances the dependence, if anything, falls.
+Five more readings are due (4 000 … 12 000); if the trajectory stays in this band, the pre-registered decision is
+to stop spending on data and attack the marginal's cheapness instead — that is, make the unconditional solution
+worse so the text's few percent becomes worth learning.
+
+## 95. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
