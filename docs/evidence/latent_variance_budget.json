@@ -1,0 +1,9 @@
+{
+  "items": 600,
+  "nothing": 0.0,
+  "global per-dim mean": 0.2007441491841565,
+  "+ per-voice mean": 0.402458364161424,
+  "+ per-utterance DC": 0.41146836151596156,
+  "+ AR(1) smoothness": 0.9138602666440575,
+  "residual": 0.0861397333559425
+}

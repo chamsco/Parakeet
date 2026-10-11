@@ -3922,7 +3922,52 @@ draw-independent, so the flow's audio being unintelligible is a real failure and
 What to measure next, stated so it is not re-litigated: **WER on sampled audio with the teacher control**, on any
 future flow attempt — not ρ against a recording.
 
-## 106. Environment notes
+## 106. The text's share of the target is 43 % on the flow's own representation — and my first reading was wrong (round 113)
+
+A variance decomposition the project had never computed: add text-blind predictors in the order a marginal-first
+model learns them, and see what is left for the text (`scripts/latent_variance_budget.py`).
+
+**On the unfolded latent** (24 dims at 93.75 Hz — what the cache stores):
+
+| predictor | R² | added |
+|---|---|---|
+| global per-dim mean | 0.201 | +0.201 |
+| + per-voice mean | 0.402 | +0.202 |
+| + per-utterance DC | 0.411 | +0.009 |
+| + AR(1) smoothness | **0.914** | +0.502 |
+| **residual** | | **0.086** |
+
+Read alone that says "the target is 91 % predictable without text, so a low text dependence is expected". I wrote
+that conclusion, then measured the same thing on the right representation.
+
+**On the folded target the flow actually models** (144 dims at 15.6 Hz, `compress=6`):
+
+| predictor | R² |
+|---|---|
+| per-voice mean | 0.404 |
+| + AR(1) smoothness | 0.566 |
+| **residual for the text** | **0.434** |
+
+**Adjacent frames at 93.75 Hz are nearly identical**, so a one-step AR predictor captures 50 points of variance —
+but that predictability is an artifact of the frame rate, and the flow never sees it: `fold_time` redistributes
+those six near-identical frames across 144 dimensions, where the same predictor gets 17 points. The honest figure
+is **43.4 % of the target's variance left for the text**, not 8.6 %. The measurement was right both times; the
+first answered a question the flow does not face.
+
+**What this settles.** The field uses 2–7 % of its objective on the text while **43 %** of the target's variance is
+available beyond voice and smoothness — so "the low text dependence is simply the target's nature" is **refuted by
+measurement**, with roughly **6–17× more conditional signal than the field uses**. Combined with WER:
+
+* the conditional signal exists and is large (43 % of variance);
+* the field uses a small part of it (2–7 %);
+* the sampler's output is unintelligible anyway (**WER 1.000 at NFE 32**, §105);
+* and data ×4.2, steps ×4, NFE ×8 and eight conditioning interventions move none of it.
+
+So the lever is **not** the target representation — which is where the first reading would have pointed, and where
+§68's retraction already pointed. It is whatever it takes to fit a large conditional signal in a 21–39M flow on
+this corpus: the paper's regime of 945 h and the compute to use it.
+
+## 107. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
