@@ -360,6 +360,26 @@ def load_latent_norm_from_cache(model, cache_dir: Optional[str | Path]) -> bool:
         normalizer.mean.copy_(mean)
         normalizer.var.copy_(var)
         normalizer.n.fill_(float(stats.get("samples", 1)))
+
+    # Per-voice statistics, when the cache carries them.  The dataset applies them on top of the cache's own
+    # normalisation, so every decode path has to invert them *first* -- before `latent_norm.denormalize` --
+    # or synthesis silently emits wrong-scale latents.  Attached to the model so a synthesis call, which has
+    # the voice index, can undo it.
+    voice_norm = meta.get("voice_norm") or {}
+    names = list(meta.get("voice_names") or [])
+    installed = {}
+    for name, per_voice in voice_norm.items():
+        if name not in names:
+            continue
+        try:
+            installed[names.index(name)] = {
+                "mean": torch.tensor(per_voice["mean"], dtype=normalizer.mean.dtype),
+                "std": torch.tensor(per_voice["std"], dtype=normalizer.var.dtype).clamp_min(1e-6),
+            }
+        except (KeyError, TypeError, ValueError):
+            continue
+    if installed:
+        setattr(model, "voice_norm", installed)
     return True
 
 
@@ -424,12 +444,23 @@ def load_checkpoint_into(cfg, path, model=None):
     if model is None:
         model = build_model(cfg)
     current = model.state_dict()
-    usable = {
-        key: value
-        for key, value in state.items()
-        if key in current and tuple(current[key].shape) == tuple(value.shape)
-    }
-    model.load_state_dict(usable, strict=False)
+    growing = {}
+    for key, value in state.items():
+        if key not in current:
+            continue
+        target = current[key]
+        if tuple(target.shape) == tuple(value.shape):
+            growing[key] = value
+        elif key.endswith("voice_embed.weight") and target.dim() == value.dim() == 2:
+            # A wider voice table must not throw away the voices a checkpoint already learned.  A plain
+            # shape-filtered load skips the tensor entirely, so a 12-voice checkpoint resumed on a 21-voice
+            # cache would rebuild *every* voice embedding from scratch -- silently losing the conditioning
+            # that was trained.  Copy the rows that correspond, leave the new voices at their initialisation.
+            grown = target.clone()
+            rows = min(target.shape[0], value.shape[0])
+            grown[:rows] = value[:rows]
+            growing[key] = grown
+    model.load_state_dict(growing, strict=False)
     return model, applied, payload
 
 

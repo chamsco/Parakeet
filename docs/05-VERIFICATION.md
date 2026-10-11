@@ -2993,7 +2993,47 @@ to its ceiling (~0.37–0.40), with the cause identified rather than assumed. Th
 structurally correct tool for this target; its own failure was diagnosed separately as the marginal being
 learned first with weak conditioning (rounds 39–51), not as this.
 
-## 74. Deliberate engineering checks worth calling out
+## 74. Per-voice normalisation — the expansion gap, solved (round 62)
+
+Rounds 58–59 ruled out the teacher, the voice *identity*, prompt length, audio level, the checkpoint and the
+encode front-end — and left the 41 % scale gap unexplained. Fitting per-voice statistics
+(`scripts/fit_voice_norm.py`) finally showed what it was, and it is boringly simple:
+
+| voice | raw pooled std | after per-voice normalisation |
+|---|---|---|
+| `af_alloy`, `af_aoede` (the corpus's Kokoro voices) | 0.96, 0.85 | **1.000** |
+| `alicia`, `alec`, `alfonso` (Speechify) | 1.11, 1.04, 1.07 | **1.000** |
+| `af_heart` … `af_kore` (the expansion's Kokoro voices) | 0.66–0.89 | **1.000** |
+
+**The scale is a property of the voice.** The corpus's Kokoro half used `af_alloy`/`af_aoede` (pooled std
+0.83–0.85) while the expansion used eleven *other* Kokoro voices (0.44–0.52 pooled) — same teacher, same
+builder, 1.7× different scale. Nothing about the data was wrong; a shared output head simply cannot serve two
+scales at once, which is why mixing them measured worse (round 57: 0.291 against 0.388).
+
+So the fix is an affine map per voice, in both directions:
+
+* `scripts/fit_voice_norm.py` writes `voice_norm` into `cache_meta.json` — nothing is rewritten, so it is
+  cheap and reversible, and **presence is what enables it**, leaving older caches unaffected;
+* `LatentShardDataset` applies it to both targets (frames and tokens — the same 24-dimensional signal);
+* `denormalize_voice` inverts it in **all three** synthesis paths: one-shot Tiny, one-shot flow, and
+  blockwise streaming, always *before* the cache-level `latent_norm.denormalize`.
+
+Two failures the tests caught before they shipped, both the silent kind:
+
+* **the feature axis is not the same for both targets** — frames arrive as `(B, C, T)` and tokens as
+  `(B, T, C = latent_dim·rate)`. Picking wrong raises a shape error at best, and scales the wrong axis at
+  worst;
+* **a wider voice table must not discard what was learned.** A shape-filtered load *skips*
+  `voice_embed.weight` when the table grows, so a 12-voice checkpoint resumed on the 21-voice cache would
+  rebuild **every** voice embedding from scratch. `load_checkpoint_into` now copies the rows that correspond
+  and leaves the new voices at their initialisation.
+
+Net effect: **1 541 utterances** (770 paid + 771 free) that measured as unusable are now on the same scale as
+the corpus, verified by synthesising through base voices (0, 3) and expansion voices (12, 20) with the
+21-row table. The corpus can now grow without a per-voice confound, which is the thing that has blocked every
+expansion attempt since round 55.
+
+## 75. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero

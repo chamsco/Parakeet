@@ -118,6 +118,23 @@ class LatentShardDataset(Dataset):
             self._items.extend(payload["items"])
         self.max_frames = max_frames
         self.indices = list(indices) if indices is not None else None
+        #: Per-voice latent statistics, if the cache carries them.  A voice's latent scale is a property of
+        #: that voice (the corpus's Kokoro voices measure std 0.83-0.85, other Kokoro voices 0.44-0.52), so
+        #: an expansion rendered with different voices lands at a different scale and cannot be mixed in
+        #: until it is normalised.  Presence in `cache_meta.json` is what enables it, so a cache is
+        #: self-describing and an existing run is unaffected unless its cache is fitted.
+        self.voice_norm: Dict[int, Dict[str, torch.Tensor]] = {}
+        meta_path = self.cache_dir / "cache_meta.json"
+        if meta_path.exists():
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+            names = list(meta.get("voice_names") or [])
+            for name, stats in (meta.get("voice_norm") or {}).items():
+                if name not in names:
+                    continue
+                self.voice_norm[names.index(name)] = {
+                    "mean": torch.tensor(stats["mean"]).view(-1, 1),
+                    "std": torch.tensor(stats["std"]).view(-1, 1).clamp_min(1e-6),
+                }
 
     def __len__(self) -> int:
         return len(self._items) if self.indices is None else len(self.indices)
@@ -129,6 +146,20 @@ class LatentShardDataset(Dataset):
             item["latent"] = item["latent"][:, : self.max_frames]
             # NOTE: log_mel is the *reference prompt*, not a target, so it is deliberately not
             # truncated here -- reference length is capped separately at collation
+        stats = self.voice_norm.get(int(item["voice"])) if self.voice_norm else None
+        if stats is not None:
+            # per-voice normalisation, applied to the flow's frame target and to the token target: both are
+            # the same 24-dimensional signal, so one voice's statistics describe both
+            item = dict(item)
+            item["latent"] = (item["latent"] - stats["mean"]) / stats["std"]
+            if item.get("latent_token") is not None:
+                token = item["latent_token"]
+                width = token.shape[-1]
+                repeats = max(1, width // max(1, stats["mean"].shape[0]))
+                mean = stats["mean"].view(1, -1).repeat(1, repeats)
+                std = stats["std"].view(1, -1).repeat(1, repeats)
+                item["latent_token"] = (token - mean[:, :width]) / std[:, :width]
+            item["voice_normalised"] = True
         return item
 
 

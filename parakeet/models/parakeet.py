@@ -64,6 +64,50 @@ def parameter_report(module: nn.Module, prefix: str = "") -> Dict[str, int]:
     return out
 
 
+def denormalize_voice(model: nn.Module, latent: torch.Tensor, voice: Optional[torch.Tensor]) -> torch.Tensor:
+    """Undo the *per-voice* latent normalisation the dataset applies (round 62).
+
+    A voice's latent scale is a property of that voice -- the corpus's Kokoro voices measure pooled std
+    0.83-0.85 while other Kokoro voices measure 0.44-0.52 -- so the dataset normalises each voice to a common
+    scale and every decode path has to invert that before the cache-level `latent_norm.denormalize`.  Missing
+    this step would not crash: it would emit wrong-scale latents and quietly degrade the audio.
+
+    The statistics are 24-dimensional while a token latent spans `latent_dim * rate`, so they are repeated to
+    match the input's width.
+    """
+    table = getattr(model, "voice_norm", None)
+    if not table or voice is None:
+        return latent
+    squeeze = latent.dim() == 2
+    if squeeze:
+        latent = latent.unsqueeze(0)
+    if latent.dim() != 3:
+        return latent.squeeze(0) if squeeze else latent
+    out = latent.clone()
+    for row in range(latent.shape[0]):
+        stats = table.get(int(voice[row]) if voice.numel() > row else int(voice[0]))
+        if stats is None:
+            continue
+        base = stats["mean"].numel()
+        if base == 0:
+            continue
+        # frame latents arrive as (B, C, T) and token latents as (B, T, C = latent_dim * rate): the feature
+        # axis is whichever matches the statistics, and picking wrong either raises a shape error or, worse,
+        # silently scales the wrong axis
+        if latent.shape[1] == base:
+            mean = stats["mean"].to(latent.dtype).to(latent.device).view(1, -1, 1)
+            std = stats["std"].to(latent.dtype).to(latent.device).view(1, -1, 1)
+        elif latent.shape[2] % base == 0:
+            width = latent.shape[2]
+            repeats = max(1, width // base)
+            mean = stats["mean"].repeat(repeats)[:width].to(latent.dtype).to(latent.device).view(1, 1, -1)
+            std = stats["std"].repeat(repeats)[:width].to(latent.dtype).to(latent.device).view(1, 1, -1)
+        else:
+            continue
+        out[row] = latent[row] * std.squeeze(0) + mean.squeeze(0)
+    return out.squeeze(0) if squeeze else out
+
+
 # --------------------------------------------------------------------------------------
 # Tiny: Paradee-style two-half distillation
 # --------------------------------------------------------------------------------------
@@ -191,8 +235,11 @@ class ParakeetTiny(nn.Module):
         self.eval()
         side = self.text_side(ids, mask, voice)
         durations = normalized_to_durations(side["log_duration"], duration_scale)
+        # `decoder_latent_from_tokens` undoes the cache-level normalisation, so the per-voice one has to come
+        # off first (round 62)
+        token_latents = denormalize_voice(self, side["latent_token"], voice)
         latent, _ = self.decoder_latent_from_tokens(
-            side["latent_token"], durations, side["f0"], side["energy"], max_frames
+            token_latents, durations, side["f0"], side["energy"], max_frames
         )
         return self.autoencoder.decode(latent)
 
@@ -468,6 +515,8 @@ class ParakeetFlow(nn.Module):
             # a model look broken for reasons no metric explains.
             plan = self.plan_from_tokens(self.text(ids, mask))
             latent = latent + self.upsample_plan(plan, latent.shape[-1])
+        # per-voice first, then the cache-level inverse (round 62)
+        latent = denormalize_voice(self, latent, voice)
         latent = self.latent_norm.denormalize(latent)
         return self.autoencoder.decode(latent)
 
@@ -551,6 +600,8 @@ class ParakeetFlow(nn.Module):
                 piece = stream_plan[..., stream_offset : stream_offset + latent.shape[-1]]
                 stream_offset += latent.shape[-1]
                 latent = latent + piece
+            # per-voice first, then the cache-level inverse -- streaming must agree with one-shot
+            latent = denormalize_voice(self, latent, voice)
             latent = self.latent_norm.denormalize(latent)
             wav = vocoder.push(latent)
             if wav.shape[-1]:
