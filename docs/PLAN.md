@@ -109,11 +109,18 @@ find out fast whether the paper's regime is the missing ingredient.
 at batch 16 with 160-frame crops, gate every 1 000, ρ every 5 000. On this machine the same setup ran at ~1–3
 s/step; a rented card should make 50 000 steps trivial.
 
-* **Watch:** the flow term's text dependence (`scripts/gate`… it prints itself as `[gate] step N: …`).
-* **Beat:** the **2–7 % band** it has been stuck in. On CPU, 12 000 steps across two runs, eight conditioning
-  interventions and 4× the sampling steps never left it.
-* **If it stays in the band:** training *volume* on this architecture is not the missing ingredient, and Run 3 is
-  where the answer is. **If it climbs:** keep going and read the criterion below.
+* **Watch:** the flow term's text dependence (it prints itself as `[gate] step N: …`; measure it in **eval** mode —
+  the in-loop printout is correct, but an earlier version of `text_dependence.py` ran the model in train mode where
+  10 % conditioning dropout inflates the number).
+* **Beat:** the **~1–2 %** band it has been stuck in — uniformly across the trajectory, 0.3–1.3 % at every timestep
+  from t=0.05 to t=0.95, so a reweighted or curriculum loss is not the answer. On CPU, 12 000 steps across two runs,
+  eight conditioning interventions and 8× the sampling steps never left it.
+* **What makes this the right test:** 43 % of the target's variance is text-determined on the representation the flow
+  models (144 dims at 15.6 Hz, after voice and temporal smoothness are accounted for), so the signal is there and the
+  field uses a small part of it. If 50 000 GPU steps do not move the flow term toward that 43 %, training volume on
+  this architecture is not the missing ingredient and Run 3 is where the answer is. If it climbs, keep going.
+* **Judge it by WER on the samples, not by ρ** — the sampler legitimately draws a different valid rendition each
+  time, so ρ against a recording conflates "different valid draw" with "wrong" (see "How to judge" below).
 
 **Run 2 — the corpus, only if Run 1 climbs. (≈2–5 GPU-days + generation time.)** Grow to at least 100 h using the
 free local teacher: `scripts/expansion_prompts.py` → `make_teacher_corpus.py` → `scripts/expand_corpus.py`, which

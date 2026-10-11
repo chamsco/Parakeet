@@ -3594,9 +3594,15 @@ entirely. The per-checkpoint noise is ±3–4 points, and the run-to-run spread 
 **Claim withdrawn.** §94 read round 93's step-2 000 values as "the velocity field's dependence went *down*, 2.4 %
 against 4.0 % on 2.3× less data, outside the ±0.6 spread so a decrease rather than noise". With the measured
 noise floor, 2.4 against 4.0 is **inside** it. What survives is the weaker, honest statement: **on this corpus
-the flow term sits in the same 2–7 % band as before, so the 4.2× corpus expansion produced no measurable change
+the flow term sits in the same band as before, so the 4.2× corpus expansion produced no measurable change
 in the conditioning** — which is still §90's ≤ 4.5 %-band conclusion (no improvement, stop buying data), but it
 is "no measurable change", not "a decrease".
+
+> **Numbers in this section are superseded.** The band was quoted as "2–7 %" here and in the sections that follow
+> (§§96–106). Round 114 found the gate was being measured in train mode, where 10 % conditioning dropout inflates
+> it; measured properly the figure is **~1–2 %**, and at every individual timestep **0.3–1.3 %** (§107). Later
+> sections of this log therefore quote the corrected number, and the corrections are kept in place rather than
+> rewritten here because the sequence of what was believed and why is the record.
 
 Two consequences, both applied from here:
 

@@ -78,7 +78,7 @@ cached teacher corpus.
 | ConvNeXt blocks, character-level text, implicit alignment | `parakeet/models/flow.py`, `text.mode` | implemented, no G2P, no aligner |
 | **context-sharing batch expansion `Ke = 4`** | `flow.context_expansion`, applied in `flow_loss` | implemented as designed |
 | the papers' reason for **sampling** rather than regressing | the flow stage | it is why the deterministic route's plateau (ρ 0.37) is a dead end rather than a tuning problem |
-| — | — | **what did not transfer:** its conditioning, at this scale. Eight interventions (§§94–101) left the flow term at 2–7 % and ρ indistinguishable from zero. The difference is 945 h against 8 h |
+| — | — | **what did not transfer:** its conditioning, at this scale. Eight interventions (§§94–101) left the flow term at **~1–2 %** (2–7 % before round 114 found the gate was inflated by train-mode dropout) and ρ indistinguishable from zero. The difference is 945 h against 8 h |
 
 **[PilotTTS](https://www.alphaxiv.org/abs/2605.27258)** — factorised conditioning, cross-sample paired training.
 
