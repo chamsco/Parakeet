@@ -98,3 +98,46 @@ steps, only the corpus size changing):
 * ~~a lower-rate learned acoustic bottleneck~~ — **retracted.** The velocity field already models 144-dim
   vectors at 15.6 Hz, which is what SupertonicTTS does. The autoencoder's 93.75 Hz frame rate looked like the
   problem, but the `compress: 6` fold is exactly the mechanism that closes it.
+
+## If you have a GPU: the first three runs, in order
+
+Everything below is a measurement this project already made, so each run has a *number to beat* rather than a hope.
+Run them in this order and stop as soon as one fails its criterion — the point is not to be thorough, it is to
+find out fast whether the paper's regime is the missing ingredient.
+
+**Run 1 — the cheap falsification. (≈2 GPU-hours.)** Train the flow on the existing ~8 h corpus for 50 000 steps
+at batch 16 with 160-frame crops, gate every 1 000, ρ every 5 000. On this machine the same setup ran at ~1–3
+s/step; a rented card should make 50 000 steps trivial.
+
+* **Watch:** the flow term's text dependence (`scripts/gate`… it prints itself as `[gate] step N: …`).
+* **Beat:** the **2–7 % band** it has been stuck in. On CPU, 12 000 steps across two runs, eight conditioning
+  interventions and 4× the sampling steps never left it.
+* **If it stays in the band:** training *volume* on this architecture is not the missing ingredient, and Run 3 is
+  where the answer is. **If it climbs:** keep going and read the criterion below.
+
+**Run 2 — the corpus, only if Run 1 climbs. (≈2–5 GPU-days + generation time.)** Grow to at least 100 h using the
+free local teacher: `scripts/expansion_prompts.py` → `make_teacher_corpus.py` → `scripts/expand_corpus.py`, which
+caches, merges and per-voice-normalises in one command and fails loudly on each of the ways an expansion went
+wrong here. Scale the teacher mixture beyond Kokoro if you also want the realism, and check licences first
+(`docs/LEGAL.md` — Speechify's permission is scoped, and PersonaPlex's derivative clause is unread).
+
+* **Criterion:** the paper's own ratio is ~100×. Anything less is a different experiment.
+
+**Run 3 — the domain, if Run 1 fails. (≈1 GPU-day.)** This is the one untested hypothesis left, and it is cheap
+because it changes the *data's character*, not the architecture: every corpus element here is **narration** — one
+speaker, one register, smooth prosody, no turn-taking — which is an unusually *easy* target to model
+unconditionally, and a hard target to model unconditionally is what makes the text worth using. Train on
+conversational audio (Moshi's open weights, or any small conversational set; the corpus pipeline is agnostic) and
+compare the flow term against Run 1's band.
+
+**How to judge any of these.** By **WER on sampled audio with the teacher control** — `scripts/real_eval.py` —
+never by ρ against a recording. A sampler legitimately draws a different valid rendition each time, so ρ-against-
+the-target is a metric for a deterministic regressor and it conflates "different valid draw" with "wrong". The
+current model's honest score is **WER 1.000 against the teacher's 0.000** at NFE 32. The intelligibility bar, when
+you have samples worth measuring, is ρ ≥ 0.75 *for a deterministic route*; for the sampler, WER is the test that
+cannot be gamed.
+
+**What not to spend time on.** Cross-attention gain, the pooled conditioning token, plan or residual-plan
+conditioning, logit-normal `t`, more sampling steps (NFE 4 → 32 changed nothing), and a pretrained text encoder:
+all measured here, all null (`docs/05-VERIFICATION.md` §§94–104). More corpus on the *narration* domain is also
+null (§94). Those are the cheap ideas, and they have been spent.
