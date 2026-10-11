@@ -49,9 +49,27 @@ at **ρ ≈ 0.37** with validation ≈ training, i.e. it fits as well as it can 
 *one-to-many* mapping. More steps will not move it. **Not worth more compute.**
 
 **Flow route** (sampling, the structurally correct tool for a one-to-many target). Its blocker is measured:
-the velocity field's own objective is only ~2–3 % text-dependent at 200 utterances, while the 2-utterance
-regime reached ρ 0.25 — so the field *can* learn conditioning when the marginal distribution has little to
-offer it. **This is where compute could pay**, and the number to move is the flow term's text dependence.
+the velocity field's own objective is only a few percent text-dependent, while the 2-utterance regime reached
+ρ 0.25 — so the field *can* learn conditioning when the marginal distribution has little to offer it.
+
+**And the dependence grows with scale** (`scripts/conditioning_vs_scale.py`, same architecture, same 1 000
+steps, only the corpus size changing):
+
+| training utterances | flow-term text dependence |
+|---|---|
+| 4 | 1.9 % |
+| 16 | 2.3 % |
+| 64 | 4.1 % |
+| 200 | **7.4 %** |
+
+Monotone over a 50× range, and the **opposite** of the prediction this measurement was built to test (that a
+bigger corpus would make the marginal cheaper and starve the conditioning further). So more data does feed the
+conditioning — slowly. Treat the levels as noisy (the same 200-utterance size measured 2–3 % at batch 16
+against 7.4 % at batch 8, so ±3 points), and the *trend* over the full range as the reliable part.
+
+**This is where compute could pay**, and the number to move is the flow term's text dependence. The honest
+expectation: it moves slowly, so budget a long run rather than a short one, and read the flow term every
+1 000 steps before spending more.
 
 ## What would change the picture
 
