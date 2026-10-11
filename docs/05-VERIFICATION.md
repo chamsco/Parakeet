@@ -3967,7 +3967,41 @@ So the lever is **not** the target representation — which is where the first r
 §68's retraction already pointed. It is whatever it takes to fit a large conditional signal in a 21–39M flow on
 this corpus: the paper's regime of 945 h and the compute to use it.
 
-## 107. Environment notes
+## 107. The text contributes ~nothing at *every* timestep — and the gate was inflated by dropout (round 114)
+
+**Per-timestep.** Replicated `flow_loss` exactly (`fold_time`, `make_xt`, `v_target = x1c - x0`) but with `t`
+supplied explicitly, model in eval mode, the same `x0` for the right and shuffled passes:
+
+| t | loss right | loss shuffled | difference | share |
+|---|---|---|---|---|
+| 0.05 | 0.8580 | 0.8611 | +0.0031 | **+0.4 %** |
+| 0.20 | 0.5504 | 0.5519 | +0.0016 | +0.3 % |
+| 0.40 | 0.4390 | 0.4404 | +0.0014 | +0.3 % |
+| 0.60 | 0.4818 | 0.4879 | +0.0061 | +1.3 % |
+| 0.80 | 0.6461 | 0.6523 | +0.0061 | +1.0 % |
+| 0.95 | 1.0707 | 1.0819 | +0.0112 | +1.0 % |
+
+The text contributes **0.3–1.3 % at every timestep**, so **no loss reweighting or curriculum can create it** — a
+t-weighted objective is ruled out *before* spending a GPU hour on it, which is the whole point of measuring rather
+than trying. The loss shape is visible too: 0.858 at t=0.05, minimum **0.439 at t=0.40**, 1.071 at t=0.95 — the
+expected U.
+
+**And the correction.** `text_dependence()` ran the model in **train** mode, and `flow_loss` applies **10 %
+conditioning dropout** when training — so its "right text" pass was polluted by dropped conditioning on one batch
+in ten, inflating the right-vs-shuffled gap. That is where the "2–7 %" band quoted in this log, the README,
+`PLAN.md` and every summary came from. Fixed: the gate now measures in eval mode, restores the previous mode, and
+reports `measured_in_eval_mode`. Re-measured on the same checkpoint: **+1.9 %**, consistent with the per-`t`
+figures, against the +2.4 to +7.9 % the train-mode version reported.
+
+No conclusion changes — both numbers say "small" — but every "2–7 %" in this project's docs was the inflated one,
+and the honest figure is **~1–2 %**.
+
+**What it adds up to:** the field's objective is ~1–2 % text-dependent *uniformly across the trajectory*, on a
+target whose text-determined share is **43 %** of the variance (§106). The gap is larger than the inflated number
+suggested, the ruled-out interventions are ruled out at every timestep rather than on average, and what must change
+is **what the field is asked to do** — not how hard it is pushed, nor where in `t` it is pushed.
+
+## 108. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).

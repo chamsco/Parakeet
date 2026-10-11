@@ -35,6 +35,15 @@ def text_dependence(
     ``*_share`` percentages.  ``flow_share`` is the one to quote: the velocity field's own text dependence.
     """
 
+    # Measure in eval mode.  `flow_loss` applies 10 % classifier-free-guidance conditioning dropout when the
+    # model is *training*, so a gate measured in train mode compares right-text (polluted by dropped
+    # conditioning on one batch in ten) against shuffled-text and reports an inflated share.  Round 114 found
+    # this by measuring the same thing at fixed timesteps in eval mode: 0.3-1.3 %, against the 2-7 % this
+    # function had been reporting.  Both say "small", but the number quoted all over this project's docs was
+    # the inflated one.
+    was_training = model.training
+    model.eval()
+
     def measure(shuffle: bool) -> Dict[str, float]:
         totals, flows, plans = [], [], []
         for _ in range(repeats):
@@ -58,6 +67,7 @@ def text_dependence(
         return {"total": mean(totals), "flow": mean(flows), "plan": mean(plans)}
 
     right, shuffled = measure(False), measure(True)
+    model.train(was_training)
     out: Dict[str, float] = {}
     for key in ("total", "flow", "plan"):
         out[f"right_{key}"] = right[key]
@@ -65,6 +75,7 @@ def text_dependence(
         out[f"difference_{key}"] = shuffled[key] - right[key]
         out[f"{key}_share"] = 100.0 * (shuffled[key] - right[key]) / max(right[key], 1e-9)
     out["flow_share"] = out["flow_share"]
+    out["measured_in_eval_mode"] = True
     return out
 
 

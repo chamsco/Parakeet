@@ -35,9 +35,11 @@ the measured reason, in order of discovery:
 * **the sampling route is therefore the right tool, and its blocker is measured too.** It learns the
   marginal distribution first — its samples carry teacher-like temporal autocorrelation (lag-1 0.885
   against 0.901) while correlating ~0 with the *right* latent. The share of its **velocity field's** own
-  objective that comes from the text is **2–7 %** — measured by shuffling the text and watching only the flow
-  term, because the *total* can look like 37 % while being almost entirely the supervised plan head — and that
-  number now prints itself inside training, every 2 000 steps, with a measured noise floor of ±3–4 points.
+  objective that comes from the text is **~1–2 %** — measured by shuffling the text and watching only the flow
+  term, because the *total* can look like 37 % while being almost entirely the supervised plan head — and it is
+  that small at **every timestep** (0.3–1.3 % from t=0.05 to t=0.95), so no loss reweighting can create it. (The
+  earlier "2–7 %" here was inflated: the gate ran the model in train mode, where 10 % conditioning dropout
+  pollutes the right-text pass. Fixed, and re-measured at +1.9 %.)
   **But read the flow's audio by WER, not by ρ against a recording.** A flow conditioned on (text, voice) is
   supposed to draw *one of many* valid utterances for that pair, so a good sampler legitimately produces a
   rendition that correlates ~0 with the particular recording it was trained on — ρ-against-the-target is a
