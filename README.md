@@ -38,6 +38,10 @@ the measured reason, in order of discovery:
   objective that comes from the text is **2–7 %** — measured by shuffling the text and watching only the flow
   term, because the *total* can look like 37 % while being almost entirely the supervised plan head — and that
   number now prints itself inside training, every 2 000 steps, with a measured noise floor of ±3–4 points.
+  And the ceiling that applies to it — measured as the agreement of two renditions sharing **both text and
+  voice**, which is the flow's own information set — is **0.445 frame ρ**, against the flow's **0.0045**. **It
+  reaches about 1 % of its ceiling, on its own training data.** So the limit is not that there is nothing to
+  learn; it is that the field fits the marginal and never reaches the conditional part.
 * **every cheap conditioning lever has now been tested, and none of them moved it.** Cross-attention gain,
   the pooled conditioning token, coarse-to-fine plan conditioning, the residual plan, logit-normal timestep
   sampling, a **4.2× larger corpus**, a *pretrained text encoder* — the token route's text half, which
