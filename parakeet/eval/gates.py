@@ -134,8 +134,12 @@ def sampled_rho_with_error(
         model.train(was_training)
 
     if not scores:
+        # Degenerate output (every dimension constant, e.g. a model that emits zeros) carries no information,
+        # so it is reported the same way as noise around zero -- and crucially WITH the key callers read.
+        # The early return used to omit `straddles_zero`, which would have raised KeyError in any caller that
+        # branches on it rather than returning "cannot tell".
         return {"mean": float("nan"), "std": float("nan"), "min": float("nan"), "max": float("nan"),
-                "n_seeds": 0}
+                "n_seeds": 0, "per_seed": [], "straddles_zero": True}
     mean = sum(scores) / len(scores)
     variance = sum((s - mean) ** 2 for s in scores) / max(1, len(scores) - 1)
     return {
