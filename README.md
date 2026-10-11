@@ -38,10 +38,14 @@ the measured reason, in order of discovery:
   objective that comes from the text is **2–7 %** — measured by shuffling the text and watching only the flow
   term, because the *total* can look like 37 % while being almost entirely the supervised plan head — and that
   number now prints itself inside training, every 2 000 steps, with a measured noise floor of ±3–4 points.
-  And the ceiling that applies to it — measured as the agreement of two renditions sharing **both text and
-  voice**, which is the flow's own information set — is **0.445 frame ρ**, against the flow's **0.0045**. **It
-  reaches about 1 % of its ceiling, on its own training data.** So the limit is not that there is nothing to
-  learn; it is that the field fits the marginal and never reaches the conditional part.
+  **But read the flow's audio by WER, not by ρ against a recording.** A flow conditioned on (text, voice) is
+  supposed to draw *one of many* valid utterances for that pair, so a good sampler legitimately produces a
+  rendition that correlates ~0 with the particular recording it was trained on — ρ-against-the-target is a
+  metric for a deterministic regressor. Two renditions sharing both text and voice agree at **0.445 frame ρ**;
+  the flow scores **0.0045** against the specific recordings, which for a sampler is not yet proof of failure.
+  **The proof is WER: the flow's audio transcribes at 1.000 against the teacher's 0.000** — unambiguous, because
+  unintelligible is unintelligible whichever utterance was intended. (Sampling steps are not the issue either:
+  ρ is flat at NFE 4, 8, 16 and 32, so the field's *exact* ODE solution is as uncorrelated as its 4-step one.)
 * **every cheap conditioning lever has now been tested, and none of them moved it.** Cross-attention gain,
   the pooled conditioning token, coarse-to-fine plan conditioning, the residual plan, logit-normal timestep
   sampling, a **4.2× larger corpus**, a *pretrained text encoder* — the token route's text half, which
