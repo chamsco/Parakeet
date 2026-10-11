@@ -4103,7 +4103,42 @@ For the honest record: this is the first *measured* route in this project with a
 measurements that established it (the plan head is empty, the token route's frames are not) cost under five minutes
 between them — both taken **before** building anything.
 
-## 110. Environment notes
+## 110. The plan removes 2 % of the energy but tracks at 0.406 — which reconciles the gate with ρ (round 118)
+
+Building the residual route's cache (`scripts/make_residual_cache.py`) surfaced a design error and then a
+conceptual one.
+
+**The design error.** Subtracting the plan *unscaled* made things worse: the residual carried **2.16× the target's
+energy**, because `energy(x − p) = energy(x) − 2cov + energy(p)`, and a predictor with ρ 0.406 at comparable
+variance *adds* variance. Fixed by fitting the per-dimension regression coefficient `α = cov(x,p)/var(p)` before
+writing anything — which minimises the residual energy and leaves the floor's ρ unchanged, because correlation is
+scale-invariant. The sample still starts at 0.406, from a well-conditioned residual.
+
+**The conceptual one, which is more valuable.** With `α` fitted, the plan removes only **2.1 % of the target's
+*energy*** — while its per-dimension *correlation* is **0.406**. Those look contradictory and are not:
+
+* ρ is scale-free: the plan tracks the target's **shape** at 0.406;
+* the energy is dominated by a few high-variance dimensions the text does not predict, so the variance-weighted
+  R² is ~0.02 even though the unweighted mean correlation is 0.41.
+
+**Why this matters, and what it reconciles.** The gate is a **loss**-based measure — MSE, hence energy-weighted —
+and it has said 1–2 % throughout. The best text predictor available explains **2.1 % of that same loss**. So:
+
+* the field is **not** "ignoring" the text in any useful sense: there is only ~2 % of the loss to capture and it
+  captures 1–2 % of it; measured against the loss, it is already near optimal;
+* and that is exactly why the gate could never show the improvement that matters — the loss is energy-weighted,
+  while intelligibility follows the **structure**, which is what ρ measures, and the project's own calibration says
+  so (ρ ≥ 0.75 reads perfectly, 0.60 fails outright).
+
+The two metrics were never in conflict; they measure different things, and the one that predicts audibility is ρ.
+My own summary language has been sloppy about this for many rounds — *"the field barely uses the text"* is a
+statement about the **loss**, and the loss was never where the text's contribution lives.
+
+**What it implies for the residual route:** it stays promising, for the reason §109's floor suggested — the route's
+benefit shows up in **ρ** (0.406 floor against the flow's 0.0045), not in the loss, so a gate reading would have said
+"no change" even if it worked. Its evaluation must be **ρ and WER on `plan + field`**, never the gate.
+
+## 111. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
