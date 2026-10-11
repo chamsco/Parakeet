@@ -3609,7 +3609,38 @@ One genuine positive, recorded because it is the secondary readout and it is not
 this corpus is +0.0882**, against ~0 for the equivalent run on the smaller corpus. Small, single-run, and not yet
 reproduced on arm B — but it is the first non-zero flow ρ at 2 000 steps this project has measured.
 
-## 97. Environment notes
+## 97. The A/B: warming the flow's text encoder from the token route changes nothing (round 96)
+
+Both arms, same corpus (4 501 training utterances), same 512×6 geometry, same schedule; the only difference is
+that arm B's text encoder starts from the token route's, which regresses text → acoustics at ρ 0.37 and is the
+one mechanism in this project that has demonstrably learned the mapping.
+
+| step | arm A (fresh) | arm B (warm text encoder) | difference |
+|---|---|---|---|
+| 500 | −2.4 % | −1.7 % | +0.7 |
+| 1 000 | **+6.6 %** | **+6.8 %** | +0.2 |
+| 1 500 | **+4.1 %** | **+3.9 %** | −0.2 |
+| 2 000 | −1.4 % | *pending* | — |
+
+**The arms track each other to within 0.2 points at every shared checkpoint.** Against a noise floor measured the
+same day at ±3–4 points, that is indistinguishable — the pre-registered **≤ 4.5 %-ish branch applies: drop it**,
+and round 43's null result survives the scale test that round 43 could not perform (it ran on 2 items, which
+rounds 64–65 showed cannot discriminate anything).
+
+**Why this negative is worth more than the others.** Every previous conditioning lever — cross-attention gain,
+the pooled conditioning token, the plan, the residual plan, logit-normal `t`, more data — was ambiguous in one
+way or another: measured on too few items, or confounded with architecture, or inside a noise floor nobody had
+quantified. This one is clean: a *pretrained* text encoder carrying a working text → acoustic mapping, dropped
+into the flow, produces no measurable change in how much the velocity field uses the text. The field is not
+short of a text representation. It is not using one.
+
+**Together with §96 and §94, the conditioning question now has a comprehensive answer at this scale.** Six
+interventions tested (gain, pooled token, plan, residual plan, `t`-sampling, pretrained text encoder) plus a
+4.2× corpus expansion, and the flow term stays in the 2–7 % band with sampled ρ ≈ 0.09. The measured difference
+from SupertonicTTS is not conditioning *mechanism* — those now match the paper one by one (§77) — it is the
+**945 h against 8 h** and the compute to use it.
+
+## 98. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
