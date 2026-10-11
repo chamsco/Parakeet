@@ -2332,7 +2332,14 @@ quarter-of-the-run default, which for a 200 000-step run would have been a singl
 
 
 
-## 53. Smoke test output (measured)
+## 53.1. Smoke test output (measured)
+
+> Renumbered from a duplicate `## 53.` found by an audit in round 74, along with the orphaned
+> `## 62. Environment notes` at the end of this file. Both are the same failure mode as the roadmap's: an
+> anchor-based shell replacement that matched nothing, so the renumbering reported in several rounds never
+> happened -- the heading it targeted says `62`, not `80`. Section numbers 35 and 38 have never existed; that
+> is a historical gap, left as is rather than renumber twenty-five sections and break the cross-references
+> that cite them.
 
 ```
 parakeet-tiny [tiny] sr=24000 mel=80@93.8Hz latent=24 compress=1/6 voice=constant
@@ -3218,7 +3225,7 @@ seconds.
   `MelSpectrogram.stft` now squeezes the singleton channel and raises a clear error for anything
   else, rather than surfacing a cryptic `torch.stft` message.
 
-## 62. Environment notes
+## 81. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
