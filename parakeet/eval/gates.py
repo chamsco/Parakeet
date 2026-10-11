@@ -66,3 +66,84 @@ def text_dependence(
         out[f"{key}_share"] = 100.0 * (shuffled[key] - right[key]) / max(right[key], 1e-9)
     out["flow_share"] = out["flow_share"]
     return out
+
+
+def sampled_rho_with_error(
+    model,
+    cfg,
+    dataset,
+    items: int = 24,
+    *,
+    seeds: tuple = (0, 1, 2, 3, 4),
+    nfe: int = 4,
+) -> Dict[str, float]:
+    """Per-dimension correlation between sampled and target latents, **with an error bar**.
+
+    Round 100 found this readout is noisy at the magnitudes this project produces: arm A reported +0.0882 at step
+    2000, and continuing from that same checkpoint measured −0.0277 — same model, same cache, different probe
+    draw. A single reading near zero therefore carries no information, which is exactly where every flow result
+    here has landed. Reporting the spread across probe seeds is what makes the number usable: an interval that
+    straddles zero says "unmeasured", and only an interval clear of zero is a positive.
+
+    Returns ``mean``, ``std``, ``min``, ``max`` and ``n_seeds`` over per-seed ρ values.
+    """
+    import torch
+
+    from parakeet.models.flow import consistency_sample
+    from parakeet.models.parakeet import unfold_time
+
+    was_training = model.training
+    model.eval()
+    scores = []
+    try:
+        with torch.no_grad():
+            for seed in seeds:
+                per_item = []
+                for index in range(min(items, len(dataset))):
+                    item = dataset[index]
+                    ids = item["ids"][None]
+                    mask = item.get("text_mask")
+                    mask = mask[None] if mask is not None else None
+                    voice = item.get("voice")
+                    voice = voice.reshape(1) if voice is not None else None
+                    memory, memory_mask, cond = model.conditions(ids, mask, voice=voice)
+                    frames = int(model.predict_latent_frames(model.text(ids, mask), mask, cond).item())
+                    tc = model.compressed_frames(frames)
+                    generator = torch.Generator().manual_seed(seed)
+                    x0 = torch.randn(1, cfg.flow.latent_dim * cfg.flow.compress, tc, generator=generator)
+                    x1c = consistency_sample(
+                        model.vf, memory, memory_mask,
+                        (1, cfg.flow.latent_dim * cfg.flow.compress, tc),
+                        steps=nfe, device=torch.device("cpu"),
+                        cfg_scale=getattr(cfg.flow, "cfg_scale", 1.0), x0=x0,
+                    )
+                    sampled = unfold_time(x1c, cfg.flow.compress, t_out=frames)
+                    target = item["latent"][None]
+                    length = min(sampled.shape[-1], target.shape[-1])
+                    dims = []
+                    for dim in range(sampled.shape[1]):
+                        x, y = sampled[0, dim, :length], target[0, dim, :length]
+                        if float(x.std()) < 1e-6 or float(y.std()) < 1e-6:
+                            continue
+                        dims.append(float(torch.corrcoef(torch.stack([x, y]))[0, 1]))
+                    if dims:
+                        per_item.append(sum(dims) / len(dims))
+                if per_item:
+                    scores.append(sum(per_item) / len(per_item))
+    finally:
+        model.train(was_training)
+
+    if not scores:
+        return {"mean": float("nan"), "std": float("nan"), "min": float("nan"), "max": float("nan"),
+                "n_seeds": 0}
+    mean = sum(scores) / len(scores)
+    variance = sum((s - mean) ** 2 for s in scores) / max(1, len(scores) - 1)
+    return {
+        "mean": mean,
+        "std": variance ** 0.5,
+        "min": min(scores),
+        "max": max(scores),
+        "n_seeds": len(scores),
+        "per_seed": scores,
+        "straddles_zero": min(scores) <= 0.0 <= max(scores),
+    }

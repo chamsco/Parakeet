@@ -3706,7 +3706,39 @@ That does not change any conclusion — every one of them was drawn from values 
 the only clean signals in this project are the *decomposed* ones (the gate's flow term against its shuffled
 control) and the *monotone* ones (the CFG sweep), not single sampled-ρ readings.
 
-## 100. Environment notes
+## 100. The readout now carries a spread, and the flow's samples are indistinguishable from zero (round 101)
+
+The noise problem round 100 exposed has a fix, so it was applied rather than documented.
+`parakeet/eval/gates.py` gains `sampled_rho_with_error()`: per-dimension correlation between sampled and target
+latents over several probe seeds, returning mean, standard deviation, range and a `straddles_zero` flag.
+`scripts/cfg_rho_sweep.py` uses it, so the sweep reports an interval instead of a point.
+
+On arm A's step-2000 checkpoint, 5 seeds x 16 items:
+
+  mean +0.0003 | std 0.0129 | range [-0.0178, +0.0147] | straddles zero: True
+  per-seed: [-0.0178, -0.0031, -0.0031, 0.0107, 0.0147]
+
+That explains the two contradictory readings as draws from a distribution centred on zero -- arm A's +0.0882 and
+the continuation's -0.0277 -- and it means **round 95's "first non-zero flow rho at 2000 steps" is withdrawn**.
+With its spread measured, the flow's sampled latents are indistinguishable from zero.
+
+The CFG sweep re-run with error bars says the same at every weight:
+
+| cfg | mean ρ | std | range | verdict |
+|---|---|---|---|---|
+| 1.00 | −0.0046 | 0.0175 | [−0.0197, +0.0146] | indistinguishable from zero |
+| 4.00 | −0.0025 | 0.0083 | [−0.0088, +0.0069] | indistinguishable from zero |
+
+**What this changes is what counts as evidence here**, not any conclusion: every flow result was already drawn
+from values inside the noise. The clean signals are the decomposed ones (the gate's flow term against its shuffled
+control) and the monotone ones (CFG's decline across an 8x range, inference-only and seed-controlled). A single
+sampled-ρ reading is not evidence, and this project has been quoting them.
+
+Recorded honestly: `sampled_rho_with_error` has no unit test. A stub model for it is feasible but fiddly (it
+calls `conditions`, `text`, `predict_latent_frames` and `vf`), so it is verified by the measurement above
+rather than by a test -- weaker than the rest of this suite and said out loud.
+
+## 101. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
