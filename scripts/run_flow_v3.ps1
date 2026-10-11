@@ -25,6 +25,6 @@ Write-Host "corpus: $total items | training on $train, holding out $holdout"
 & .\.venv\Scripts\python.exe -u scripts\overfit_flow.py `
     --config configs\parakeet_flow_plan.yaml `
     --cache runs\expanded_v3 --items $train --holdout $holdout `
-    --steps 30000 --batch-size 16 --crop-frames 160 --lr 0.0005 `
+    --steps 12000 --batch-size 16 --crop-frames 160 --lr 0.0005 `
     --set text.dim=512 --set text.n_layers=6 --set flow.text_dim=512 --set flow.cond_dim=512 `
     --gate-every 2000 --save-every 2000 --out runs\flow_v3

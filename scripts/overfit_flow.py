@@ -136,6 +136,12 @@ def main() -> int:
         if not field:
             raise SystemExit(f"--set needs section.field=value, got {override!r}")
         target = getattr(cfg, section)
+        if not hasattr(target, field):
+            # A typo here surfaced as a bare AttributeError two lines later, which reads like a bug in the
+            # config rather than in the flag -- and it cost a measurement run before it was noticed.  Name the
+            # section and what it actually has.
+            available = ", ".join(sorted(k for k in vars(target) if not k.startswith("_")))
+            raise SystemExit(f"cfg.{section} has no field {field!r}. Available: {available}")
         current = getattr(target, field)
         setattr(target, field, type(current)(value) if not isinstance(current, bool)
                 else value.lower() in {"1", "true", "yes"})

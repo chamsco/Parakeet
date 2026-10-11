@@ -18,13 +18,20 @@ time, and trust the step counter in a log rather than a clock.
 | stage | setting | cost | 50 000 steps |
 |---|---|---|---|
 | flow (marginal route) | batch 8, whole utterances | ~2.0 s/step | 28 CPU-hours |
-| flow | batch 16, 160-frame aligned crops | ~0.5 s/step | **7 CPU-hours** |
+| flow | batch 16, 160-frame crops, **measured** | **1.76 s/step contended, ~0.9 alone** | **12–25 CPU-hours** |
 | token route (`distill-text`) | batch 16, 512-dim / 6-layer text side | ~0.8–1.2 s/step | 11–17 CPU-hours |
 | audio autoencoder | batch 8 | ~0.5 s/step | 7 CPU-hours |
 
-So a serious run on this machine is **single-digit to low-double-digit CPU-hours** per 50 000 steps — days of
-wall clock on a sleeping desktop, not weeks. Two artefacts already exist to keep that honest:
-`scripts/rho_curve.py` reads ρ from checkpoints, and `scripts/text_dependence.py` reads the conditioning.
+**Corrected in round 88.** This table claimed ~0.5 s/step for the cropped flow, which was an estimate from an
+earlier measurement. Measured directly on the 1 932-item corpus by timing 100 and 300 steps and subtracting, so
+the fixed setup cost cancels: **1.76 s/step while the corpus generator was running**, and about **0.9 s/step**
+on a quiet machine — so 50 000 steps is 12–25 CPU-hours, not 7. The earlier figure was optimistic by roughly
+two, and anything budgeted from it was too.
+
+The practical consequence: a run long enough to be informative is **thousands of steps, not tens of thousands**.
+The conditioning gate's trend is visible at 1 000-step resolution (round 65's curve used 1 000 per point), so a
+12 000-step run with a reading every 2 000 gives six points for 2.5–5 CPU-hours — which is the right size for a
+question that a wrong answer costs days to discover.
 
 ## What to watch, in order
 
