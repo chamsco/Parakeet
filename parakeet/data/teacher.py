@@ -901,6 +901,13 @@ def synthesize_corpus(
     weights = weights / weights.sum()
 
     keep_cache: Dict[str, Tuple[np.ndarray, int]] = {}
+    # Stream the manifest instead of writing it at the end.  A two-hour corpus build that is interrupted --
+    # or killed, as this one was -- otherwise loses every record while keeping every wav, and the cache build
+    # then cannot run at all because it reads the manifest.  Opened in "w" mode because generation always
+    # starts from index 0 and rewrites the audio it describes, so truncating keeps the two consistent.
+    manifest = out_dir / "manifest.jsonl"
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    handle = manifest.open("w", encoding="utf-8")
     for i, text in enumerate(texts):
         if max_utts is not None and i >= max_utts:
             break
@@ -945,12 +952,13 @@ def synthesize_corpus(
             ),
         )
         lines.append(json.dumps(asdict(rec), ensure_ascii=False))
+        handle.write(lines[-1] + "\n")
+        handle.flush()
         keep_cache[utt_id] = (wav, sr)
         if (i + 1) % 100 == 0:
             print(f"[teacher] {i+1} utterances, {sum(r['duration_s'] for r in map(json.loads, lines))/3600:.2f} h")
 
-    manifest = out_dir / "manifest.jsonl"
-    manifest.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
+    handle.close()
     meta = {
         "mix": mix,
         "teachers": {k: asdict(TEACHERS[k]) for k in mix},
