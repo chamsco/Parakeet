@@ -3028,7 +3028,7 @@ Two failures the tests caught before they shipped, both the silent kind:
   rebuild **every** voice embedding from scratch. `load_checkpoint_into` now copies the rows that correspond
   and leaves the new voices at their initialisation.
 
-Net effect: **1 541 utterances** (770 paid + 771 free) that measured as unusable are now on the same scale as
+* **	rain.py had its own warm-start path** and did not use the shared helper, so the very first\n  expanded retrain logged `skipped 1 key: voice_embed.weight (12,512)->(21,512)` and started with **every**\n  voice embedding random -- visible immediately as a loss of 1.45 at step 150 against ~0.9 for the same\n  trajectory before. With the growth logic applied there too: `voice table grew: copied 12 learned rows, 9\n  new voice(s) initialised fresh`, 0 missing keys, loss 0.94 at step 150. The lesson is the one from round 54\n  repeating: two code paths that do the same job will not stay the same, so the helper has to be the only one.\n\nNet effect: **1 541 utterances** (770 paid + 771 free) that measured as unusable are now on the same scale as
 the corpus, verified by synthesising through base voices (0, 3) and expansion voices (12, 20) with the
 21-row table. The corpus can now grow without a per-voice confound, which is the thing that has blocked every
 expansion attempt since round 55.

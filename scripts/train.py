@@ -184,6 +184,19 @@ def main() -> int:
             if key not in current:
                 continue
             if tuple(current[key].shape) != tuple(value.shape):
+                # A growing voice table is not a stale key: skipping it rebuilds *every* voice embedding
+                # from scratch, so a 12-voice checkpoint resumed on a 21-voice corpus would lose all of its
+                # voice conditioning and start the run from random voices.  Copy the rows that correspond;
+                # the new voices keep their initialisation.  (Round 62 measured the loss starting at 2.13
+                # instead of ~0.9 because of exactly this.)
+                if key.endswith("voice_embed.weight") and current[key].dim() == value.dim() == 2:
+                    grown = current[key].clone()
+                    rows = min(current[key].shape[0], value.shape[0])
+                    grown[:rows] = value[:rows]
+                    usable[key] = grown
+                    print(f"[train]   voice table grew: copied {rows} learned rows, "
+                          f"{current[key].shape[0] - rows} new voice(s) initialised fresh")
+                    continue
                 skipped.append(f"{key} {tuple(value.shape)}->{tuple(current[key].shape)}")
                 continue
             usable[key] = value
