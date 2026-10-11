@@ -3371,7 +3371,29 @@ Comfortable, so no sharding work is needed and the flow can train on the whole e
 a minute and rules out the failure mode that would otherwise appear as an unexplained allocation error halfway
 into the run that this entire spend exists to enable.
 
-## 86. Environment notes
+## 86. The real merge, on the recovered half of the corpus (round 83)
+
+The rehearsal used 117 utterances. This one used the 725 the generator actually produced before round 75's kill,
+merged onto the base corpus with the fixed fitter:
+
+`
+merged: {"base": 1207, "extra": 725, "voices_added": 9, "total": 1932, "voices": 21, "shards": 4}
+fitted per-voice statistics for 19 voices
+token_widths: [72]
+worst_pooled_scale_error: 0.0419
+`
+
+**0.0419** against the rehearsal's 0.0688 and the 0.15 limit -- lower on more data, which is what a per-voice
+statistic estimated from 725 items rather than 117 should do. The guards that matter passed on live data: the
+correct token width, nine new voices remapped onto the existing table, and every fitted voice within 4 % of unit
+scale.
+
+So the corpus stands at **1 932 items (~4.5 h)** right now, and the second half (2 601 utterances, ~4.8 h) will
+be merged onto this result when the generator finishes. Expected final corpus: ~11 h against the original 1.9.
+
+The chain is the same one rehearsed in round 78 -- which is why this was one command and no surprises.
+
+## 87. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).

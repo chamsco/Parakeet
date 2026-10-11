@@ -1,0 +1,12 @@
+{
+  "items": 1932,
+  "base_items": 1207,
+  "new_items": 725,
+  "voices": 21,
+  "voices_with_normalisation": 19,
+  "token_widths": [
+    72
+  ],
+  "worst_pooled_scale_error": 0.0419,
+  "hint": "the expansion's own voices are the last ones in the voice table"
+}
