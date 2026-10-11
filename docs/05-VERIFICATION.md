@@ -3092,7 +3092,43 @@ Also verified this round, because it is the one place a missing per-voice invers
 tables, and one-shot synthesis succeeds for base voices (0, 3) *and* expansion voices (12, 20), as does
 blockwise streaming — wrong-scale latents with no error would have been the alternative.
 
-## 77. Deliberate engineering checks worth calling out
+## 77. The design matches the paper; the data does not (round 68)
+
+Reading SupertonicTTS's own numbers rather than working from memory corrected a claim this project had been
+carrying. The paper: *"With `Kc = 6` and `C = 24`, the model processes 144-dimensional vectors at a reduced
+frame rate of approximately 14 Hz."* This project: the autoencoder emits 24 dims at 93.75 Hz and the flow
+folds them by `compress: 6`, so the velocity field models **144-dimensional vectors at 15.6 Hz** — verified
+from the config, not assumed.
+
+| | latent the flow models | dims/s |
+|---|---|---|
+| SupertonicTTS | 144 dims @ ~14 Hz | ~2 000 |
+| this project | 144 dims @ 15.6 Hz | 2 250 |
+
+**They match**, and `docs/PLAN.md` had recommended a lower-rate learned bottleneck as the fix for a target it
+called "unusually large". That recommendation is **retracted**: the `compress: 6` fold is exactly the
+mechanism that closes the gap, and it has been in the config all along. The full comparison is in
+[docs/PAPER_COMPARISON.md](../PAPER_COMPARISON.md), including the axes that *do* line up (latent size, folded
+rate, ConvNeXt, character-level text, implicit alignment, `Ke = 4`, NFE 32 — and this model is **smaller**,
+21.3M against 44M) and the one that does not:
+
+**945 hours** of generative training data in the paper against **~1.9 h** here (~3.2 h of expansions, usable
+since the per-voice fix). That reframes the remaining work from "find the missing architectural trick" to
+"more teacher audio, or more compute, with the same architecture".
+
+### The long run's second gate reading
+
+| step | flow-term text dependence |
+|---|---|
+| 2 000 | +4.0 % |
+| 4 000 | **+3.8 %** |
+
+Flat. Two readings at the same value are not yet a trajectory, and the token route's own history says the
+mapping can appear only after several thousand steps — so the run continues and the reading at 6 000, 8 000,
+… is what decides. Recorded now, before the later points are known, because "flat so far" is the honest
+description.
+
+## 78. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero
