@@ -2928,7 +2928,46 @@ the objective: the 770 paid utterances and the 771 free ones are both unusable a
 `scripts/expansion_levels.py` are the two tools that did this work, so the next person starts where this
 stopped instead of at the beginning.
 
-## 72. Deliberate engineering checks worth calling out
+## 72. The plateau is the model, not the target — and the split was leaking text (round 60)
+
+The token route stalled at ~0.40. The question worth money is whether that is the *target's* ceiling or the
+*model's*. The corpus contains the experiment needed to ask: the operator's paragraph, and 331 other prompts,
+are rendered in several voices, so **same text in different voices** can be correlated directly
+(`scripts/target_ceiling.py`):
+
+| comparison | token ρ | frame ρ |
+|---|---|---|
+| same text, different voices (n=108) | +0.248 | +0.171 |
+| different text (control) | +0.031 | +0.069 |
+| **the model at 10 000 steps** | **+0.402** | — |
+
+**The model beats the cross-voice agreement.** That refutes the hypothesis the measurement was built to test:
+cross-voice agreement is not an upper bound, because the model is *given the voice* while those pairs differ
+in voice by construction. So a text+voice → latent model is not capped at 0.25, the target is **not** the
+wall, and the honest ceiling for this target is still unmeasured. The script's own conclusion was rewritten
+to say so rather than left printing the refuted reading.
+
+It also exposed a **fourth instrumentation flaw**: 332 texts have multiple renditions, so the item-level
+validation split was putting the same sentence on both sides. Splitting by **text group** — no prompt appears
+in both halves — gives the honest numbers:
+
+| total steps | train ρ | validation ρ |
+|---|---|---|
+| 5 000 | 0.369 | **0.372** |
+| 10 000 | 0.358 | **0.371** |
+
+Two things follow, and they matter more than the small correction:
+
+* **the plateau is confirmed**: +0.371 → 0.371 across 5 000 steps;
+* **the model is underfitting, not overfitting**: validation ρ ≈ training ρ (0.371 against 0.358–0.369). There
+  is no generalisation gap to close, which — with the target ruled out above — points at capacity and
+  architecture rather than data or steps. That is consistent with the only capacity experiment this project
+  has run: 4.6M → 22.6M moved validation 0.118 → 0.190.
+
+`fit_diagnosis` now splits by text group by default and reports the group count, so a leak of this kind
+cannot quietly return.
+
+## 73. Deliberate engineering checks worth calling out
 
 * **Streaming == offline, bit-for-bit (5.6e-09).** Getting this right required a specific fix:
   prefilling the latent with zeros is *not* equivalent to the offline path, because offline zero

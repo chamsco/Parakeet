@@ -131,15 +131,31 @@ def main() -> int:
     # expanded cache that is the whole 770-item expansion, one low-scale voice, so "validation" was
     # measuring a different source rather than unseen text from the same distribution -- which is how a run
     # can show train cosine 0.873 and validation cosine -0.366 at the same time.
+    #
+    # Splitting by text *group*, not by item.  The corpus renders many prompts through several voices --
+    # 332 texts have more than one rendition -- so an item-level split puts the same sentence on both sides
+    # and validation measures memorised text.  Round 60 measured that directly while looking for a ceiling.
     generator = torch.Generator().manual_seed(args.split_seed)
-    order = torch.randperm(len(dataset), generator=generator).tolist()
-    validation_indices = order[:n]
-    train_indices = order[n : 2 * n] or order[:n]
-    train = collect(model, dataset, train_indices, tokenizer, cfg)
-    validation = collect(model, dataset, validation_indices, tokenizer, cfg)
+    groups: dict = {}
+    for index in range(len(dataset)):
+        key = tuple(int(v) for v in dataset[index]["ids"][:40])
+        groups.setdefault(key, []).append(index)
+    keys = [groups[k] for k in groups]
+    order = torch.randperm(len(keys), generator=generator).tolist()
+    validation_indices: list = []
+    train_indices: list = []
+    for position in order:
+        bucket = validation_indices if len(validation_indices) < n else train_indices
+        bucket.extend(keys[position])
+        if len(train_indices) >= n:
+            break
+    train = collect(model, dataset, train_indices[: max(n, 1)], tokenizer, cfg)
+    validation = collect(model, dataset, validation_indices[: max(n, 1)], tokenizer, cfg)
     composition = {
         "train_voices": _voice_counts(dataset, train_indices),
         "validation_voices": _voice_counts(dataset, validation_indices),
+        "text_groups": len(keys),
+        "split_by": "text group (no prompt appears on both sides)",
     }
 
     checks = {
