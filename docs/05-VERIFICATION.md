@@ -3393,7 +3393,18 @@ be merged onto this result when the generator finishes. Expected final corpus: ~
 
 The chain is the same one rehearsed in round 78 -- which is why this was one command and no surprises.
 
-## 87. Environment notes
+## 87. Test count corrected, and the count is now checked rather than estimated (round 85)
+
+The commit that added the conditioning-gate tests said "Suite 337 -> 341". The real number was **336 -> 340**.
+The earlier figure came from summing pytest's --collect-only per-file counts, which is not the same as the
+number pytest reports as passed, and I quoted it without checking the summary line.
+
+No document had the wrong number -- nothing in the repo states a test count -- so the correction is to the
+commit message and to the method: pytest -p no:warnings and read the N passed line, which is what every
+count in this log from now on comes from. It is a small thing, but "I reported a number I had not read" is the
+same failure as the roadmap rounds, in miniature.
+
+## 88. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
