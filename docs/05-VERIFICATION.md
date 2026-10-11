@@ -3354,6 +3354,23 @@ Its motivation was this hypothesis, the hypothesis is refuted, and the ceiling i
 gain is zero and the CPU belongs to the corpus. The flat-µ plateau keeps its round-61 interpretation: the limit
 is the one-to-many mapping, and sampling is the structurally correct response to it.
 
+## 86. Pre-flight for the bigger corpus (round 81)
+
+LatentShardDataset loads every shard into memory at once -- merge_caches says so in its own docstring, which
+is why the merge streams. The corpus is about to grow from 1 978 items to roughly 5 300, so the memory ceiling
+was measured before the run rather than discovered during it:
+
+| | |
+|---|---|
+| machine RAM | 31.2 GB total |
+| uns/expanded_v2 on disk | 1 637 MB for 1 978 items |
+| projected for ~5 300 items | **4.4 GB on disk**, ~5-6 GB in memory |
+| plus model (21M fp32) and activations | well under 1 GB |
+
+Comfortable, so no sharding work is needed and the flow can train on the whole expanded corpus. The check costs
+a minute and rules out the failure mode that would otherwise appear as an unexplained allocation error halfway
+into the run that this entire spend exists to enable.
+
 ## 85. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
