@@ -3495,7 +3495,22 @@ which build it describes.
 The gate readings are due every 2 000 steps against the rule pre-registered in §90, which was written before
 any of them existed.
 
-## 92. Environment notes
+## 92. A second optimistic rate estimate, from measuring the wrong corpus (round 92)
+
+Round 88 measured the flow at 1.76 s/step contended and inferred ~0.9 alone, then right-sized this run to
+12 000 steps on that basis. The run actually achieves about **2.7 s/step** — 600 steps in 27 minutes — so
+12 000 steps is roughly **9 CPU-hours**, not the 2.5–5 projected.
+
+The measurement was not wrong; it was taken on the **wrong corpus**. The 1 932-item cache's utterances are
+shorter, and with `self_reference=True` every batch is padded to its longest member, so longer utterances cost
+more per step — 6.6 s each here against 4.5 s there. This is round 88's lesson repeating one round later:
+**measure the thing you are actually going to run, not the nearest thing available.**
+
+The run continues rather than restarting — 900 steps and a falling loss (3.76 → 1.39) are already spent, and the
+gate trend is what answers the question, not the exact step count. The readings at 2 000/4 000/6 000 still
+satisfy §90's rule; the wall clock is now stated as ~9 CPU-hours rather than leaving the earlier figure standing.
+
+## 93. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
