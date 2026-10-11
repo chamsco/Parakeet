@@ -3680,7 +3680,33 @@ term out of the 2–7 % band; none moved sampled ρ above 0.09. What the measure
 velocity field, at this size and step budget, fits the marginal distribution and does not learn the text →
 acoustic mapping — and §77's comparison is the explanation: matching architecture, **945 h against 8 h**.
 
-## 99. Environment notes
+## 99. The last untested dimension is training time — and ρ is noisy too (round 100)
+
+Eight conditioning interventions are closed and none moved anything, so the remaining untested variable is the
+simplest one: **more steps**. Every flow experiment in this project has run 2 000–4 000 steps, while
+SupertonicTTS trains its 44M module against 945 h with a schedule to match, and the token route's own history
+showed the mapping appearing only after several thousand steps (§48).
+
+So arm A's step-2 000 checkpoint was continued for 8 000 more on the full corpus, gate every 1 000 for eight
+points, with the readout pre-registered before the run:
+
+| ρ at step 8 000 | reading |
+|---|---|
+| **> 0.20** | training time is the lever; the route is plausible with more compute |
+| **0.05–0.20** | trending but far from the 0.75 bar; state the slope and extrapolate |
+| **≤ 0.05, flat** | the route is closed at this model size, whatever the step budget |
+
+**A calibration fell out of the warm start immediately.** Loading arm A's checkpoint, the continuation measures
+**ρ = −0.0277** on its 24 probe items — while arm A itself reported **+0.0882** at the same step. Same model, same
+cache, different probe draw: so ρ at this magnitude is *also* noisy, and §96's "first non-zero flow ρ" should be
+treated as **not established** rather than as a small positive. The gate already had a measured ±3–4 point floor;
+the sampled-ρ readout needs the same scepticism at values near zero, which is where all of them are.
+
+That does not change any conclusion — every one of them was drawn from values inside the noise — but it does mean
+the only clean signals in this project are the *decomposed* ones (the gate's flow term against its shuffled
+control) and the *monotone* ones (the CFG sweep), not single sampled-ρ readings.
+
+## 100. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
