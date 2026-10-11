@@ -8,10 +8,19 @@ from text by any model, so that agreement is an upper bound on the target.
 The operator's eight takes are exactly this experiment -- one paragraph, eight voices -- and they are in the
 cache, sharing token ids by construction. Controls: different text in the same voice, and different text in
 different voices.
+
+Round 79 added `--cache` and `--no-voice-norm` because those eight takes live in `runs/expanded_v2`, which now
+carries per-voice statistics. That matters to the *measurement*: per-voice normalisation is an affine map per
+voice, and it removes a per-voice scale difference the model is told about through the voice embedding -- so
+same-text cross-voice agreement measured on a fitted cache should be **higher** than the 0.248/0.171 figures
+this script first reported on an unfitted one. Toggling the flag on the same cache isolates exactly that.
+
+    python scripts/target_ceiling.py --cache runs/expanded_v2 [--no-voice-norm]
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 from collections import defaultdict
@@ -23,7 +32,14 @@ import torch
 
 from parakeet.data.dataset import LatentShardDataset
 
-CACHE = "runs/mixed_v2/latent_cache"
+_ap = argparse.ArgumentParser(description="Same-text cross-voice agreement: the target's own ceiling")
+_ap.add_argument("--cache", default="runs/mixed_v2/latent_cache")
+_ap.add_argument("--items", type=int, default=0, help="0 = the whole cache")
+_ap.add_argument("--no-voice-norm", action="store_true",
+                 help="read raw latents, i.e. the measurement as it was taken before per-voice fitting")
+_args = _ap.parse_args()
+
+CACHE = _args.cache
 
 
 def correlate(a: torch.Tensor, b: torch.Tensor) -> float:
@@ -51,8 +67,10 @@ def correlate_frames(a: torch.Tensor, b: torch.Tensor) -> float:
     return sum(scores) / max(1, len(scores))
 
 
-dataset = LatentShardDataset(CACHE)
-print(f"cache {CACHE}: {len(dataset)} items")
+_indices = list(range(_args.items)) if _args.items else None
+dataset = LatentShardDataset(CACHE, indices=_indices, apply_voice_norm=not _args.no_voice_norm)
+print(f"cache {CACHE}: {len(dataset)} items | voice_norm applied: {not _args.no_voice_norm} "
+      f"| table present: {bool(dataset.voice_norm)}")
 
 # group items by their token ids: identical ids means identical text (the eight takes)
 by_text: dict[tuple, list[int]] = defaultdict(list)
