@@ -3853,7 +3853,45 @@ being *under*-estimated, which makes the 1 % gap conservative.
 One number deliberately not revised: the token route's 0.723 ceiling is for **seen** texts while its 0.37
 validation figure is on held-out texts, so they are not comparable and the plateau's explanation stands.
 
-## 104. Environment notes
+## 104. The sampler is not the problem — and ρ against one recording is the wrong metric for a sampler (round 110)
+
+**NFE does nothing.** Swept the sampling steps on the most-trained flow checkpoint (3 seeds × 6 items):
+
+| NFE | mean ρ | range | verdict |
+|---|---|---|---|
+| 4 | +0.0257 | [+0.0036, +0.0463] | clear of zero (small sample) |
+| 8 | +0.0012 | [−0.0105, +0.0126] | indistinguishable from zero |
+| 16 | +0.0040 | [−0.0296, +0.0277] | indistinguishable from zero |
+| **32** | **+0.0031** | [−0.0123, +0.0112] | indistinguishable from zero |
+
+So the velocity field's **exact ODE solution** — NFE 32, full integration, the setting the paper prefers — is as
+uncorrelated with the target as the 4-step one. The NFE-4 measurements were not the artifact I went looking for.
+
+**And the metric is wrong for a sampler — which corrects a lot of this project's wording.** ρ is measured between
+*one* sampled latent and *one* target utterance. A flow conditioned on (text, voice) is supposed to draw **one of
+many** valid utterances for that pair, so a well-trained sampler will legitimately produce a different valid
+rendition and score ~0 against that particular recording. **ρ-against-the-target is a metric for a deterministic
+regressor; applied to a sampler it conflates "a different valid draw" with "wrong".**
+
+That means every "the flow's ρ is ~0" statement in this log and the README is *not* evidence that the flow draws
+invalid audio. It is equally consistent with drawing valid audio that happens not to be that recording.
+
+**What does establish that the samples are wrong is the measurement independent of which valid draw you get: WER.**
+The flow's audio transcribes at **1.000** against the teacher's **0.000** — unambiguous, because unintelligible is
+unintelligible regardless of which utterance was intended.
+
+**Consequent correction to §103.** That section compared the flow's ρ (0.0045) with a ceiling of 0.445 and concluded
+it reaches "about 1 % of its ceiling". By the argument above the comparison is invalid for the same reason: 0.445
+measures how strongly two renditions of one (text, voice) agree, and a sampler is entitled to produce a third
+rendition that disagrees with both while remaining valid. Corrected statement: **the flow reaches ~1 % agreement
+with the specific recordings it was trained on, which for a sampler is not yet evidence of failure.** The evidence
+of failure is WER 1.000. Round 109's open question survives only in the weaker form: the field's conditional signal
+is small, *and* the sampler's output is unintelligible by the metric that can tell.
+
+The bottom line is unchanged — size and speed solved and measured, the speech unintelligible by WER — but the
+correct next measurement for any flow attempt is **WER on its sampled audio**, not ρ against a recording.
+
+## 105. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
