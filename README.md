@@ -34,27 +34,47 @@ the measured reason, in order of discovery:
   average them. That is the papers' reason for **sampling** the acoustics rather than predicting them.
 * **the sampling route is therefore the right tool, and its blocker is measured too.** It learns the
   marginal distribution first — its samples carry teacher-like temporal autocorrelation (lag-1 0.885
-  against 0.901) while correlating ~0 with the *right* latent — and the text carries only **14 %** of its
-  objective. Conditioning, not compute, is its problem.
+  against 0.901) while correlating ~0 with the *right* latent. The share of its **velocity field's** own
+  objective that comes from the text is **2–4 %**, measured by shuffling the text and watching only the flow
+  term (a total that looks like 37 % turns out to be almost entirely the supervised plan head), and it grew
+  from **1.9 % to 7.4 %** as the corpus grew 50×. Conditioning, not architecture, is its problem.
+* **the architecture itself matches the papers, and the gap is data.** SupertonicTTS processes
+  "144-dimensional vectors at a reduced frame rate of approximately 14 Hz"; this project's velocity field
+  models **144-dim vectors at 15.6 Hz** (24 dims at 93.75 Hz, folded by `compress: 6`). The latent size, the
+  folded rate, ConvNeXt blocks, character-level text, implicit alignment, `Ke = 4` and NFE 32 all line up,
+  and this model is *smaller* (21.3M against 44M). The axis that does not line up is **945 hours of
+  generative training data against ~1.9 h here** — which is why the current work is generating more teacher
+  audio with the local, permissive teacher rather than searching for a missing trick. See
+  [docs/PAPER_COMPARISON.md](docs/PAPER_COMPARISON.md).
 * **what is already solved:** size and speed. **9.63M parameters**, **42× real time** in fp32 and **85×**
   in int8 dynamic quantisation at **20.3 MB** with waveform cosine 0.9952; the full int8 ONNX pipeline runs
   at **103× real time**. The audio autoencoder's own round trip is *perfect* (WER 0.000), so the codec and
   the decoder are not the weak links.
 
 Two engineering notes that matter to anyone reading the numbers: every metric here has been audited, and
-**four separate instrumentation flaws were found and fixed** (a cache read in the wrong latent space by
-sampling, a validation split that was really a *source* comparison, a validation split that leaked the
-same sentence into both halves, and a speech-likeness gate that rejects perfectly intelligible audio). The
-logs record them, including the claims that were retracted.
+**four instrumentation flaws were found and fixed** (a cache read in the wrong latent space, a validation
+split that was really a *source* comparison, a validation split that leaked the same sentence into both
+halves, and a speech-likeness gate that rejects perfectly intelligible audio), plus a retracted claim that the
+token bottleneck caps the model at ρ 0.12 (it is nearly lossless at 0.95) and a retracted recommendation to
+change the acoustic bottleneck (it already matches the paper). The logs record them all, including the claims
+that did not survive their own re-measurement.
+
+Corpus growth is now mechanical rather than exploratory: a voice's latent scale is a property of that voice
+(the corpus's Kokoro voices pool at 0.83–0.85, other Kokoro voices at 0.44–0.52), which is why two earlier
+expansions measured *worse* when mixed in; per-voice normalisation fixes it, and
+`scripts/expand_corpus.py` caches, merges and normalises a new corpus in one command with each of those
+failures as a test.
 
 One licence note, stated plainly: the Speechify teacher's written permission covers
 **demonstration/quantization work**, which is narrower than "train on the audio and publish derivative
-weights". See [docs/LEGAL.md](docs/LEGAL.md) — it is recorded rather than assumed away.
+weights". The free expansions use Kokoro (Apache-2.0), which has no such question attached. See
+[docs/LEGAL.md](docs/LEGAL.md) — it is recorded rather than assumed away.
 
 The full record, with every number and every correction, is in
 [docs/05-VERIFICATION.md](docs/05-VERIFICATION.md). What a serious run would cost on this machine — measured
 step rates, the metrics to watch in order, and which of the two candidate routes is worth compute — is in
-[docs/PLAN.md](docs/PLAN.md).
+[docs/PLAN.md](docs/PLAN.md), and how the design compares with each paper is in
+[docs/PAPER_COMPARISON.md](docs/PAPER_COMPARISON.md).
 
 ---
 
