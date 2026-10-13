@@ -4179,7 +4179,53 @@ fits the marginal and no intervention moves it; and both routes produce unintell
 difference from the paper is **945 h against 8**, and the compute to use it — which `docs/PLAN.md` now costs, with
 three ordered runs and their criteria.
 
-## 112. Environment notes
+## 112. The dialogue domain leaves 1.75× more for the text — and the merged cache has a voice-mapping bug (round 121)
+
+**1. The premise holds.** Both caches measured **raw**, same statistic, folded target (144 dims, what the flow
+models):
+
+| corpus | per-voice R² | + AR(1) | **residual for the text** |
+|---|---|---|---|
+| **dialogue** (1 461 turns, 1.8 h) | 0.484 | 0.626 | **0.374** |
+| **narration** (`expanded_v3`) | 0.713 | 0.787 | **0.213** |
+
+The dialogue domain's marginal — who is speaking, plus temporal smoothness — explains **62.6 %** of the target
+against narration's **78.7 %**, so the share left for the text is **37.4 % against 21.3 %**. The hypothesis is that
+a *harder* marginal makes the text worth learning; this measures its premise directly, and it is **confirmed**: the
+dialogue set leaves **~1.75× more conditional signal**. The prediction for a training run is therefore concrete —
+the flow term should rise on dialogue data — and it did not on narration.
+
+Also a correction: §106 reported the narration residual as **0.434**, measured with per-voice normalisation applied
+to a cache whose table turned out to be partly ineffective (below). Raw, the honest figure is **0.213**.
+
+**2. The merged cache's voice mapping is wrong for some voices.** Probing `expanded_v3` item by item:
+
+| voice | pooled std | \|per-dim mean\| | |
+|---|---|---|---|
+| 0 | 1.5943 | 1.1205 | **not normalised** |
+| 1 | 1.0017 | 0.0187 | normalised |
+| 2 | 1.4459 | 1.0050 | **not normalised** |
+| 3 | 0.9973 | 0.0085 | normalised |
+
+An **alternating** pattern, which is what a permutation mismatch looks like: the cache's `voice_names` order
+interleaves Kokoro and Speechify voices while the items' `voice` fields appear to follow the base corpus's own
+numbering — so the per-voice statistics are applied to the **wrong voices for roughly half of them**.
+
+**Not a stale table**: refitting with the current (round-78-fixed) code writes 19 voices and the anomaly is
+unchanged. And `expand_corpus.py`'s `verify()` passed at 0.0419 because it samples every 13th item and the scale
+tolerance is 0.15 — a permutation mismatch of this kind slips through both.
+
+**Consequence, stated plainly:** every run trained on the merged cache — rounds 91–118, including the 8 000-step
+training-time experiment and the A/B — trained with per-voice normalisation applied to the **wrong voices for part
+of the corpus**. The effect is a scale/DC nuisance the model must fit, not corrupted targets (those voices are
+internally consistent, just unnormalised), so comparisons that relied on *within-run* consistency still hold; but
+any claim that depended on the merged cache being correctly normalised does not. §106's 0.434 was one.
+
+The premise test used the raw comparison precisely because normalisation changes what the per-voice term can
+explain, and the two caches were in different states — 11/11 fitted and effective for dialogue, 19/21 fitted but
+partly ineffective for narration. That is what forced the check that found the bug.
+
+## 113. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).

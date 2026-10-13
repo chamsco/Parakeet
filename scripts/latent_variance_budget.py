@@ -41,12 +41,15 @@ def main() -> int:
     ap.add_argument("--cache", required=True)
     ap.add_argument("--items", type=int, default=600, help="how many utterances to sample")
     ap.add_argument("--max-frames", type=int, default=400, help="cap per utterance for speed")
+    ap.add_argument("--no-voice-norm", action="store_true",
+                    help="read RAW latents: per-voice normalisation changes what the per-voice term can explain, so comparisons between caches must use the same state")
     ap.add_argument("--compress", type=int, default=6,
                     help="temporal fold the flow applies (flow.compress); the flow models the folded form")
     args = ap.parse_args()
     compress = args.compress
 
-    dataset = LatentShardDataset(args.cache, indices=list(range(min(args.items, len(LatentShardDataset(args.cache))))))
+    dataset = LatentShardDataset(args.cache, indices=list(range(min(args.items, len(LatentShardDataset(args.cache))))),
+                                apply_voice_norm=not args.no_voice_norm)
     items = []
     for index in range(len(dataset)):
         item = dataset[index]
