@@ -24,9 +24,11 @@
 # through-decoder direction is exhausted at this data scale too, and the two remaining statements about this machine are
 # that the latent-L1 text side plateaus at rho 0.22 and the through-decoder side plateaus near two-thirds wrong.
 #
-# WER is read at three checkpoints, not all twelve, because each real_eval pass costs about a minute of contention.
+# WER is read at two checkpoints, not all four. Measured cost: 3.60 s/step, so the budget is set by wall clock, and a
+# 4000-step run is about four hours alone and longer under contention. 4000 still answers the question, because the
+# known point is the annealed 2400 and this asks what the next 1600 with a longer schedule do.
 param(
-  [int]$Steps = 12000,
+  [int]$Steps = 4000,
   [string]$Out = "runs\text_audio_long"
 )
 $env:PYTHONIOENCODING = "utf-8"
@@ -53,8 +55,8 @@ foreach ($ck in $checkpoints) {
     Tee-Object -FilePath "$Out\report.txt" -Append | Write-Host
 }
 
-Write-Host "[audio_long] WER at three checkpoints"
-foreach ($step in @(2000, 6000, 12000)) {
+Write-Host "[audio_long] WER at two checkpoints"
+foreach ($step in @(2000, 4000)) {
   $ck = Join-Path $Out "distill-audio_step$step.pt"
   if (-not (Test-Path $ck)) { continue }
   & $py -u scripts\real_eval.py --config configs\parakeet_tiny.yaml --checkpoint $ck `
