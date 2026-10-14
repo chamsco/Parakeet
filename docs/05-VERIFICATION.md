@@ -4929,7 +4929,28 @@ prompt across several voices. That reframes the gap against the paper. The compa
 count to ~8 100. Repeating a prompt across voices is useful signal, since it forces the model to predict acoustics
 from text rather than memorise a waveform, but it does not add new text.
 
-**The curve so far, all read on the same 60 held-out items:**
+**A convention mismatch found and sized before trusting the curve.** `runs/v3_fixed` carries a per-voice normaliser
+(19 voices, 24 (voice, source) pairs), so the model trains on per-voice-normalised latents. `runs/holdout_cache`
+carried **no** table, so its latents were raw. The monitor was therefore scoring a normalised prediction against raw
+targets.
+
+Measured on the step-1 000 checkpoint, same 60 items: raw frame ρ **+0.0842** against normalised **+0.0884**, a
+difference of **+0.0041**, which is the size of the measurement's own noise.
+
+The reason the effect is small is structural and worth stating, because it generalises: **a per-dimension correlation
+is affine-invariant in each dimension.** Subtracting a per-dim mean and dividing by a per-dim standard deviation
+cannot change ρ. So a normalisation mismatch of this kind cannot move a ρ readout, and the earlier readings stand
+approximately. It *can* move a readout that is not scale-invariant, which includes anything that decodes the latents,
+so the cache now carries the training cache's table (`voice_norm_source` records where it came from, and it was **not**
+fitted on the held-out set, since the normaliser belongs to the model's input convention). The raw-convention copy is
+kept at `runs/holdout_raw_convention` so the earlier numbers stay reproducible, and the change is noted in
+`runs/text_long384/report.txt` at the line where the convention changes.
+
+One side observation from the same check: with the training table applied, the held-out latents normalise to a pooled
+std of 2.73 against 1.02 for the training cache. That is between-dimension spread, because the held-out corpus's
+per-dimension means differ from the training corpus's even for the same voice names. It does not affect ρ for the
+reason above, and it is not a blocker, but it says the held-out audio is not scale-identical to the training audio.
+
 
 | run | params | data | steps | held-out frame rho |
 |---|---|---|---|---|
