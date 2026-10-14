@@ -357,12 +357,38 @@ about anything. The authoritative record is `docs/05-VERIFICATION.md` §§108–
 
 ### In flight
 
-* [ ] **The matched target experiment** (`scripts/run_target_ab.ps1`): 304 Kokoro records, each with a same-voice
-      punctuation variant; two caches verified **identical in ids, voice and durations (304/304)** with only the
-      target differing; both arms 1 500 steps from the same warm start. Read out by WER on the held-out corpus,
-      because a 304-item subset will memorise and training loss therefore says nothing. **The mechanical question:
-      does training on the rendition-independent target produce better samples?**
-* [ ] **A powered version** needs variants for the expansion corpora (~3 300 prompts, generation time only).
+* [ ] **The held-out shared target** — punctuation variants of the **400 held-out prompts** (in generation), so arm
+      S can be scored against the signal it was trained to predict, on data no run has seen. This exists because
+      §125's readout was invalid: see below.
+* [ ] **The from-scratch pair** (`scripts/run_target_scratch.ps1`): both targets trained from a random
+      initialisation, 3 000 steps each, because fine-tuning onto a different target for 500 steps is not a fair test
+      of it. Hours; runs in the background.
+
+### Done, and what it showed
+
+* **The matched target experiment ran** (`scripts/run_target_ab.ps1`): 304 Kokoro records, each with a same-voice
+  punctuation variant; two caches **verified identical in ids, voice and durations (304/304)** with only the target
+  differing; both arms 500 and 1 000 steps from one warm start.
+
+  | step | arm O (originals) | arm S (shared) |
+  |---|---|---|
+  | 500 | ρ +0.1994 | ρ +0.0335 |
+  | 1000 | ρ +0.2084 | ρ +0.0540 |
+  | (baseline) | ρ +0.2057 | — |
+
+  **The result is INCONCLUSIVE, and my first reading of it was wrong.** WER is **1.000 for both arms** — saturated,
+  it cannot separate two unintelligible models — and the ρ comparison is **biased against arm S by construction**:
+  it was trained on the rendition-independent signal (std 0.54), so scoring it against the *original* renditions
+  asks it to predict something it was never trained to predict. Arm S's ρ **climbs** with training (0.034 → 0.054),
+  which is what adapting to a different target looks like, and a ρ against the wrong target cannot separate that
+  from failure.
+
+  Established, and less than first claimed: **the route produced no intelligible speech in this pilot** (WER 1.000
+  on 24 held-out utterances, control 0.022). What is *not* established is that the target is at fault.
+
+* **The held-out set proved itself on first use.** The baseline reads **WER 1.000** with the recogniser's control at
+  **0.014** on four unseen books — the project's headline number reproduced independently on data no run has seen,
+  for the first time.
 
 ### Closed, and stopped
 
