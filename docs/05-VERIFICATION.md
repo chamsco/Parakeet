@@ -5233,6 +5233,24 @@ noise floor: repeat it where the decision is actually made, which here is the pl
 The plateau stands at **≈ 0.22 ± 0.02** held out, against in-sample 0.4157, with WER 1.0000 at every checkpoint, on
 400 prompts from four unseen books with a 3 744-distinct-prompt training corpus.
 
+**The third matched point completes it.** Measured again with three readings per checkpoint, after stopping the
+baseline run to free CPU:
+
+| step | no contrast | contrast live | difference | largest spread | verdict |
+|---|---|---|---|---|---|
+| 1 000 | 0.0889 | 0.1172 | **+0.0283** | 0.0194 | **SEPARATED** |
+| 2 000 | 0.1794 | 0.1841 | +0.0046 | 0.0075 | inside the spread |
+| 3 000 | 0.2074 | 0.2135 | +0.0061 | 0.0069 | inside the spread |
+
+Three independent measurements now separate at step 1 000 and three agree that the arms are indistinguishable from
+step 2 000 onward. **The mean-invariant latent term is an early-training accelerator and nothing more**, which is why
+it is not being added to the token route's config: it would cost per-step compute and change the plateau not at all.
+
+The baseline run (`runs/text_long384`) was stopped at step 8 900 after this measurement, and the reason is the
+measurement itself: its remaining 11 100 steps would have tested the annealed endpoint on the **base** corpus, while
+`scripts/run_milestone3.ps1` trains to 10 000 steps with the schedule annealing over its own budget on the **enlarged**
+corpus, which answers the same question and one more. Stopping it took the contrast arm from 1.80 s/step to 0.80.
+
 ## 140. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
