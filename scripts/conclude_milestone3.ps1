@@ -26,6 +26,11 @@
 # So steps 1000 to 3000 are a fair comparison and steps 4000 and 5000 handicap the new arm by 24 and 36 points of peak
 # learning rate. The verdict should be read on 1000 to 3000, and any win the new arm shows there is conservative. The
 # endpoints are not comparable at all: different budgets, so a difference there mixes text with training compute.
+#
+# AND THE COMPARISON IS TEXT ONLY, verified rather than assumed. The base cache carries 21 voices; the expansion's 11
+# Kokoro voices are all among them, adding ZERO new voices. So the merged corpus increases distinct prompts from 3744 to
+# about 8100 and holds voices constant, which is what makes this a text-diversity test rather than a general "more data"
+# test. Had it added voices, the result would have mixed two changes.
 param(
   [string]$Base = "runs/text_long384",
   [string]$New = "runs/text_v4",
