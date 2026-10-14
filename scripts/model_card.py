@@ -717,8 +717,10 @@ def render(results: List[Dict[str, Any]], args) -> str:
         out.append(
             f"Checkpoint files present in this workspace: **{len(checkpoints)}** "
             f"({', '.join(f'`{c}`' for c in checkpoints[:3])}{' …' if len(checkpoints) > 3 else ''}).  "
-            "**Models trained on a REAL corpus do exist** -- a Kokoro+Speechify mixture of ~8 h across 21 "
-            "voices, with the autoencoder's round trip at **WER 0.000** and the token/flow routes measured at "
+            "**Models trained on a REAL corpus do exist** -- a Kokoro+Speechify mixture that began at ~8 h across 21 "
+            "voices and has since been merged to about **12.3 h over 8 890 utterances and 19 voices**, of which about "
+            "**8 100 distinct prompts** are the text the model has actually seen, with the autoencoder's round trip at "
+            "**WER 0.000** and the token/flow routes measured at "
             "**WER 1.000 against a teacher control of 0.000-0.014**, on held-out text as well as training text.  "
             "So the size and speed claims below are real and the *speech* is not: these are not released "
             "weights, and nothing here should be read as a working TTS model.  The measured reason is in "
