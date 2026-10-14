@@ -236,6 +236,23 @@ def aggregate_to_tokens(
 
 
 @torch.no_grad()
+def _autoencoder_fingerprint(autoencoder: nn.Module) -> str:
+    """A short hash of the autoencoder's weights, so a cache records which ones encoded it.
+
+    The metadata recorded the audio config, the latent width and the normalisation statistics, but not the
+    autoencoder's identity. Retraining one and reusing a cache, or merging a new cache into an old one, would then
+    put latents from two different spaces into one training set with nothing in the metadata to show it. The
+    expansion's own merge check compares pooled scales, which would catch a gross mismatch and not a subtle one.
+    """
+    import hashlib
+
+    digest = hashlib.sha256()
+    for name, tensor in sorted(autoencoder.state_dict().items()):
+        digest.update(name.encode("utf-8"))
+        digest.update(tensor.detach().cpu().float().numpy().tobytes())
+    return digest.hexdigest()[:16]
+
+
 def build_latent_cache(
     manifest_path: str | Path,
     out_dir: str | Path,
@@ -398,6 +415,7 @@ def build_latent_cache(
         "teacher_weights": teacher_weights or {},
         "voice_names": voices,
         "latent_norm": latent_norm_meta,
+        "autoencoder_fingerprint": _autoencoder_fingerprint(autoencoder),
     }
     (Path(out_dir) / "cache_meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
     return Path(out_dir)
