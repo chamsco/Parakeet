@@ -3,6 +3,24 @@
 Ordered so that every phase ends with something measurable, and the legal question never blocks
 the engineering.
 
+> **Status banner, added after the corpus result.** This file is a dated record and its older entries are left as
+> written, so three of them are now superseded and are flagged here rather than edited in place:
+>
+> * **"the model is under-fit"** was half right. Measured at step 5 000 on the same configuration, the
+>   3 744-distinct-prompt model fits its own data at in-sample ρ **0.5201** with a **2.33×** gap, and a corpus of about
+>   8 100 prompts fits at 0.4919 with a **1.36×** gap. The model does reproduce its training data; what looked like
+>   under-fitting was the smaller corpus being memorised.
+> * **"corpus size ... is not the bottleneck"** appears in several entries and is now **wrong**. Doubling the distinct
+>   prompts took the held-out plateau from **0.2228** to **0.3630**, a stable **+0.140 offset** across steps 3 000–5 000
+>   with both arms flat. It is the only variable in this project ever measured to move that number. The earlier flat
+>   results (418 and 1 207 and 3 744 distinct prompts) were taken **below a threshold**.
+> * **"Push the audio objective further — WER 0.667 is still not usable; the trend says more steps help"** is closed:
+>   on the real 4 533-item corpus the through-decoder objective reads WER **1.0000** and DNSMOS 1.200 against the latent
+>   L1 route's 1.0000 and 1.278, so the 0.667 was a three-voice, six-utterance result and the objective difference does
+>   not survive the real data.
+>
+> The authoritative account is `docs/05-VERIFICATION.md` **section 145**; the live forward plan is `docs/PLAN.md`.
+
 ## P0 — Framework (done, this repo)
 
 * [x] Autoencoder: mel → 24-dim latent → causal iSTFT waveform, streaming-exact
