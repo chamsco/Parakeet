@@ -34,14 +34,15 @@ the measured reason, in order of discovery:
   twice; the drift across those 4 000 steps has sd **0.0093**, smaller than the instrument's own within-checkpoint spread
   of **0.0202**, so it is a plateau rather than a slow climb).
 * **and then doubling the corpus moved it, which is the first thing in this project to move it.** Merging in 4 357 more
-  prompts — **8 890 items over about 8 100 distinct prompts** against 4 533 over 3 744 — raises held-out ρ to
-  **0.3471 at step 3 000** against the baseline's **0.2046**, a difference of **+0.1425, SEPARATED**, with five readings
-  per checkpoint, both arms under one convention, and cumulative learning-rate exposure matched at 1.05×. **The
-  mechanism is visible in the same measurement:** the baseline fits its training data at in-sample ρ 0.3190 and
-  generalises at 0.1645, a gap of **1.94×**, while the enlarged model fits at 0.3520 and generalises at 0.3297, a gap of
-  **1.07×**. Same architecture, same capacity, same step count, same schedule shape; only the corpus differs, and one
-  memorises while the other generalises. Earlier flat results (418 against 3 744 distinct prompts) were taken **below a
-  threshold**, which is not a place from which a threshold can be seen.
+  prompts — **8 890 items over about 8 100 distinct prompts** against 4 533 over 3 744 — **doubles the held-out
+  plateau**: **0.3630** against **0.2228**, a stable offset of **+0.140** measured at every thousand steps from 3 000 to
+  5 000, with **both arms flat**, five readings per checkpoint, both arms under one convention, and cumulative
+  learning-rate exposure matched at 1.05×. **The mechanism is visible in the same measurement:** the baseline fits its
+  own training data at in-sample ρ 0.5201 and generalises at 0.2228, a gap of **2.33×**, while the enlarged model fits at
+  **0.4919** — *worse* — and generalises at 0.3630, a gap of **1.36×**. Same architecture, same capacity, same step
+  count, same schedule shape; only the corpus differs, and the larger one **gives up in-sample fit to buy
+  generalisation**. Earlier flat results (418 against 3 744 distinct prompts) were taken **below a threshold**, which is
+  not a place from which a threshold can be seen.
 * **what that does not yet establish.** The comparison doubles the text count (2.16×) and the record count (1.96×) at
   the same time, so it shows **corpus size** is the lever and not that **text diversity** specifically is. It also does
   not make the speech intelligible: WER is **1.0000** for both arms, because `correlation_threshold` in the evidence
