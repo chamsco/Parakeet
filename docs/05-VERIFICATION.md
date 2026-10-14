@@ -5686,6 +5686,15 @@ Cost at the measured rates: N×k prompts of synthesis at about 20 per minute, pl
 hours each. For N = 2 000 and k = 3 that is about 5 hours of synthesis and 5 hours of training, so it is a round-sized
 commitment rather than a cheap probe — which is why the v5 round is finishing first rather than being displaced by it.
 
+**And a cheap experiment I started and then cancelled, recorded so it is not repeated blind.** Training on the *new*
+corpus alone — 4 357 items against the baseline's 4 533, the same quantity with a different composition — would say
+whether the lever is more data or better data, and needs no synthesis at all. Its cache build reported **11 voices**
+where the comparison arms carry 19-21, because the new corpus's voices are a subset of the base's. The arm would
+therefore have differed in voice-set size as well as composition, and its answer would have been ambiguous in the
+direction it was meant to resolve, while taking a third of the CPU from v5's synthesis. It was cancelled before it cost
+a training run, and its partial cache was deleted so that nothing reads it later. The composition question is still open
+and still cheap; it needs an arm whose voice set matches the base's.
+
 ## 146. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
