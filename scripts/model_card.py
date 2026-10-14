@@ -64,15 +64,15 @@ CLAIMS: List[Dict[str, Any]] = [
     },
     {
         "id": "token_route_frame_rho",
-        "statement": "the deterministic (token) route's frames against the target, 40 items — the best available "
-                     "text conditioning. (A 12-item measurement gave 0.406; at n=40 it is 0.354, so the thinner "
-                     "sample was optimistic.) Any 'ceiling' comparison against it is NOT statistically "
-                     "meaningful: the same-text-same-voice agreement that would set one was measured on FOUR "
-                     "pairs, whose 95% CI spans [-0.90, +0.99]",
-        "report": ["runs/token_route_ceiling.json"],
+        "statement": "the deterministic (token) route's frames against the target, HELD OUT (dialogue corpus, "
+                     "which neither checkpoint trained on) — the honest capability figure. NOT the 0.354 this "
+                     "project published for months: that was measured on TRAINING items, and the same model reads "
+                     "0.8244 there. The training-versus-held-out gap is a factor of five, and it means the "
+                     "0.354/0.406 figures described what the model had SEEN, not what it can do",
+        "report": ["runs/token_route_heldout_baseline.json"],
         "field": "frame_rho",
         "op": ">=",
-        "target": 0.30,
+        "target": 0.10,
         "fmt": "rho {:.3f} frames",
     },
     {

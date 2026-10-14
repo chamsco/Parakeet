@@ -4589,7 +4589,47 @@ that bug and this number.
 model would land at or above the target's error, not at zero. The claim is narrower and measured: the target is
 **2.7× better** than the current output, and the route to it is CPU-feasible.
 
-## 124. Environment notes
+## 124. The token route's published ρ is a TRAINING number — held out it is 0.15 (round 139)
+
+The continuation's first checkpoint hit the pre-registered test and read **+0.8244** where the baseline read
+**+0.3544** — a jump that would have been the best result in the recent span. **It is memorisation.** Both readings
+were taken on items 0–40 of the corpus the model trained on.
+
+Measured properly, on a corpus **neither** checkpoint ever saw (dialogue, so domain-shifted too):
+
+| measurement | frame ρ |
+|---|---|
+| baseline step 5000, **held out** (3 runs) | +0.1507 / +0.1483 / +0.1562 → mean **0.1517**, sd **0.0040** |
+| continuation step 1000, **held out** | +0.1785, +0.1840 |
+| continuation step 1000, **training items** | **+0.8244** |
+
+**The training-versus-held-out gap is a factor of five.** That forces a correction the project has needed for months:
+
+> every "the token route reaches ρ 0.354" (or 0.406) figure was measured on **training** items; the honest
+> generalisation figure is about **0.15**; the model card stated it without that distinction.
+
+0.354 was not wrong as a *measurement*; it was wrong as a *capability*. It sat in the model card beside numbers about
+what the model can do, and it is a number about what the model has *seen*.
+
+**The pre-registered prediction, assessed against the right baseline.** §120 registered: if held-out ρ rises above
+the baseline the headroom is real; if flat, the mapping is the wall. The baseline is **0.152**, not the 0.354 that
+was registered against. On the honest baseline the continuation gains **+0.02 to +0.03**, which is:
+
+* well above the within-session sd (0.0040) — so not ordinary noise;
+* **not** far above the worst spread seen between sessions (0.146 to 0.162 on the same checkpoint, ≈0.016), which is
+  float nondeterminism under CPU contention — the same computation summing differently with thread scheduling;
+* one increment of 1 000 steps, on domain-shifted data, with no held-out measurement at any other step.
+
+Verdict: **WEAK SUPPORT**, not confirmation — the direction the hypothesis predicts, at a size the instrument can
+only just resolve. More checkpoints, on a held-out slice of the **same** corpus rather than a different domain, is
+what would settle it.
+
+**The memorisation measurement is the more useful result.** A model whose training ρ is 0.82 and whose held-out ρ is
+0.15 is not "close to its ceiling" by any reading — it is a model that has **memorised its corpus**, which also
+explains why every conditioning and data intervention moved nothing: a marginal-fitting model with enough capacity
+to memorise is exactly what those measurements describe.
+
+## 125. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
