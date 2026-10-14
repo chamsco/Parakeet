@@ -374,7 +374,6 @@ class ParakeetFlow(nn.Module):
         speaker_emb: Optional[torch.Tensor] = None,
         voice: Optional[torch.Tensor] = None,
         context_expansion: Optional[int] = None,
-        reflow: bool = False,
         sample_weight: Optional[torch.Tensor] = None,
         latent_token: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
@@ -449,8 +448,6 @@ class ParakeetFlow(nn.Module):
                 plan_loss = (plan[..., :width] - target).pow(2).mean()
                 aux["plan"] = plan_loss.detach()
                 loss = loss + self.cfg.flow.plan_weight * plan_loss
-        if reflow:
-            loss = loss * 1.0  # reflow pairs are supplied by the caller as (x0, x1)
         return loss, aux
 
     @torch.no_grad()

@@ -5259,7 +5259,36 @@ measurement itself: its remaining 11 100 steps would have tested the annealed en
 corpus, which answers the same question and one more. Stopping it took the contrast arm from 1.80 s/step to 0.80, and
 the contrast arm was itself stopped at step 4 100 once its advantage was measured to be gone.
 
-## 140. Environment notes
+## 140. Two refactor claims from the audit gauntlet, checked: one wrong, one right (round 152)
+
+The adversarial gauntlet that reviewed the comment audit's REFACTOR claims passed 12 of 20 and collapsed 8. Two of the
+12 were checked directly rather than acted on, and one of them does not hold.
+
+**Wrong: `loss_device` and `--losses-on-cpu` are not dead.** The claim was that both should be deleted.
+`scripts/dml_benchmark.py` passes `loss_device=` into `text_audio_step` and defines `--losses-on-cpu`, so deleting them
+breaks a live script. The parameter is unused by any *training* run, which is probably what the claim meant, but a live
+caller is what decides a deletion and this one exists. Not deleted, and the DirectML comment above it stays with it.
+
+**Right: the `reflow` no-op.** In `parakeet/models/parakeet.py`, `flow_loss` took a `reflow: bool = False` parameter
+whose only use was
+
+```python
+if reflow:
+    loss = loss * 1.0  # reflow pairs are supplied by the caller as (x0, x1)
+```
+
+Multiplying by 1.0. The parameter appeared exactly twice in the file, in the signature and in that branch, and no caller
+passed it, so both are gone. The only surviving mention of reflow in the file is the docstring on the high-NFE sampler,
+which is a different thing and stays.
+
+Verified: the flow stage still trains (`smoke_test.py --steps 2` exit 0), the suite passes at 347, and the file's only
+remaining `reflow` is that docstring.
+
+**The lesson is about gauntlets generally.** An adversarial review is a filter, not a verdict. This one collapsed 8 of
+20 claims on its own record and still passed one that a single `grep` refutes, which is the argument for checking a claim
+against the code before acting on it even when a second reviewer agrees.
+
+## 141. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
