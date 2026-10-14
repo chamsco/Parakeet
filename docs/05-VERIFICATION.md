@@ -4629,7 +4629,47 @@ what would settle it.
 explains why every conditioning and data intervention moved nothing: a marginal-fitting model with enough capacity
 to memorise is exactly what those measurements describe.
 
-## 125. Environment notes
+## 125. The shared-target route fails its first controlled test (round 144)
+
+The matched experiment produced a result. Identical 304 items, identical warm start, identical steps, **only the
+target differing**, read out on 400 prompts from four books no run has seen:
+
+| model | held-out ρ | WER | DNSMOS |
+|---|---|---|---|
+| baseline step 5000 | **+0.2057** | 1.000 | 1.088 |
+| arm O (originals) step 500 | **+0.1994** | 1.000 | 1.082 |
+| arm S (shared) step 500 | **+0.0335** | 1.000 | 1.096 |
+
+**What this says.** The rendition-independent target does **not** produce better speech: WER ties at 1.000 and the
+non-saturated readout is decisively **worse** for arm S, by a factor of six. The route's premise was that a target
+decoding at 0.368 WER instead of 1.000 should lift the samples toward it; it does not, because the model must
+**hit** that target and held-out ρ says it does not come close.
+
+**The mechanism is the same wall as everywhere else** — not a new failure mode. Training-item ρ is 0.82 and
+held-out ρ is 0.15 (§124); the shared-target arm simply moves further down the same curve. *A better target is
+useless to a model that cannot fit targets.*
+
+**Honest limits**, because they shape what comes next:
+
+* 500 steps of **fine-tuning** from a model trained on the **original** targets is an unfavourable way to test a
+  different target: the model must first unlearn rendition-specific detail the original rewarded. A decisive version
+  trains **from scratch** on the shared target — hours, not minutes;
+* n=8 first read arm O at 1.236 against arm S at 1.000, which looked like a win; at n=24 both are exactly 1.000.
+  The n=8 gap was sampling, and **WER is saturated in this regime** — it cannot separate two unintelligible models,
+  which is why the ρ readout decided this round;
+* DNSMOS favours arm S consistently but slightly (1.096 vs 1.082, and 1.098 vs 1.093 at n=8), within the metric's
+  own variability. **Not treated as a result.**
+
+**What survives.** The target measurement is untouched and remains this span's strongest positive finding: the
+rendition-independent component decodes at **WER 0.368** against 1.000, its cache writer reproduces that figure to
+sixteen digits, and the reliability behind it is **0.714 on 110 pairs** against a four-pair estimate of 0.445. What
+fails is the assumption that a model can be *pointed* at it and arrive.
+
+**The measured conclusion:** the wall is not the target's quality and not the input representation. It is that this
+model **does not generalise from its training texts**, and every route that assumes otherwise — including this one —
+inherits that.
+
+## 126. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).

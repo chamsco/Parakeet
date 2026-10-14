@@ -1,0 +1,69 @@
+{
+  "checkpoint": "runs\\text_continue\\distill-text_step5000.pt",
+  "checkpoint_step": 5000,
+  "weights": "ema",
+  "corpus": {
+    "manifest": "kept.jsonl",
+    "utterances": 8
+  },
+  "level_correction": {
+    "outputs_over_full_scale": 0,
+    "max_peak": null
+  },
+  "synthesis": {
+    "rtf": 0.4239610204305343,
+    "x_realtime": 2.3587074089606057,
+    "log_mel_cosine_vs_reference": 0.9259845986962318,
+    "phase_coherence": 0.1484482567757368,
+    "generated_seconds": 22.912,
+    "reference_seconds": 27.894833333333334,
+    "length_ratio": 0.8213707436861066
+  },
+  "speechlikeness": {
+    "available": true,
+    "voiced_fraction": 1.0,
+    "median_f0_hz": 93.75,
+    "spectral_flatness": 0.6272838562726974,
+    "detail": "voiced fraction, median F0 and spectral flatness via the YIN tracker",
+    "speech_like": false,
+    "teacher": {
+      "available": true,
+      "voiced_fraction": 0.5466006956994534,
+      "median_f0_hz": 162.42044067382812,
+      "spectral_flatness": 0.34740014001727104,
+      "detail": "voiced fraction, median F0 and spectral flatness via the YIN tracker",
+      "speech_like": true
+    }
+  },
+  "naturalness": {
+    "metric": "dnsmos p835",
+    "student": 1.092872649754571,
+    "teacher": 2.6626751346489788,
+    "note": "teacher = the Kokoro reference the corpus was built from; it is the control"
+  },
+  "utmos": {
+    "student": null,
+    "teacher": null,
+    "available": false,
+    "reason": "`utmos` not installed (ModuleNotFoundError)",
+    "note": "the documented metric; `utmos` needs fairseq, whose sdist cannot build here"
+  },
+  "wer": {
+    "student": 1.2361111111111112,
+    "teacher": 0.013888888888888888,
+    "recogniser": "base.en",
+    "note": "the recogniser size is part of the number; not comparable to a large-v3 WER"
+  },
+  "caveats": [
+    "the student is trained on a small corpus for a short CPU budget: this is a baseline",
+    "DNSMOS on the *teacher* is the ceiling for this corpus, not a human MOS",
+    "WER with a small recogniser is an upper bound relative to the papers' large-v3"
+  ],
+  "checks": {
+    "synthesis_produces_audio": true,
+    "dnsmos_available": true,
+    "wer_available": true,
+    "naturalness_metric_separates_teacher_from_student": true,
+    "recogniser_works_on_the_teacher_audio": true
+  }
+}
