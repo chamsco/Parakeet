@@ -4810,7 +4810,30 @@ the mechanism and wrong to call the whole result inconclusive: **the dominant ef
 Four revisions of one conclusion, each fixed by removing a confound the previous had not controlled. **None of the
 numbers were wrong at any stage; every error was in what they were taken to mean.**
 
-## 130. Environment notes
+## 130. Second matched point: the shared target holds at 86–90 %, and held-out ρ is still RISING (round 149)
+
+The from-scratch pair's step-2 000 checkpoint closes the loop on §129's reversal:
+
+| step | arm O (originals) | arm S (shared) | S as % of O |
+|---|---|---|---|
+| 1000 | +0.1388 | +0.1245 | **90 %** |
+| 2000 | +0.1736 | +0.1485 | **86 %** |
+
+Each arm scored against the signal it was **trained to predict**, on 400 held-out prompts from four unseen books.
+The shared target is consistently close to — and slightly below — the original, at **both** points. *"Training on
+the rendition-independent target is worse"* stays **refuted**; the target is viable.
+
+**Both arms are still rising**, which is worth recording against an earlier conclusion. Arm O goes **0.139 → 0.174**
+and arm S **0.125 → 0.149** between step 1 000 and 2 000, on data neither trained on. §124 concluded from the
+1 207-item runs that *"held-out ρ does not move"* with training; here it moves, in the right direction, at 304
+items. So the plateau was a property of **that run**, not of the method — and the generalisation story is again
+**scale-dependent** rather than fixed.
+
+**What this does not change:** every arm here transcribes at **WER 1.000** and ρ ≈ 0.15 is far below the 0.60 fail
+point. Rising for another thousand steps does not cross that gap, and the correction is about what the numbers
+*mean*, not about the audio getting better.
+
+## 131. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
