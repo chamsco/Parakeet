@@ -12,14 +12,12 @@ each of them fails silently:
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 
 import torch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from scripts.merge_caches import merge_caches  # noqa: E402
+from scripts.merge_caches import merge_caches
 
 
 def _write_cache(root: Path, items: list[dict], voices: list[str], norm: dict | None) -> None:

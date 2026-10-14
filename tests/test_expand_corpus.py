@@ -9,14 +9,12 @@ batch source or as unexplained audio. These tests use `verify`, the guard at the
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 
 import torch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
-from expand_corpus import verify  # noqa: E402
+from expand_corpus import verify
 
 
 def _merged_cache(root: Path, *, token_width: int = 72, voice_norm: bool = True, scale: float = 1.0,

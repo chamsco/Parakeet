@@ -11,13 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
-ROOT = Path(__file__).resolve().parents[1]
-import sys
-
-sys.path.insert(0, str(ROOT / "scripts"))
-
-from build_prompts import SOURCES, sentences, strip_gutenberg  # noqa: E402
+from build_prompts import SOURCES, sentences, strip_gutenberg
 
 
 def test_every_source_records_a_licence():

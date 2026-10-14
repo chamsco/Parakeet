@@ -5,8 +5,11 @@ import pytest
 import torch
 
 ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
+# `scripts/` is not a package, so the tests that import a script module need it on the path. One insertion here
+# replaces the per-file preludes those tests used to carry.
+for _path in (ROOT / "scripts", ROOT):
+    if str(_path) not in sys.path:
+        sys.path.insert(0, str(_path))
 
 from parakeet.config import ParakeetConfig, load_config  # noqa: E402
 

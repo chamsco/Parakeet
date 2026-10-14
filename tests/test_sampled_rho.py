@@ -9,17 +9,14 @@ These tests drive it with a stub model and a stubbed sampler, so the statistics 
 """
 
 from __future__ import annotations
-
-import sys
 from pathlib import Path
 
 import pytest
 import torch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from parakeet.eval import gates  # noqa: E402
-from parakeet.eval.gates import sampled_rho_with_error  # noqa: E402
+from parakeet.eval import gates
+from parakeet.eval.gates import sampled_rho_with_error
 
 
 class _FlowCfg:
