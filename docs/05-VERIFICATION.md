@@ -4418,7 +4418,53 @@ checked and does not carry the claim.
 specific: a *derived* number inherited a name ("ceiling") from the measurement that produced it, and the name
 outlived the definition. The measurements were right; the label did work it had not earned.
 
-## 120. Environment notes
+## 120. The ceiling has no measured value — it rests on 4 pairs (round 133)
+
+Last round corrected §109's ceiling arithmetic (0.445 is a *reliability*, so the applicable bound is √0.445 =
+0.667, putting the token route at 61 % rather than 91 %). Before acting on the new number I checked **its
+precision**, and that makes both figures meaningless:
+
+`
+reliability r = 0.445 measured on n = 4 pairs
+Fisher-z 95% CI for r:  [-0.902, +0.985]
+therefore sqrt(r):      [0.000, 0.992]
+`
+
+**Four pairs do not determine a correlation.** The "text+voice ceiling" could be 0 — in which case nothing is
+learnable from text and voice — or 0.99, in which case the token route's 0.354 is well short and the flow's 0.0045
+is nowhere. Every ceiling figure this project has published, including the one published two rounds ago, is a point
+estimate of a quantity that is **not measured**.
+
+**What is actually established, separated from what is not:**
+
+| quantity | value | status |
+|---|---|---|
+| token route, frames, **40 items** | ρ **0.354** | measured (a 12-item run gave 0.406 — the thin sample was optimistic) |
+| token route audio, 6 utterances | WER **1.000** | measured (teacher control 0.000) |
+| SAME TEXT across **different** voices, n = 108 | ρ 0.171 | well estimated |
+| SAME TEXT, SAME voice, **n = 4** | ρ 0.445 | **not estimated** |
+| the ceiling that follows from it | — | **unknown** |
+
+The one same-text number with a real sample size is the **cross-voice** one (0.171, n=108), and it answers a
+different question: different voices cannot share a rendition, so it bounds *cloning*, not text conditioning.
+
+**Consequences, which cut toward doing more rather than less:**
+
+* the "the deterministic route is at its ceiling" story — at 91 %, or at 61 % — has **no numerical basis**. Neither
+  did "the target is one-to-many, so a deterministic model cannot do better";
+* the honest statement is: a text-conditioned route measures ρ 0.354 and transcribes at WER 1.000, and **how much
+  more is achievable is unknown**;
+* so the cheap experiment is the right one, and it is cheap because the token route trains at ~0.8 s/step against
+  the flow's 2.4: **a 5 000-step continuation is in flight** (uns/text_headroom, warm-started from step 5000,
+  22.6 M trainable). **Pre-registered prediction: if validation ρ rises above 0.354 the headroom is real and the
+  corpus/compute axis is confirmed; if it is flat, the mapping from text to this representation is the wall
+  regardless of capacity** — which is what "one-to-many" was asserting without evidence.
+
+**Repeat renditions cannot be manufactured here** to fix the measurement: Kokoro is deterministic and the corpus
+has one take per (text, voice). A genuine reliability estimate needs repeated stochastic generations of the same
+text and voice — a GPU-and-licence job, not a CPU one.
+
+## 121. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).

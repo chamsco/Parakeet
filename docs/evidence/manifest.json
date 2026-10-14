@@ -1,7 +1,7 @@
 {
-  "generated": "2026-10-14T03:52:53",
+  "generated": "2026-10-14T03:55:53",
   "git": {
-    "rev": "ff688c5",
+    "rev": "79e4a76",
     "dirty": true
   },
   "note": "Committed snapshots of the reports the model card cites.  Refresh with `python scripts/model_card.py --refresh-evidence` after re-running the demos; the hashes make a stale bundle visible.",
@@ -18,7 +18,7 @@
       "status": "copied",
       "source": "runs/token_route_ceiling.json",
       "evidence": "docs/evidence/token_route_frame_rho.json",
-      "sha256": "0ecb7d85ba3b30f25588ff392e2650aca840eb6927eb0a2da0d5c175a4af2ee2"
+      "sha256": "b9c197672af3bd04a4640607edc034bdb0ebb07c62575c1b03d795f4199b871b"
     },
     {
       "claim": "plan_head_empty",
