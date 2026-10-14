@@ -5398,6 +5398,27 @@ prompts used by any earlier corpus, and the validator above confirms that exclus
 Generation cost about two and a half hours of wall clock for 4 357 utterances at roughly 24 utterances per minute with
 two other jobs contending, which is the "synthesis is CPU-cheap and generation-bound" claim in the objective, measured.
 
+**A second expansion is prepared and deliberately not started.** The objective's stop rule says a *rising* held-out ρ is
+the signal to keep growing, and a flat one is the signal to stop, so the synthesis waits on the step-3 000 read rather
+than being spent in advance. What is cheap is done: eight more public-domain books, none used before, with 500 000
+characters requested and **439 433 produced as 3 779 prompts** (two of the eight are short enough to exhaust their
+per-book quota):
+
+| Gutenberg id | book |
+|---|---|
+| 2600 | War and Peace |
+| 768 | Wuthering Heights |
+| 145 | Middlemarch |
+| 766 | David Copperfield |
+| 1023 | Bleak House |
+| 5200 | Metamorphosis |
+| 1952 | The Yellow Wallpaper |
+| 2542 | A Doll's House |
+
+The prompt builder excluded the 400 held-out prompts and all 5 097 previously used ones, so this set is disjoint from
+training, from validation, and from the first expansion. If the corpus lever turns out to be real, adding these takes
+the distinct-prompt count from about 8 100 to about 11 900 for roughly 2.2 hours of synthesis and no new books to find.
+
 ## 143. The comment audit, closed by family (round 152)
 
 The audit that started this work examined 4 795 comment lines and produced 402 findings. Its outcome, by family, with
