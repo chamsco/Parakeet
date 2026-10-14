@@ -4055,6 +4055,12 @@ with a measured, nonzero floor, and establishing that floor took two minutes.
 
 ## 109. The residual route's floor is 0.406, measured — and the token route is at 91 % of its ceiling (round 117)
 
+> **The 91 % figure in this section is superseded — see §119.** 0.445 is the *reliability* (how much two renditions
+> of the same text and voice agree), not the ceiling that applies to a predictor of the shared signal: that is its
+> square root, **0.667**, and the recogniser's fail point (0.60) lies **below** it. The token route is at **61 %** of
+> the applicable ceiling, with **+0.261** of headroom, and **is not excluded** — the opposite of the pessimistic
+> reading this heading invites. Nothing else in the section changes.
+
 Round 116 proposed a residual against the token route's output and quoted a floor of 0.37 — which was the token
 route's **token** ρ. A residual route inherits its **frame** ρ, never measured until now. Two minutes:
 
@@ -4174,7 +4180,8 @@ has read "0.0045 against a 0.75 bar" for eighty rounds without its audio being a
 
 **So the remaining path is only scale**, and this closes the last cheap structural idea rather than deferring it:
 the architecture matches SupertonicTTS axis by axis (§77); the conditional signal exists (43 % of variance, §106)
-and the deterministic route already extracts most of it (91 % of the applicable ceiling, §109); the flow's field
+and the deterministic route already extracts most of it (61 % of the *applicable* ceiling — 91 % of the
+reliability, which is not the same thing, §119); the flow's field
 fits the marginal and no intervention moves it; and both routes produce unintelligible audio at WER 1.000. The
 difference from the paper is **945 h against 8**, and the compute to use it — which `docs/PLAN.md` now costs, with
 three ordered runs and their criteria.
@@ -4364,7 +4371,54 @@ is now **measured** rather than suspected.
   than reporting a sign as a finding;
 * and it is why the in-loop gate was raised to epeats=5 for future runs — these arms started before that change.
 
-## 119. Environment notes
+## 119. The ceiling was the reliability, not the true-score bound — the token route has more headroom than §109 said (round 132)
+
+While re-reading §109 to check a *different* argument, the ceiling arithmetic turned out to be wrong — and wrong in
+the pessimistic direction.
+
+**What §109 did.** It measured the agreement between two renditions of the same text and same voice — frame ρ
+**0.445** — called that "the ceiling that applies", and concluded that the token route at **0.406** sits at **91 %**
+of it, i.e. nearly saturated.
+
+**Why that is not the applicable ceiling.** 0.445 is a **reliability**: the correlation between two measurements of
+the same underlying signal, each equal to that signal plus independent error. Classical test theory gives the
+correlation a predictor of the *shared* signal can reach with a **single** such measurement as the square root of
+the reliability:
+
+```
+true-score ceiling = sqrt(0.445) = 0.667
+```
+
+A model conditioned on (text, voice) has access to exactly the shared signal and nothing else, so **0.667**, not
+0.445, bounds it. The recogniser's calibration (§37) puts its fail point at **0.60** and perfect reading at 0.75, so
+the bar lies **inside** the range the ceiling permits:
+
+| quantity | ρ |
+|---|---|
+| token route, measured | 0.406 |
+| recogniser fails | 0.60 |
+| **true-score ceiling (√0.445)** | **0.667** |
+| two renditions agree (the reliability §109 quoted) | 0.445 |
+
+So the token route is at **61 %** of the ceiling that applies, with **+0.261** of headroom — not 91 % and saturated.
+**The deterministic route is not excluded by the ceiling**, the opposite of what §109's framing encourages.
+
+**What this does not change.** The flow's samples are at 0.0045 against the same 0.667 — **0.7 %**, *worse* than the
+1 % §109 reported, because the reference got larger. And the route-level verdicts rest on measurements that are
+untouched: the token route's own audio is **WER 1.000** against the teacher's 0.000 (§117), and the field has not
+moved under eight conditioning interventions. What changes is the *reason* the deterministic route might be stuck:
+not "there is almost nothing left to learn", but "there are 0.26 points of it, and no headroom argument against
+trying".
+
+Corrected in the four other places the claim was published: `docs/ROADMAP.md`, the generated `docs/MODEL_CARD.md`
+(via `scripts/model_card.py`), §111's parenthetical, and this section's forward pointer from §109. The README was
+checked and does not carry the claim.
+
+**Method note.** This is the seventh self-correction in the span and the second in three rounds. The pattern is
+specific: a *derived* number inherited a name ("ceiling") from the measurement that produced it, and the name
+outlived the definition. The measurements were right; the label did work it had not earned.
+
+## 120. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).

@@ -51,7 +51,10 @@ CLAIMS: List[Dict[str, Any]] = [
     {
         "id": "token_route_frame_rho",
         "statement": "the deterministic (token) route's frames against the target — the best available text "
-                     "conditioning, and 91% of the text+voice ceiling (0.445)",
+                     "conditioning. It is 91% of the text+voice RELIABILITY (0.445, how much two renditions of the "
+                     "same text and voice agree), which is NOT the applicable ceiling: a predictor of the shared "
+                     "signal can reach its square root, 0.667, and the recogniser's fail point (0.60) lies BELOW "
+                     "that. So the route sits at 61% of the ceiling that applies, not 91%, and is not excluded",
         "report": ["runs/token_route_ceiling.json"],
         "field": "frame_rho",
         "op": ">=",

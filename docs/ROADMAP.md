@@ -279,9 +279,11 @@ this file was again the last to hear about it — line 212 records the previous 
 * **The loss is energy-weighted; intelligibility follows structure (§§110, 118).** The best available text predictor
   explains **2.1 % of the flow's loss** while tracking the target at ρ **0.406** — so "the field barely uses the
   text" was a statement about the *loss*, and the loss was never where the text's contribution lives.
-* **The token route is at 91 % of the ceiling that applies to it (§109).** Against the text+voice reproducibility
-  ceiling (ρ 0.445), the deterministic route's frames measure ρ **0.406** and the flow's samples **0.0045**.
-  "Deterministic route parked at its ceiling" was written against a *different* ceiling and is corrected.
+* **The token route is at 61 % of the ceiling that applies to it (§§109, 117).** Two renditions of the same text
+  and voice agree at ρ **0.445** — a *reliability*. The applicable ceiling for a predictor of the shared signal is
+  its square root, **0.667**, and the recogniser's fail point (**0.60**) lies **below** it. So the deterministic
+  route's ρ 0.406 has **+0.261** of headroom and is **not** excluded by the ceiling, contrary to §109's earlier
+  "91 %" framing. The flow's samples remain at 0.0045.
 * **The plan head has learned nothing, so the plan/residual route is dead (§§108, 111).** Unfolded, the plan's ρ
   against the target is **−0.0137**. The 0.37 belongs to the *token route*, not to the flow's auxiliary head — and
   with floor 0.406 against a fail threshold of 0.60, the residual route's **0.039 window** cannot produce
