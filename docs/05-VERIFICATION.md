@@ -5387,7 +5387,29 @@ prompts used by any earlier corpus, and the validator above confirms that exclus
 Generation cost about two and a half hours of wall clock for 4 357 utterances at roughly 24 utterances per minute with
 two other jobs contending, which is the "synthesis is CPU-cheap and generation-bound" claim in the objective, measured.
 
-## 143. Environment notes
+## 143. The comment audit, closed by family (round 152)
+
+The audit that started this work examined 4 795 comment lines and produced 402 findings. Its outcome, by family, with
+what was actually done rather than what was proposed:
+
+| family | outcome |
+|---|---|
+| suppressions (`noqa`) | **250 → 35**, every removal proved comment-only, by AST where a file was edited and by removals-only diffs where a bundle was |
+| section banners | **0** pure-rule banners left; 114 decoration lines removed with the parse tree as the proof |
+| restatements | 9 removed, all comments duplicating a `_banner(...)` print on the next line |
+| workaround confessions | searched for workaround, hack, kludge, fragile, brittle, too risky, do not remove, for now, temporary: **3 hits, none a confession** |
+| stale citations | **0** identifiers or paths cited that no longer exist, now guarded by `tests/test_comment_citations.py`, which was proved to fail on a planted stale citation |
+| dead config knobs | **7 fields with no reader anywhere**, annotated in `config.py`; the negative result, 91 of 98 fields are read, is recorded too |
+| real defects fixed | **5**: three comments that had swallowed or mis-described live code, the contrast flag no stage could reach, and the cache metadata that could not name its own autoencoder |
+| dead code removed | the `reflow` no-op parameter and branch, whose only effect was multiplying a loss by 1.0 |
+| gauntlet claims | 2 of its 12 survivors checked against the code, **1 refuted** (`loss_device` has a live caller in `dml_benchmark.py`) |
+
+**Three of the five defects were found by checking a claim rather than trusting it**, and the same is true of the
+refuted survivor: the audit's own adversarial pass had cleared it. That is the transferable result of this section — not
+the 215 suppressions and comment lines removed, which are cosmetic, but that a config key or a refactor claim is worth
+one `grep` against the code before it is acted on.
+
+## 144. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
