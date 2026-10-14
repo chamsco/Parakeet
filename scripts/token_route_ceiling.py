@@ -77,6 +77,22 @@ def main() -> int:
     load_latent_norm_from_cache(model, args.cache)
     model.eval()
 
+    # A cache whose global normaliser is (near) identity is the symptom of the defect recorded in
+    # docs/05-VERIFICATION.md section 144: runs/holdout_cache carried an identity global normaliser while the training
+    # caches share one fitted mean and variance, and the correction lived only in that cache's metadata, which is
+    # gitignored. A cache rebuild would restore the identity silently and move every reading by about 0.019 — the size
+    # of the instrument's own resolution. So the instrument reports it rather than depending on a note.
+    import json as _json
+
+    _meta_path = Path(args.cache) / "cache_meta.json"
+    if _meta_path.exists():
+        _norm = (_json.loads(_meta_path.read_text(encoding="utf-8")).get("latent_norm") or {})
+        _mean = _norm.get("mean")
+        if _mean is not None and max(abs(float(m)) for m in _mean) < 1e-6:
+            print("  WARNING: this cache's global latent normaliser is an IDENTITY (all-zero mean).")
+            print("  The training caches carry a fitted mean, so every reading here is on a different convention")
+            print("  than the models were trained in. See docs/05-VERIFICATION.md section 144.")
+
     if not hasattr(model, "decoder_latent_from_tokens"):
         raise SystemExit("this build has no decoder_latent_from_tokens: cannot expand tokens to frames")
 
