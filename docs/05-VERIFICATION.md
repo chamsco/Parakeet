@@ -5703,6 +5703,17 @@ Both effects are real and both matter for the loop, but only the ceiling can cro
 converged faster would reach a plateau that never becomes audible. That is why each new doubling is read as a **ceiling
 increment** at matched steps rather than as a convergence curve.
 
+**The run is complete, and its endpoint thickens the result rather than changing it.** `runs/text_v4` finished its
+10 000 steps with `nonfinite_steps: 0.0`. Its plateau readings now stand at six points — 0.3630, 0.3648, 0.3649, 0.3619,
+0.3698 and **0.3616 at the endpoint with five readings and a spread of 0.0044** — so the ceiling is **0.362 to 0.370**
+and the first doubling is finished, not sampled. The last matched point the *baseline* still has is step 8 000 (its later
+checkpoints were pruned), where five readings per arm give **0.2108 against 0.3657, a difference of +0.1548, SEPARATED**
+— a wider gap than at steps 5 000–6 000 because the baseline itself flickers between 0.21 and 0.23 while the enlarged run
+sits still. The gap is therefore **+0.135 to +0.155**, bounded by the baseline's own instability rather than by the
+enlarged run's.
+
+The endpoint's outcome metrics: **WER 1.0000** against a teacher control of 0.0219, and **DNSMOS 1.204**.
+
 **And the outcome metrics at that plateau, which is the half of milestone 3 the objective asks for in the same breath.**
 On 24 held-out utterances at step 5 000:| run | held-out ρ | WER | teacher control | DNSMOS |
 |---|---|---|---|---|
