@@ -4860,7 +4860,39 @@ three matched points, from scratch); the training procedure is not the blocker (
 and **the wall is the level of generalisation every arm here reaches**, which is roughly the same whether the model
 is fine-tuned (0.200), trained from scratch on 304 items (0.139–0.174), or the 1 207-item baseline (0.221).
 
-## 132. Environment notes
+## 132. Two corrections from one audit: the baseline was mislabelled, and "fine-tuning degrades it" was sampling (round 151)
+
+Auditing every committed WER evidence file against its own checkpoint found round 143's narrative wrong twice.
+
+**What the files actually say** (each carries checkpoint, so labels cannot be guessed from row order):
+
+| n | checkpoint | WER | control |
+|---|---|---|---|
+| 8 | baseline step 5000 | **1.236** | 0.014 |
+| 8 | arm O step 500 | **1.000** | 0.022 |
+| 24 | baseline step 5000 | **1.000** | 0.022 |
+| 24 | arm O step 1000 | **1.000** | 0.022 |
+
+**Correction one — a reading error, not a measurement error.** §(round 143) reported *"the baseline reads 1.000 and
+arm O reads 1.236, so fine-tuning on 304 items degrades the model"*. The summary read was sorted by **file name**
+(val_armO_original before val_baseline_step5000) and I took row order for run order. The 1.236 belongs to the
+**baseline**; the 1.000 to **arm O**. *A summary sorted alphabetically is not a summary in run order* — which is why
+the evidence files carry their checkpoint field and why reading it takes one command.
+
+**Correction two — the conclusion the numbers could not support.** With the labels right, the n=8 gap is 1.236
+against 1.000 — and at a matched 24 utterances **both** arms and the baseline read exactly **1.000**. So the gap was
+**sampling**, and *"fine-tuning a 5 000-step model on 304 items degrades it"* is **not supported**. It is the same
+lesson arm S taught two rounds earlier: **WER is saturated in this regime** and cannot separate unintelligible
+models; an n=8 difference in a saturated metric is not evidence.
+
+**What survives:** fine-tuning on 304 items leaves the model where it was — unintelligible, WER 1.000 on unseen data
+— which is consistent with everything else here and says nothing about degradation either way.
+
+**Tooling lesson, applied immediately:** reports carry checkpoint for every run, and this audit read that field
+rather than row order. **Two rounds running, an ordering assumption produced a false conclusion**; one command
+reading the artefact's own label would have caught both.
+
+## 133. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
