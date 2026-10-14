@@ -5088,6 +5088,23 @@ result inside the 0.0054 seed spread means the remaining lever is steps alone.
 both had cheap checks: one more held-out point for the plateau, one look at which code path reads the key for the
 flag. A config key that no reader in the active path consumes is invisible in every log the run produces.
 
+**Verified active, not merely wired.** The loss log is the instrument, and it distinguishes the two states cleanly. A
+`distill-text` step line used to read
+
+```
+step     1650 duration=0.6015 f0=0.1000 energy=0.1199 latent=0.7754 loss=1.5969
+```
+
+with no contrast key anywhere, which is what a silently ignored config value looks like in a log. The same stage on the
+new arm reads
+
+```
+step      100 duration=0.7281 f0=0.4190 energy=0.3883 latent=1.0879 latent_contrast=0.9840 loss=3.6073
+```
+
+so the term is present and, at equal weight, of the same magnitude as the raw latent term. That means it changes the
+objective materially rather than marginally, which is the condition for the A/B to be worth its CPU.
+
 ## 136. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
