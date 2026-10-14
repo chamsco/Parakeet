@@ -5202,7 +5202,38 @@ And **+0.04 does not approach the bar**: if the plateau scales by a similar fact
 against the 0.60 at which the recogniser stops failing. It improves the model; it does not make it intelligible, and
 both statements belong in the same sentence.
 
-## 139. Environment notes
+## 139. The contrast term's advantage was early training, not a higher plateau (round 152)
+
+§138 measured the mean-invariant term separating at step 1 000 and registered the caveat that "a step-1 000 advantage
+need not survive to the plateau". The second matched point answers it, with three readings per checkpoint:
+
+| step | `runs/text_long384`, no contrast | `runs/text_contrast_ab`, contrast live | difference | largest spread | verdict |
+|---|---|---|---|---|---|
+| 1 000 | 0.0842 | **0.1163** | **+0.0322** | 0.0066 | **SEPARATED** |
+| 2 000 | 0.1712 | 0.1786 | +0.0074 | 0.0107 | inside the spread |
+
+**The +0.032 advantage at step 1 000 has collapsed to +0.007 by step 2 000**, which is inside the instrument's spread.
+The arm without the term catches up. So the mean-invariant latent term is an **early-training accelerator, not a
+plateau-raiser**: it reaches the same place sooner, and by the time the curve flattens both arms are at the same ρ.
+
+That matters for what the term is worth. Its measured value is real but narrow: 38 % faster early progress. Its
+measured value is **not** a higher ceiling, and §138's second caveat — that +0.04 does not approach the 0.60 bar — is
+now joined by a stronger one, which is that the +0.04 itself does not persist.
+
+**The last live CPU intervention is therefore closed, and this is what closed it.** Every earlier candidate had been
+measured: conditioning interventions, sampler settings, corpus ×4.2, training time ×4, capacity, text diversity,
+domain change, both structural routes and the rendition-independent target. The contrast term was the one thing found
+disabled and newly enabled, and it does not move the plateau either.
+
+**The lesson is §137's lesson applied to an effect rather than to a measurement.** A separated difference at one point
+on a curve is not a property of the curve, and the check that settles it is the same one that settles a measurement
+noise floor: repeat it where the decision is actually made, which here is the plateau and not step 1 000. Two
+"SEPARATED" verdicts at step 1 000 were both correct and both misleading.
+
+The plateau stands at **≈ 0.22 ± 0.02** held out, against in-sample 0.4157, with WER 1.0000 at every checkpoint, on
+400 prompts from four unseen books with a 3 744-distinct-prompt training corpus.
+
+## 140. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
