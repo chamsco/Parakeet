@@ -5036,6 +5036,17 @@ model has not learned the mapping yet.** The training log agrees: the latent ter
 
 That changes what the next spend should be, and it is why the curve's asymptote is the only thing worth measuring now.
 
+**Updated at step 7 000: the gap widens with training, so both readings are true at different step counts.** In-sample
+ρ on the training cache rises from **0.4157** at step 3 000 to **0.5824** at step 7 000, while held-out stays at
+**0.2235**. The gap grows from 2.0× to 2.6×. So the model is under-fit *early* and moves into memorisation *later*, and
+the flat held-out curve is a generalisation limit rather than a fitting limit: more steps buy training fit that does not
+transfer.
+
+That also gives the corpus comparison a second, sharper readout. If the enlarged corpus narrows the
+in-sample-against-held-out gap at matched steps, the data lever works even where held-out ρ is flat, and the flat
+held-out number would be a resolution problem rather than a null result. `scripts/conclude_milestone3.ps1` measures both
+for exactly that reason.
+
 **The outcome metric has no gradient in the range this configuration can reach.** `real_eval.py` at 24 held-out
 utterances per point, on the same five checkpoints the ρ curve was read from:
 
