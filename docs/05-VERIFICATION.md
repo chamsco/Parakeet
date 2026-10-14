@@ -4892,7 +4892,58 @@ models; an n=8 difference in a saturated metric is not evidence.
 rather than row order. **Two rounds running, an ordering assumption produced a false conclusion**; one command
 reading the artefact's own label would have caught both.
 
-## 133. Environment notes
+## 133. The held-out set is clean, and "corpus size" means unique texts (round 152)
+
+Two checks before trusting the curve that the new training run is meant to establish.
+
+**The held-out prompts are disjoint from every training corpus.** `data/holdout_v1` holds 400 prompts from four books
+(Dracula, Jane Eyre, A Tale of Two Cities, Moby-Dick) that no corpus was built from. Verified against the union of
+every prompt file used to synthesize corpora, 10 549 prompts across `prompts.txt`, `prompts_v2`, `prompts_v3`,
+`prompts_v3_rest`, `prompts_short`, `dialogue` and the new `prompts_v4`, plus the manifests of each corpus that fed
+the training cache:
+
+| check | overlap with the 400 held-out texts |
+|---|---|
+| union of all prompt files (10 549) | **0** |
+| `mixed_corpus/train_v2` manifest (417 texts) | **0** |
+| `kokoro_v3` manifest (725) | **0** |
+| `kokoro_v3b` manifest (2 601) | **0** |
+| the new `prompts_v4` expansion (4 357) | **0** |
+
+So the held-out number is a capability measurement rather than a training-item figure, which is the property §124
+found missing from every earlier "rho 0.35" claim.
+
+**Corpus size is text diversity, not hours, and the count is much smaller than the record count suggests.**
+
+| corpus | records | **unique texts** | voices |
+|---|---|---|---|
+| `mixed_corpus/train_v2` | 1 207 | **418** | 12 |
+| `kokoro_v3` | 725 | 725 | 11 |
+| `kokoro_v3b` | 2 601 | 2 601 | 11 |
+| **`v3_fixed` total** | **4 533** | **3 744** | 21 |
+| `kokoro_v4` (expanding now) | 4 357 planned | 4 357 | 11 |
+
+The training cache holds 4 533 utterances but only **3 744 distinct prompts**, because the base corpus reads each
+prompt across several voices. That reframes the gap against the paper. The comparison is not "8 h against 945 h" but
+**3 744 distinct prompts against whatever the paper's corpus contains**, and the expansion nearly doubles the prompt
+count to ~8 100. Repeating a prompt across voices is useful signal, since it forces the model to predict acoustics
+from text rather than memorise a waveform, but it does not add new text.
+
+**The curve so far, all read on the same 60 held-out items:**
+
+| run | params | data | steps | held-out frame rho |
+|---|---|---|---|---|
+| ladder narrow | 9.62M | 1 207 items (418 texts) | 1 000 | 0.0932 |
+| ladder narrow | 9.62M | 1 207 items | 2 000 | 0.1783 |
+| ladder narrow | 9.62M | 1 207 items | 3 000 | **0.2151** |
+| baseline `text_continue` | 22.6M | warm-started | 5 000 | 0.1985 |
+| long run | ~30M | 4 533 items (3 744 texts) | 1 000 | 0.0908 |
+
+The ladder arm is **still climbing at 3 000 steps**, which is why the wide capacity arm was stopped: asking whether
+capacity helps at a fixed step count confounds capacity with under-training, and steps cost CPU time while
+parameters cost it faster. The long run now tests the same slope on 3.7× the text.
+
+## 134. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
