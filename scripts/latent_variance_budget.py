@@ -141,16 +141,21 @@ def main() -> int:
         print(f"  + AR(1) smoothness  R^2 {r2_f_ar:6.3f}")
         print(f"  residual for the text: {1.0 - r2_f_ar:.3f}")
 
-    # The FOLDED numbers matter more than the unfolded chain and were being printed without being saved: the flow
-    # models the folded 144-dim target, so its residual is the share of the objective the text has to explain.  A
-    # report that omits it cannot support a claim about conditional signal.
+        folded_report = {"dims": int(folded[0][1].shape[0]),
+                         "per_voice_r2": r2_f_voice,
+                         "plus_ar1_r2": r2_f_ar,
+                         "residual_for_text": 1.0 - r2_f_ar}
+    else:
+        # Every item folded thinner than the 8-frame floor. Report the unfolded chain with folded null instead of
+        # indexing folded[0] after all the measurement work has already been done.
+        folded_report = None
+
+    # The folded 144-dim target is what the flow models, so its residual is the share of the objective the text has
+    # to explain. The report carries it whenever it exists.
     Path("runs/latent_variance_budget.json").write_text(
         json.dumps({"items": len(items), **{label: value for label, value in steps},
                     "residual": residual,
-                    "folded": {"dims": int(folded[0][1].shape[0]),
-                               "per_voice_r2": r2_f_voice,
-                               "plus_ar1_r2": r2_f_ar,
-                               "residual_for_text": 1.0 - r2_f_ar}}, indent=2), encoding="utf-8")
+                    "folded": folded_report}, indent=2), encoding="utf-8")
     return 0
 
 

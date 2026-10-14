@@ -94,7 +94,9 @@ def main() -> int:
         latent_token=batch.get("latent_token"),
     )
     loss.backward()
-    # NB: `flow_loss` carries the flow and plan terms only; the length term lives in `stage_flow`, so a zero`n    # for the length predictor here is the probe's scope, not a model finding`n    print("\ngradient norm by module group (one backward):")
+    # `flow_loss` carries the flow and plan terms only; the length term lives in `stage_flow`, so a zero for the
+    # length predictor here is the probe's scope rather than a model finding.
+    print("\ngradient norm by module group (one backward):")
     for name, prefixes in groups.items():
         if isinstance(prefixes, str):
             prefixes = (prefixes,)

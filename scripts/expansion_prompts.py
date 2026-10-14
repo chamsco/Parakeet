@@ -78,7 +78,7 @@ def main() -> int:
         # text-to-speech model should be trained to imitate
         if any(token in candidate for token in ("_", "[", "]", "{", "}", "http", "Gutenberg", "Copyright")):
             return False
-        if "CHAPTER" in candidate or "Chapter" in candidate.split()[0] if candidate.split() else False:
+        if "CHAPTER" in candidate or candidate.startswith("Chapter"):
             return False
         upper = sum(1 for ch in candidate if ch.isupper())
         if upper > 0.3 * max(1, sum(1 for ch in candidate if ch.isalpha())):
