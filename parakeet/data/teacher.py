@@ -811,7 +811,10 @@ def _kokoro_runtime() -> type:
         import kokoro  # noqa: F401
 
         return KokoroBackend
-    except Exception:  # noqa: BLE001 - any import failure means "not usable here"
+    except (ImportError, OSError):
+        # A packaging failure is a reason to prefer the other runtime. A defect inside our own KokoroBackend module
+        # is not: swallowing it would silently change which runtime built a corpus, and the manifest records the
+        # teacher name rather than the backend, so nothing downstream could tell.
         return SherpaKokoroBackend
 
 

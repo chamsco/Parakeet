@@ -65,7 +65,7 @@ def summarise(wavs: list[Path], limit: int) -> dict:
     for path in wavs:
         try:
             values = stats(path)
-        except Exception:  # noqa: BLE001
+        except (wave.Error, OSError, EOFError):
             continue
         rms.append(values[0])
         peak.append(values[1])
