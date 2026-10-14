@@ -5492,7 +5492,50 @@ matter in a comparison. It is why both arms of the corpus comparison are re-meas
 their readings above it were taken under — the baseline's are old, and the enlarged run's are current because it started
 after the correction.
 
-## 145. Environment notes
+## 145. Milestone 3 answers YES: the corpus lever was real, and my prediction was wrong (round 152)
+
+The registered prediction was that doubling the distinct prompts from 3 744 to about 8 100 would change nothing, on the
+strength of two earlier flat comparisons (418 against 3 744, and 304 against 1 207). **It is wrong, and by a lot.** At
+step 2 000, five readings per checkpoint, both arms re-measured under one convention:
+
+| run | mean held-out frame ρ | spread | gap to in-sample |
+|---|---|---|---|
+| `runs/text_long384`, 3 744 distinct prompts | 0.1702 | 0.030 | **1.94×** |
+| `runs/text_v4`, ~8 100 distinct prompts | **0.3256** | 0.015 | **1.07×** |
+| difference | **+0.1554** | | **SEPARATED** |
+
+**0.3256 is above the smaller corpus's entire plateau of 0.2223, at a fifth of the steps.** And it is not schedule: the
+cumulative-exposure ratio at step 2 000 is 1.15, and comparing at matched exposure instead of matched steps leaves
+**+0.147** of the gap, so about 5 % is the schedule.
+
+**Two independent verifications, because a result this large deserved them.**
+
+*The in-sample against held-out gaps are the mechanism.* The baseline fits its training data at 0.3190 and generalises
+at 0.1645 — a factor of **1.94**, the memorisation signature this project has been fighting since round 139. The enlarged
+run fits at 0.3520 and generalises at 0.3297 — a factor of **1.07**, which is as close to "no memorisation" as this
+measurement can resolve. **Same architecture, same capacity, same step count, same schedule shape; only the corpus
+differs, and one memorises while the other generalises.**
+
+*The outcome metric has not moved yet, and that is expected from the calibration.* WER reads **1.0000** for both arms at
+step 2 000, with DNSMOS 1.230 against **1.269**. `docs/evidence/correlation_threshold.json` puts the transition between
+ρ 0.60 and 0.75 and records 1.000 at 0.60, 0.45, 0.30 and 0.15 — a step, not a gradient. At ρ 0.33 the words are
+absent and the calibration says they must be.
+
+**What this changes.** Corpus size is the memory-versus-generalisation knob, and the earlier flat results were below a
+threshold that lies somewhere between roughly 3 700 and 8 100 distinct prompts. Milestone 4's rule therefore applies in
+the direction it was written for: held-out ρ is rising, so keep growing. `scripts/run_growth_round.ps1` is running with
+the prepared 3 779 prompts, which take the count to about **11 900**.
+
+**What it does not change.** The plateau for the enlarged corpus is **unknown and open**: 0.3256 at step 2 000 is
+climbing, and nothing yet says where it stops. If it stops below 0.60 the speech stays unintelligible and the honest
+report is that the corpus lever is real *and* insufficient at this scale — the two statements together, which is exactly
+the shape this section's evidence predicted before the result arrived.
+
+**And the record of the miss.** I wrote the prediction, registered it in the script, defended it with two earlier
+measurements, and it was wrong. The earlier measurements were not noise; they were taken below a threshold, which is a
+failure mode that a threshold cannot be found by testing on one side of it.
+
+## 146. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
