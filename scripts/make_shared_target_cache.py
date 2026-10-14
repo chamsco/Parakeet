@@ -65,6 +65,10 @@ def main() -> int:
     ap.add_argument("--checkpoint", default="runs/ae_scaled/adversarial/autoencoder_last.pt")
     ap.add_argument("--out", required=True)
     ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--originals-only", action="store_true",
+                    help="write the SAME items and order but keep each item's ORIGINAL targets. This is the "
+                         "control arm of the matched experiment: identical items, so the target is the only "
+                         "variable between the two caches.")
     args = ap.parse_args()
 
     cfg = load_config(args.config)
@@ -133,6 +137,14 @@ def main() -> int:
         durations = origin["durations"]
         n_tokens = int(durations.shape[0])
         record = dict(origin)
+        if args.originals_only:
+            # control arm: the same item, untouched.  Pairing, order and metadata are identical to the shared
+            # cache by construction, so any difference between arms is the target and nothing else.
+            record["source_index"] = origin_index
+            items.append(record)
+            if len(items) % 100 == 0:
+                print(f"  {len(items)}/{len(pairs)} built (originals)", flush=True)
+            continue
         record["latent"] = shared.contiguous()
         record["latent_token"] = span_average(shared, durations, n_tokens).contiguous()
         record["n_frames"] = shared.shape[-1]
