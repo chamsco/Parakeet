@@ -4767,7 +4767,50 @@ and are not comparable, which is exactly why the in-domain set was built.
 **Not yet a comparison.** The matched from-scratch *shared*-target arm has not run, so this bounds the original-target
 route only. It is logged as a data point, not a result about the target.
 
-## 129. Environment notes
+## 129. From scratch and matched, the shared target is 90 % of the original — the failures were the warm-start handicap (round 148)
+
+The from-scratch pair answered the question, and it **reverses §127**. Both arms random-init, 304 identical items,
+1 000 identical steps, each scored against the signal it was **trained** to predict, on 400 held-out prompts from
+four unseen books:
+
+| arm | scored against | ρ |
+|---|---|---|
+| O (original targets) | its own target | **+0.1388** |
+| S (shared targets) | **its own target** | **+0.1245** |
+| S (shared targets) | the ORIGINALS (reference) | +0.1078 |
+
+**The shared target is not the problem.** From scratch on equal terms it reaches **90 %** of the original-target
+arm's held-out ρ. The 5× penalty in §127 came from the **fine-tuning design**, not the target: arm S fine-tuned from
+an original-trained model scored 0.041; the same target from scratch scores **0.1245** — a factor of three, exactly
+what §126/§127's caveat said to expect and neither round could settle until now.
+
+**And the bias is real but small.** §126 argued the ρ comparison was biased because arm S was scored against a
+signal it never predicted. The from-scratch arm sizes it: 0.1245 against its own target, 0.1078 against the
+originals — about **14 %**. Correctly identified, and nowhere near enough to explain 0.041. So §126 was right about
+the mechanism and wrong to call the whole result inconclusive: **the dominant effect was the training procedure.**
+
+**What this does and does not change:**
+
+* it does **not** change the outcome — every model here transcribes at **WER 1.000**, and ρ ≈ 0.13 is far below the
+  0.60 at which the recogniser fails. The speech is still unintelligible;
+* it **does** change what is refuted. *"Training on the rendition-independent target is worse"* is now measured
+  **false** at matched settings. The target is viable at this scale; what is missing is the generalisation itself,
+  which every arm here lacks equally (0.139, 0.125, and the 1 207-item baseline's 0.221).
+
+**The progression of this one question**, because it is this session's pattern in miniature:
+
+| round | conclusion | what was wrong |
+|---|---|---|
+| 144 | "the route fails" | biased readout, saturated metric |
+| 145 | "inconclusive, the readout is biased" | right mechanism, overstated |
+| 146 | "it fails on fair terms, 5× worse" | fair readout, arms unequally trained |
+| 147 | "a good target is not sufficient" | recorded as settled |
+| 148 | "the target is fine; the handicap was the training" | matched from scratch |
+
+Four revisions of one conclusion, each fixed by removing a confound the previous had not controlled. **None of the
+numbers were wrong at any stage; every error was in what they were taken to mean.**
+
+## 130. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
