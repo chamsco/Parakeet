@@ -39,7 +39,7 @@ from .teacher import (  # noqa: F401
     resolve_mix,
     synthesize_corpus,
 )
-from .text import TAGS, CharVocab, TextTokenizer, normalize_text  # noqa: F401
+from .text import TAGS, CharVocab, TextTokenizer, normalize_text
 from .synthetic import (  # noqa: F401
     FORMANTS,
     LAYOUTS,

@@ -1,6 +1,6 @@
 """Parakeet model components."""
 
-from .autoencoder import LatentNormalizer, SpeechAutoencoder  # noqa: F401
+from .autoencoder import LatentNormalizer, SpeechAutoencoder
 from .blocks import (  # noqa: F401
     CausalConv1d,
     ChannelLayerNorm,
@@ -36,8 +36,8 @@ from .parakeet import (  # noqa: F401
     count_parameters,
     parameter_report,
 )
-from .speaker import QFormerStyleEncoder, SpeakerConditioner  # noqa: F401
-from .text import TextEncoder  # noqa: F401
+from .speaker import QFormerStyleEncoder, SpeakerConditioner
+from .text import TextEncoder
 
 __all__ = [
     "SpeechAutoencoder",

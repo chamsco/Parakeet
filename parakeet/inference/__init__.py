@@ -14,7 +14,7 @@ from .quantize import (  # noqa: F401
     save_int8_state_dict,
     size_report,
 )
-from .synthesize import StreamingVocoder, Synthesizer, write_wav  # noqa: F401
+from .synthesize import StreamingVocoder, Synthesizer, write_wav
 
 __all__ = [
     "Synthesizer",

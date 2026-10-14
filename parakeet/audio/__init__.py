@@ -5,7 +5,7 @@ package runs with nothing but ``torch`` + ``numpy``.  Heavier reference implemen
 (librosa, parselmouth, torchaudio) are only used by the optional *teacher-signal* tooling.
 """
 
-from .mel import MelSpectrogram, hz_to_mel, mel_filterbank, mel_to_hz  # noqa: F401
+from .mel import MelSpectrogram, hz_to_mel, mel_filterbank, mel_to_hz
 from .f0 import (  # noqa: F401
     bins_to_f0,
     energy_to_normalized,
@@ -16,7 +16,7 @@ from .f0 import (  # noqa: F401
     normalized_to_energy,
     normalized_to_f0,
 )
-from .istft import OLAISTFT, StreamingOLA  # noqa: F401
+from .istft import OLAISTFT, StreamingOLA
 
 __all__ = [
     "MelSpectrogram",

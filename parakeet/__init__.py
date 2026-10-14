@@ -15,7 +15,7 @@ Design lineage
   factorises speaker identity from speaking style.
 """
 
-from .config import ParakeetConfig, load_config, save_config  # noqa: F401
+from .config import ParakeetConfig, load_config, save_config
 
 __version__ = "0.1.0"
 __all__ = ["ParakeetConfig", "load_config", "save_config", "__version__"]

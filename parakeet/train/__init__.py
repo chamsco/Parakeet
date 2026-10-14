@@ -23,7 +23,7 @@ from .losses import (  # noqa: F401
     phase_lock_loss,
     weighted_mean,
 )
-from .stages import run_stage, train_all_stages  # noqa: F401
+from .stages import run_stage, train_all_stages
 
 __all__ = [
     "EMAModel",
