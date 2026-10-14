@@ -4952,17 +4952,31 @@ per-dimension means differ from the training corpus's even for the same voice na
 reason above, and it is not a blocker, but it says the held-out audio is not scale-identical to the training audio.
 
 
-| run | params | data | steps | held-out frame rho |
-|---|---|---|---|---|
-| ladder narrow | 9.62M | 1 207 items (418 texts) | 1 000 | 0.0932 |
-| ladder narrow | 9.62M | 1 207 items | 2 000 | 0.1783 |
-| ladder narrow | 9.62M | 1 207 items | 3 000 | **0.2151** |
-| baseline `text_continue` | 22.6M | warm-started | 5 000 | 0.1985 |
-| long run | ~30M | 4 533 items (3 744 texts) | 1 000 | 0.0908 |
+**The curve, all read on the same 60 held-out items.** Two runs at matched steps, differing in text count by 9× and
+in capacity by 3×:
 
-The ladder arm is **still climbing at 3 000 steps**, which is why the wide capacity arm was stopped: asking whether
-capacity helps at a fixed step count confounds capacity with under-training, and steps cost CPU time while
-parameters cost it faster. The long run now tests the same slope on 3.7× the text.
+| step | ladder: 418 texts, 9.62M | long run: 3 744 texts, ~30M |
+|---|---|---|
+| 1 000 | 0.0932 | 0.0908 (raw convention at the time; 0.0884 normalised) |
+| 2 000 | 0.1759 | 0.1741 |
+| 3 000 | 0.2102 | **0.2113** |
+| for reference | baseline `text_continue`, 22.6M warm-started: 0.1985 at its 5 000th step | |
+
+**The held-out curve is a function of step count, not of text count or capacity, across the ranges tested.** Three
+matched points agree to within 0.005, which is the measurement's own noise, while text diversity varies 9-fold and
+parameters 3-fold. That is a stronger statement than "data scaling looked flat": over this range neither lever moves
+held-out rho at all, and the only thing that has moved it is more steps.
+
+**The shape is monotone and decelerating.** The ladder adds +0.083 between 1 000 and 2 000 steps, then +0.034 between
+2 000 and 3 000. Two deltas do not fit a curve, but a deceleration that size puts the asymptote nearer 0.25 than the
+0.60 at which the recogniser reads a latent. The long run continues to 20 000 steps, and that is what the stop rule is
+for.
+
+The wide capacity arm was stopped rather than run to completion: at a fixed step count it would have measured capacity
+confounded with under-training, and the matched comparison above answers the question more cheaply.
+
+Still unintelligible at this point. The ladder arm's last WER was **1.3934** against a control of 0.0219 on 24
+held-out utterances, which is over-generation rather than a near miss.
 
 ## 134. Environment notes
 
