@@ -5585,6 +5585,18 @@ calibration. So the likely answer is both statements together: **the corpus leve
 short of intelligible.** The v5 round — 3 779 more prompts, about 11 900 distinct — is the measurement that says whether
 0.4 is a wall or a waypoint.
 
+**The loop's measured cost, so a handover does not have to rediscover it.** Per round: about **3 hours** of synthesis at
+the measured 19.3 utterances per minute for roughly 3 800 prompts; about **12 minutes** to cache and merge, which scales
+with the base it merges onto (18 shards took about 10 minutes); and about **2.4 hours** of training at the measured
+0.93 s/step under two-way contention, for a 10 000-step run that anneals over its own budget. So roughly **six hours of
+wall clock per round**, each adding about 3 800 distinct prompts.
+
+Prepared and waiting, so a round never stalls on finding text: `prompts_v5.txt` (3 779 prompts, synthesising) and
+`prompts_v6.txt` (3 451 prompts, from eight more unused books, recorded above). The instruments are
+`scripts/run_growth_round.ps1` for the round, `scripts/validate_corpus.py` before its merge, `scripts/monitor_text_run.ps1`
+for the curve while it trains, and `scripts/compare_runs.ps1` at five readings per checkpoint for the comparison — with
+the cumulative-exposure table above saying which step range is fair.
+
 ## 146. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
