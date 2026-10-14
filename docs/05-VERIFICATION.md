@@ -4978,7 +4978,40 @@ confounded with under-training, and the matched comparison above answers the que
 Still unintelligible at this point. The ladder arm's last WER was **1.3934** against a control of 0.0219 on 24
 held-out utterances, which is over-generation rather than a near miss.
 
-## 134. Environment notes
+## 134. What "unintelligible" actually looks like in the waveform (round 152)
+
+`real_eval.py` on the long run's step-3 000 checkpoint, 24 held-out utterances, so the numbers name their data:
+
+| metric | student | teacher control |
+|---|---|---|
+| WER (base.en) | **1.0000** | 0.0219 |
+| DNSMOS p835 | 1.184 | 2.913 |
+| log-mel cosine vs reference | 0.9192 | 1.0 by definition |
+| phase coherence | 0.1942 | |
+| **voiced fraction** | **1.000** | 0.565 |
+| **median F0** | **93.75 Hz** | 161.4 Hz |
+| spectral flatness | 0.464 | 0.346 |
+| length ratio | 0.7945 (59.33 s against 74.67 s) | 1.0 |
+| x real time | 34.5× | |
+
+The mechanism is legible in two of those rows. **Voiced fraction 1.000** means the output is voiced from end to end,
+with no silence and no unvoiced consonants, and **median F0 93.75 Hz is exactly the hop rate** (24 000 / 256). A
+periodicity sitting precisely at the frame rate is a buzz, not a voice. Meanwhile the log-mel cosine is 0.9192, so the
+spectral envelope is roughly right and the excitation is not.
+
+That is the signature of a regressor predicting the conditional mean. A predictor at ρ 0.21 keeps about a fifth of the
+per-dimension variance, so it emits something close to the average latent, the decoder turns a nearly constant latent
+trajectory into a constant envelope, and the result is a frame-rate buzz with the right gross spectrum. It is
+consistent with everything else measured: the oracle path that feeds TRUE frame latents through the same decoder and
+iSTFT reads at WER 0.167, so the decoder and the phase stage are not the defect, and the text-to-latent predictor is.
+
+This also explains why the failure is not a near miss. WER 1.0000 means the words are simply absent, not mispronounced.
+
+The long run is better than the ladder arm at the same step count on both outcome metrics: WER 1.0000 against 1.3934,
+DNSMOS 1.184 against 1.101. So more text and capacity did move the outcome slightly even though they did not move the
+ρ readout at 3 000 steps.
+
+## 135. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
