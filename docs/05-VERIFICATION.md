@@ -5360,7 +5360,34 @@ difference was a small-corpus effect.
 The card's claim carries the provenance in the statement and in its format string for the same reason: a bounded number
 with no data description is how a small-corpus result becomes a project headline.
 
-## 142. Environment notes
+## 142. Milestone 2 complete: 4357 new prompts, 7.49 h, validated before the merge (round 152)
+
+The expansion named in the objective's second milestone is finished and checked, not merely generated:
+
+| check | result |
+|---|---|
+| records | **4 357 of 4 357** |
+| audio | **7.49 h** (median 5.72 s, min 2.45, max 16.27) |
+| distinct texts | **4 357, zero appearing more than once** |
+| duplicate `utt_id`s, missing wavs, incomplete records | **0, 0, 0** |
+| voices / sample rate | 11 Kokoro voices, 24 000 Hz |
+| **overlap with the 400 held-out prompts** | **0** |
+| disk | 1.21 GB |
+
+Merged with the base this becomes roughly **8 890 items over 12.3 h** and, the number that matters, about **8 100
+distinct prompts against the 3 744** the comparison model trained on. The voice set does not change: the expansion's 11
+Kokoro voices are all already in the base cache's 21, so **zero new voices**, which is what makes the comparison a
+text-diversity test rather than a general "more data" test.
+
+**Eight public-domain books, never used before**, supplied the text: Great Expectations, Emma, Huckleberry Finn,
+Treasure Island, The Jungle Book, Anne of Green Gables, Walden and Peter Pan, drawn with a 500 000-character budget
+spread across all eight so no single book dominates. The prompt builder excluded the 400 held-out prompts and all 5 097
+prompts used by any earlier corpus, and the validator above confirms that exclusion held.
+
+Generation cost about two and a half hours of wall clock for 4 357 utterances at roughly 24 utterances per minute with
+two other jobs contending, which is the "synthesis is CPU-cheap and generation-bound" claim in the objective, measured.
+
+## 143. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
