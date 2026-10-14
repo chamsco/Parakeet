@@ -19,6 +19,15 @@
 #     the earlier flat results were too small a range;
 #   - a difference inside the spread means the objective's remaining lever is not corpus size, which closes milestone 2
 #     and 3 with a negative result rather than an unfinished one.
+# THE READOUT AND ITS POWER, calculated before the result so the verdict is not eyeballed. The instrument's
+# within-checkpoint range measures 0.0087 to 0.0364 depending on the step, so about 0.02 is typical, and for three
+# readings the range of a normal sample is about 1.69 standard deviations, giving sd ~ 0.012. The standard error of a
+# mean with 3 readings is then 0.012/sqrt(3) = 0.0068, and the standard error of a DIFFERENCE between two such means
+# is 0.0068*sqrt(2) = 0.0096, so a +0.02 difference is about 2.1 standard errors: detectable and marginal. With 5
+# readings it is about 2.7, so use -Repeats 5 for the verdict itself.
+#
+# Compare MEANS, never single readings. Three claims in this project were made and retracted on single readings, and
+# the same checkpoint read twice has moved by 0.0204, which is the size of the effect this comparison is looking for.
 param(
   [string]$Corpus = "data\kokoro_v4",
   [string]$Merged = "runs\v4_fixed",
