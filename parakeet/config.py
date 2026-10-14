@@ -16,9 +16,7 @@ from typing import Any, Dict, List, Optional, Type, TypeVar, Union, get_args, ge
 T = TypeVar("T")
 
 
-# --------------------------------------------------------------------------------------
 # Sub-configs
-# --------------------------------------------------------------------------------------
 @dataclass
 class AudioConfig:
     """Waveform / mel front-end used by every Parakeet variant."""
@@ -237,9 +235,7 @@ class TrainConfig:
     loss: LossConfig = field(default_factory=LossConfig)
 
 
-# --------------------------------------------------------------------------------------
 # Top level
-# --------------------------------------------------------------------------------------
 @dataclass
 class ParakeetConfig:
     """Full model specification.
@@ -283,9 +279,7 @@ class ParakeetConfig:
         return self
 
 
-# --------------------------------------------------------------------------------------
 # (De)serialisation helpers
-# --------------------------------------------------------------------------------------
 def _unwrap_optional(tp: Any) -> Any:
     origin = get_origin(tp)
     if origin is Union:

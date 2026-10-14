@@ -178,7 +178,7 @@ def main() -> int:
     cache = build_cache(cfg, out)
     print(f"  -> cache {cache} ({len(LatentShardDataset(cache))} items)")
 
-    # ---------------- run A: uninterrupted ----------------
+    # run A: uninterrupted
     _banner("run A: uninterrupted")
     torch.manual_seed(cfg.train.seed)
     weights_a, curve_a = train(cfg, cache, args.steps, out / "full")
@@ -186,7 +186,7 @@ def main() -> int:
           f"last loss {curve_a['loss'][-1]:.4f} | lr {curve_a['lr'][0]:.2e} -> "
           f"{curve_a['lr'][-1]:.2e}")
 
-    # ---------------- run B: crash at half, resume in a fresh everything ----------------
+    # run B: crash at half, resume in a fresh everything
     half = max(1, args.steps // 2)
     _banner(f"run B: crash after step {half}, then resume to {args.steps} from a fresh model")
     torch.manual_seed(cfg.train.seed)
@@ -202,7 +202,7 @@ def main() -> int:
         cfg, cache, args.steps, out / "part2", resume_from=str(ckpt), save_every=0
     )
 
-    # ---------------- compare ----------------
+    # compare
     _banner("comparison")
     worst = max(
         float((weights_a[k] - weights_b[k]).abs().max()) for k in weights_a

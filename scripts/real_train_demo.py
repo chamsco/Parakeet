@@ -109,7 +109,7 @@ def main() -> int:
         torch.from_numpy(sf.read(str(corpus / r["wav_path"]), dtype="float32")[0]) for r in records
     ]
 
-    # ---------------- 1. autoencoder on real speech ----------------
+    # 1. autoencoder on real speech
     ae_checkpoint = out / "autoencoder_last.pt"
     reusing = bool(args.reuse_ae and ae_checkpoint.exists())
     if reusing:
@@ -145,7 +145,7 @@ def main() -> int:
     strict["autoencoder_improved_on_real_speech"] = ae_after < ae_before
     strict["autoencoder_materially_improved"] = ae_after < 0.95 * ae_before
 
-    # ---------------- 2. cache from the trained autoencoder ----------------
+    # 2. cache from the trained autoencoder
     _banner("2/4 latent cache from the trained autoencoder")
     fit_latent_normalizer(model.latent_norm, model.autoencoder, source, cfg, max_batches=4)
     # via the library helper, not build_latent_cache directly: it resolves record paths against the
@@ -164,7 +164,7 @@ def main() -> int:
           f"latent {meta['latent_dim']}d")
     strict["cache_built_from_trained_autoencoder"] = len(dataset) > 0
 
-    # ---------------- 3. text side on real cached signals ----------------
+    # 3. text side on real cached signals
     _banner(f"3/4 text side on real teacher signals | {args.steps_text} steps")
     probes = [dataset[i] for i in range(len(dataset))]
     text_before = teacher_signal_loss(model, probes, cfg)
@@ -179,7 +179,7 @@ def main() -> int:
           f"({100 * (text_before - text_after) / text_before:+.1f}%) in {text_seconds:.0f}s")
     strict["text_side_learned_real_signals"] = text_after < text_before
 
-    # ---------------- 4. text -> audio against the real reference ----------------
+    # 4. text -> audio against the real reference
     _banner("4/4 text -> audio, rendered by the trained decoder")
     synth = Synthesizer(model, cfg, device="cpu", apply_phase_lock=True)
     mel = MelSpectrogram(cfg.audio)

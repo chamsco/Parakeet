@@ -33,7 +33,7 @@ class SpeechAutoencoder(nn.Module):
         self.latent_dim = cfg.latent_dim
         n_freq = audio.n_fft // 2 + 1
 
-        # ---- encoder (non-causal: it sees the whole utterance) ----
+        # encoder (non-causal: it sees the whole utterance)
         dims = list(cfg.encoder_dims)
         self.stem = nn.Conv1d(
             audio.n_mels, dims[0], cfg.kernel_size, padding=cfg.kernel_size // 2
@@ -49,7 +49,7 @@ class SpeechAutoencoder(nn.Module):
         self.encoder = nn.Sequential(*enc)
         self.to_latent = nn.Conv1d(dims[-1], cfg.latent_dim, 1)
 
-        # ---- decoder (causal: streaming capable) ----
+        # decoder (causal: streaming capable)
         conv_cls = CausalConv1d if cfg.causal_decoder else nn.Conv1d
         self.from_latent = nn.Conv1d(cfg.latent_dim, cfg.decoder_dim, 1)
         dilations = list(cfg.decoder_dilations)

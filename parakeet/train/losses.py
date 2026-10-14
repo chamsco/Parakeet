@@ -26,9 +26,7 @@ from ..audio.mel import MelSpectrogram
 from ..models.duration import durations_to_normalized
 
 
-# --------------------------------------------------------------------------------------
 # Reconstruction losses
-# --------------------------------------------------------------------------------------
 class MultiResolutionSTFTLoss(nn.Module):
     """Spectral-convergence + log-magnitude L1 over several STFT resolutions."""
 
@@ -110,9 +108,7 @@ class SpectralAnnealer:
         return w
 
 
-# --------------------------------------------------------------------------------------
 # Adversarial losses (HiFi-GAN style MPD/MSD)
-# --------------------------------------------------------------------------------------
 class PeriodDiscriminator(nn.Module):
     def __init__(self, period: int, channels: Sequence[int] = (32, 64, 128, 256)) -> None:
         super().__init__()
@@ -261,9 +257,7 @@ class AdversarialVocoderLoss(nn.Module):
         return adv, fm
 
 
-# --------------------------------------------------------------------------------------
 # Phase losses (Paradee's "buzz" fix, made trainable)
-# --------------------------------------------------------------------------------------
 def _band_bins(freqs: torch.Tensor, lo: float, hi: float) -> torch.Tensor:
     return (freqs >= lo) & (freqs <= hi)
 
@@ -316,9 +310,7 @@ def phase_lock_loss(
     )
 
 
-# --------------------------------------------------------------------------------------
 # Distilled teacher-signal losses (Tiny text side)
-# --------------------------------------------------------------------------------------
 @dataclass
 class DistillSignalWeights:
     duration: float = 1.0
@@ -393,9 +385,7 @@ class TextSideDistillLoss(nn.Module):
         return total, logs
 
 
-# --------------------------------------------------------------------------------------
 # Multi-teacher mixing
-# --------------------------------------------------------------------------------------
 class MultiTeacherMixer:
     """Turns a teacher mixture into **per-sample weights that actually reach the loss**.
 

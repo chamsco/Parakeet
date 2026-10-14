@@ -109,14 +109,12 @@ MINIMAX = TeacherSpec(
     model_id="speech-2.8-turbo",
 )
 
-# --------------------------------------------------------------------------------------
 # Synthetic fixtures
 #
 # These are NOT teachers.  They render deterministic, speech-like audio from the text so that the
 # whole data path -- corpus -> manifest -> latent cache -> training -> synthesis -- can be exercised
 # with no network access, no teacher weights and no heavy dependencies.  They are deliberately
 # absent from DEFAULT_MIX: a model trained on them is a plumbing test, never a speech model.
-# --------------------------------------------------------------------------------------
 STUB_LOW = TeacherSpec(
     name="stub_low",
     kind="local_fixture",
@@ -228,9 +226,7 @@ def check_teacher(name: str, acknowledge_restricted: bool = False) -> TeacherSpe
     return spec
 
 
-# --------------------------------------------------------------------------------------
 # backends
-# --------------------------------------------------------------------------------------
 class TeacherBackend:
     """Interface every teacher implements."""
 
@@ -836,9 +832,7 @@ def build_backend(name: str, **kwargs) -> TeacherBackend:
     return BACKENDS[name](**kwargs)
 
 
-# --------------------------------------------------------------------------------------
 # corpus writing
-# --------------------------------------------------------------------------------------
 def sha1_of_array(wav) -> str:
     """Content hash of a waveform, for corpus provenance (integrity, not security)."""
     import hashlib

@@ -28,9 +28,7 @@ from parakeet.data.teacher import TEACHERS
 from parakeet.models import build_model, count_parameters
 from parakeet.train.common import config_fingerprint, git_revision
 
-# --------------------------------------------------------------------------------------
 # claims: every advertised number, tied to the report that produced it
-# --------------------------------------------------------------------------------------
 CLAIMS: List[Dict[str, Any]] = [
     # Rounds 108-121.  These are the claims that bound what is *possible* from the data on hand, so they belong
     # next to the advertised numbers: the negative results are the most load-bearing things this project measured.
@@ -433,9 +431,7 @@ CLAIMS: List[Dict[str, Any]] = [
 ]
 
 
-# --------------------------------------------------------------------------------------
 # evaluation
-# --------------------------------------------------------------------------------------
 def _dig(payload: Any, path: str) -> Any:
     for part in path.split("."):
         if isinstance(payload, dict):
@@ -570,9 +566,7 @@ def evaluate(claim: Dict[str, Any], reports_root: Path = ROOT) -> Dict[str, Any]
     return result
 
 
-# --------------------------------------------------------------------------------------
 # card rendering
-# --------------------------------------------------------------------------------------
 def _teacher_table() -> str:
     lines = [
         "| teacher | kind | code licence | weights / output licence | trainable? | restricted |",

@@ -139,14 +139,14 @@ def main() -> int:
     torch.set_num_threads(max(1, torch.get_num_threads()))
     t_start = time.perf_counter()
 
-    # ---------------- corpus: same texts, three voices ----------------
+    # corpus: same texts, three voices
     _banner(f"corpus: {len(TEXTS)} texts x {len(VOICES)} voices = {len(TEXTS) * len(VOICES)} utterances")
     manifest = _corpus(cfg, out / "corpus", TEXTS)
     records = [json.loads(l) for l in manifest.read_text(encoding="utf-8").splitlines() if l.strip()]
     manifest_voices = {r["voice"] for r in records}
     print(f"  -> {len(records)} records | voices {sorted(manifest_voices)}")
 
-    # ---------------- autoencoder fixture + cache ----------------
+    # autoencoder fixture + cache
     import soundfile as sf
 
     wavs = [torch.from_numpy(sf.read(str(out / "corpus" / r["wav_path"]), dtype="float32")[0])
@@ -179,14 +179,14 @@ def main() -> int:
     meta = json.loads((cache / "cache_meta.json").read_text(encoding="utf-8"))
     print(f"  -> cache voice_names {meta['voice_names']}")
 
-    # ---------------- train with and without voice conditioning ----------------
+    # train with and without voice conditioning
     _banner(f"train the text side twice from the same init ({args.steps_text} steps each)")
     model_voice, before_v, after_v = train(cfg, cache, args.steps_text, args.batch_size, True)
     model_ctrl, before_c, after_c = train(cfg, cache, args.steps_text, args.batch_size, False)
     print(f"  with voice : teacher-signal loss {before_v:.4f} -> {after_v:.4f}")
     print(f"  control    : teacher-signal loss {before_c:.4f} -> {after_c:.4f}")
 
-    # ---------------- per-voice pitch for one fixed text ----------------
+    # per-voice pitch for one fixed text
     _banner("predicted F0 for the SAME text under each voice index")
     ids = torch.tensor(tokenizer.encode(TEXTS[0], add_special=False))
     f0_voice = per_voice_f0(model_voice, ids, len(VOICES))
@@ -198,7 +198,7 @@ def main() -> int:
     span_ctrl = max(f0_ctrl) - min(f0_ctrl)
     print(f"  span across voices: with conditioning {span_voice:.1f} Hz | control {span_ctrl:.1f} Hz")
 
-    # ---------------- audio per voice ----------------
+    # audio per voice
     synth = Synthesizer(model_voice, cfg, device="cpu", apply_phase_lock=True)
     for i, name in enumerate(VOICES):
         wav = synth.synthesize(TEXTS[0], voice=i, seed=0)

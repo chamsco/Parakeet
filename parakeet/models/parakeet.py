@@ -108,9 +108,7 @@ def denormalize_voice(model: nn.Module, latent: torch.Tensor, voice: Optional[to
     return out.squeeze(0) if squeeze else out
 
 
-# --------------------------------------------------------------------------------------
 # Tiny: Paradee-style two-half distillation
-# --------------------------------------------------------------------------------------
 class ParakeetTiny(nn.Module):
     variant = "tiny"
 
@@ -247,9 +245,7 @@ class ParakeetTiny(nn.Module):
         return self.text_side(ids, mask, kw.get("voice"))
 
 
-# --------------------------------------------------------------------------------------
 # Small: SupertonicTTS-style flow matching with PilotTTS conditioning
-# --------------------------------------------------------------------------------------
 class ParakeetFlow(nn.Module):
     variant = "small"
 
@@ -616,7 +612,6 @@ class ParakeetFlow(nn.Module):
         return self.conditions(ids, mask, **kw)
 
 
-# --------------------------------------------------------------------------------------
 def build_model(cfg: ParakeetConfig) -> nn.Module:
     cfg.validate()
     if cfg.variant == "tiny":

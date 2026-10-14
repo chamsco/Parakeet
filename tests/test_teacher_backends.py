@@ -29,9 +29,7 @@ from parakeet.data.teacher import (
     TeacherLicenseError,
 )
 
-# --------------------------------------------------------------------------------------
 # Orpheus
-# --------------------------------------------------------------------------------------
 N_CODEBOOKS = 7
 CODEBOOK_SIZE = 4096
 AUDIO_BASE = 128266
@@ -196,9 +194,7 @@ def test_orpheus_non_audio_tokens_are_filtered_out():
     assert backend.snac.levels[0].shape == (1, 1), "only in-range audio tokens count"
 
 
-# --------------------------------------------------------------------------------------
 # Kokoro
-# --------------------------------------------------------------------------------------
 class _StubKokoroPipeline:
     """Mimics `KPipeline.__call__`, which yields (graphemes, phonemes, audio) triples."""
 
@@ -248,9 +244,7 @@ def test_kokoro_durations_pass_through_and_degrade_to_none():
     assert backend.durations("hello") is None, "must degrade rather than raise"
 
 
-# --------------------------------------------------------------------------------------
 # MiniMax (legally gated; the code path still has to be correct)
-# --------------------------------------------------------------------------------------
 def _wav_bytes(samples, sr=32000):
     buffer = io.BytesIO()
     with wave.open(buffer, "wb") as wf:

@@ -68,7 +68,7 @@ def main() -> int:
     t_start = time.perf_counter()
     strict: Dict[str, bool] = {}
 
-    # ---------------- 1. teacher ----------------
+    # 1. teacher
     spec = check_teacher("kokoro")
     backend = build_backend("kokoro")
     _banner(f"1/4 real teacher: {spec.name} ({spec.kind}) via {type(backend).__name__}")
@@ -95,7 +95,7 @@ def main() -> int:
           f"(RTF {synth_s / max(total_audio, 1e-9):.2f})")
     strict["corpus_has_real_audio"] = len(records) > 0 and total_audio > 5.0
 
-    # ---------------- 2. signal statistics on real speech ----------------
+    # 2. signal statistics on real speech
     import soundfile as sf
 
     wavs = [torch.from_numpy(sf.read(str(out / "corpus" / r["wav_path"]), dtype="float32")[0])
@@ -139,7 +139,7 @@ def main() -> int:
     strict["threshold_fix_helps_real_speech"] = voiced_default > voiced_old
     strict["f0_is_plausible_for_speech"] = 70.0 < statistics.median(f0s) < 350.0
 
-    # ---------------- 3. curation with the published gates ----------------
+    # 3. curation with the published gates
     _banner("4/4 curation (published thresholds) + latent cache")
 
     def load_wav(rel: str):

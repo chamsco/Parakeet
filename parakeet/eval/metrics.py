@@ -32,9 +32,7 @@ from ..config import ParakeetConfig
 from ..inference.phase_lock import phase_coherence
 
 
-# --------------------------------------------------------------------------------------
 # dependency-free diagnostics
-# --------------------------------------------------------------------------------------
 def _align(a: torch.Tensor, b: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     n = min(a.shape[-1], b.shape[-1])
     return a.reshape(-1)[:n], b.reshape(-1)[:n]
@@ -100,9 +98,7 @@ def buzz(wav: torch.Tensor, cfg: ParakeetConfig) -> float:
     )
 
 
-# --------------------------------------------------------------------------------------
 # optional heavy metrics
-# --------------------------------------------------------------------------------------
 @dataclass
 class OptionalMetric:
     value: Optional[float]
@@ -396,9 +392,7 @@ def speaker_similarity(
     return OptionalMetric(None, False, "funasr present but CAM++ checkpoint not configured")
 
 
-# --------------------------------------------------------------------------------------
 # real-time factor
-# --------------------------------------------------------------------------------------
 @dataclass
 class RTFResult:
     rtf: float
@@ -442,9 +436,7 @@ def measure_rtf(
     )
 
 
-# --------------------------------------------------------------------------------------
 # report
-# --------------------------------------------------------------------------------------
 @dataclass
 class EvalReport:
     n_utterances: int = 0

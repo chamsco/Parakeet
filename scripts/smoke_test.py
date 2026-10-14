@@ -84,7 +84,7 @@ def run_variant(cfg_path: str, stages, steps: int, out_dir: Path, batch_size: in
         if not ok:
             raise SystemExit(f"stage {stage} produced a non-finite loss")
 
-    # ---------------- synthesis + phase lock + int8 ----------------
+    # synthesis + phase lock + int8
     _banner(f"{cfg.name}: synthesis")
     synth = Synthesizer(model, cfg, device="cpu", apply_phase_lock=False)
     text = "hello world, this is a parakeet smoke test."

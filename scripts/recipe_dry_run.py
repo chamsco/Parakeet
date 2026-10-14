@@ -120,7 +120,7 @@ def main() -> int:
     t_start = time.perf_counter()
     strict: dict[str, bool] = {}
 
-    # ---------------- 1. teacher corpus ----------------
+    # 1. teacher corpus
     mix = resolve_mix(args.teachers.split(","))
     prompts = PROMPTS[: args.prompts]
     _banner(f"1/6 teacher corpus | mixture {mix} | {len(prompts)} prompts")
@@ -151,7 +151,7 @@ def main() -> int:
     cfg = cfg.validate()
     print(f"  -> voices present: {corpus_voices} (n_voices={cfg.n_voices})")
 
-    # ---------------- 2. autoencoder on the corpus ----------------
+    # 2. autoencoder on the corpus
     _banner(f"2/6 autoencoder | {args.steps_ae} steps on the corpus audio")
     import soundfile as sf
 
@@ -182,7 +182,7 @@ def main() -> int:
     print(f"  -> reconstruction log-mel L1 {ae_before:.4f} -> {ae_after:.4f}")
     strict["autoencoder_improved"] = ae_after < ae_before
 
-    # ---------------- 3. curation + latent cache ----------------
+    # 3. curation + latent cache
     _banner("3/6 curation (P1 gates) + latent cache")
     import soundfile as sf
 
@@ -252,7 +252,7 @@ def main() -> int:
             "ref_mel" in batch and "ref_mel_neg" in batch and bool(batch["ref_mask"].any())
         )
 
-    # ---------------- 4. the student stage ----------------
+    # 4. the student stage
     if args.stage == "flow":
         _banner(f"4/6 flow | {args.steps_student} steps with paired references")
         fixed = loader()
@@ -276,7 +276,7 @@ def main() -> int:
               f"final stage loss {float(logs.get('loss', float('nan'))):.4f}")
         strict["student_improved"] = text_after < text_before
 
-    # ---------------- 5. synthesis ----------------
+    # 5. synthesis
     _banner("5/6 synthesis from text")
     synth = Synthesizer(model, cfg, device="cpu", apply_phase_lock=True)
     text = prompts[0]
@@ -330,7 +330,7 @@ def main() -> int:
               f"estimator is dominated by x0 -- layer_scale_init 1e-6)")
         strict["reference_changes_the_conditioning"] = cond_delta > 1e-3 and cond_vs_null > 1e-3
 
-    # ---------------- 6. report ----------------
+    # 6. report
     _banner("6/6 summary")
     student_before, student_after = (
         (float(before), float(after)) if flow_mode else (text_before, text_after)

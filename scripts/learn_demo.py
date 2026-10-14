@@ -92,7 +92,7 @@ def main() -> int:
     print(f"model: {cfg.name} | {count_parameters(model)/1e6:.3f}M params")
     t0 = time.perf_counter()
 
-    # ---------------- 1. autoencoder ----------------
+    # 1. autoencoder
     wave_source = SyntheticSpeechBatchSource(corpus, batch_size=args.batch_size, seed=cfg.train.seed)
     ae_before = ae_reconstruction_l1(model, [u.wav for u in corpus], cfg)
     run_stage("autoencoder", cfg, model=model, batches=wave_source,
@@ -108,7 +108,7 @@ def main() -> int:
     # snapshot: lets the end-to-end comparison isolate the *distilled* halves
     post_ae_state = copy.deepcopy(model.state_dict())
 
-    # ---------------- 2. text side ----------------
+    # 2. text side
     targets = token_targets_from_corpus(model, corpus, cfg, tokenizer)
     text_before = teacher_signal_loss(model, targets, cfg)
     text_logs = run_stage(
@@ -120,7 +120,7 @@ def main() -> int:
     print(f"[distill-text]  teacher-signal loss {text_before:.4f} -> {text_after:.4f} "
           f"({100 * (1 - text_after / text_before):.1f}% better)")
 
-    # ---------------- 3. decoder on teacher-shaped latents ----------------
+    # 3. decoder on teacher-shaped latents
     decoder_logs = run_stage(
         "distill-decoder", cfg, model=model,
         batches=TokenTargetBatchSource(targets, "distill-decoder", batch_size=args.batch_size,
@@ -131,7 +131,7 @@ def main() -> int:
           f"spec {float(decoder_logs.get('spectral', float('nan'))):.4f} "
           f"adv {float(decoder_logs.get('adv', float('nan'))):.4f}")
 
-    # ---------------- 4. end-to-end ----------------
+    # 4. end-to-end
     baseline = build_model(cfg)
     baseline.load_state_dict(post_ae_state)
     baseline.eval()
@@ -143,7 +143,7 @@ def main() -> int:
     print(f"[durations]     mean |pred - true| = {dur_mae:.2f} frames "
           f"({dur_mae * cfg.audio.hop_length / cfg.audio.sample_rate * 1000:.0f} ms)")
 
-    # ---------------- 5. audio + phase lock ----------------
+    # 5. audio + phase lock
     ids = targets[0]["ids"][None]
     mask = torch.ones_like(ids, dtype=torch.bool)
     wav_gen = model.synthesize(ids, mask)
@@ -157,7 +157,7 @@ def main() -> int:
     write_wav(out / "baseline_untrained_text.wav", baseline.synthesize(ids, mask), cfg.audio.sample_rate)
     print(f"[phase-lock]    coherence 2-8k {coh_raw:.4f} -> {coh_locked:.4f}")
 
-    # ---------------- 6. report ----------------
+    # 6. report
     checks = {
         "autoencoder_learned": ae_after < 0.90 * ae_before,
         "text_side_learned": text_after < 0.50 * text_before,

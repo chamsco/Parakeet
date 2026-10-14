@@ -59,9 +59,7 @@ from .losses import (
 )
 
 
-# --------------------------------------------------------------------------------------
 # individual steps (pure functions so they can be unit-tested without a data pipeline)
-# --------------------------------------------------------------------------------------
 def autoencoder_step(
     cfg: ParakeetConfig,
     model: nn.Module,
@@ -250,9 +248,7 @@ def tiny_text_step(
     return total, logs
 
 
-# --------------------------------------------------------------------------------------
 # generic loop
-# --------------------------------------------------------------------------------------
 def text_audio_step(
     cfg: ParakeetConfig,
     model: nn.Module,

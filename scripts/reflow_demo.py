@@ -163,7 +163,7 @@ def main() -> int:
     print(f"params: {sum(p.numel() for p in model.parameters())/1e6:.3f}M | "
           f"VF {sum(p.numel() for p in model.vf.parameters())/1e6:.3f}M")
 
-    # ---------------- autoencoder fixture + latent targets ----------------
+    # autoencoder fixture + latent targets
     wave_source = SyntheticSpeechBatchSource(corpus, batch_size=args.batch_size, seed=cfg.train.seed)
     run_stage("autoencoder", cfg, model=model, batches=wave_source, max_steps=args.steps_ae, out_dir=str(out))
     fit_latent_normalizer(model.latent_norm, model.autoencoder, wave_source, cfg, max_batches=6)
@@ -174,7 +174,7 @@ def main() -> int:
     print(f"[fixture] autoencoder trained {args.steps_ae} steps, normaliser fitted "
           f"({time.perf_counter() - t_start:.0f}s elapsed)")
 
-    # ---------------- flow matching ----------------
+    # flow matching
     opt = build_optimizer(model, cfg.train.lr, cfg.train.weight_decay)
     ema = EMAModel(model, cfg.train.ema_decay)
     flow_losses: List[float] = []
@@ -199,7 +199,7 @@ def main() -> int:
     naive.load_state_dict(copy.deepcopy(model.state_dict()))
     naive.eval()
 
-    # ---------------- reflow ----------------
+    # reflow
     reflow_losses: List[float] = []
     for step in range(args.steps_reflow):
         batch = source()
@@ -213,7 +213,7 @@ def main() -> int:
           f"loss {reflow_losses[0]:.4f} -> {sum(reflow_losses[-10:]) / max(1, len(reflow_losses[-10:])):.4f} "
           f"| {time.perf_counter() - t_start:.0f}s elapsed")
 
-    # ---------------- evaluation on fixed batches ----------------
+    # evaluation on fixed batches
     _banner("comparison from identical noise and conditioning")
     mel = MelSpectrogram(cfg.audio)
     eval_batches = []
@@ -261,7 +261,7 @@ def main() -> int:
     def mean(key: str) -> float:
         return sum(r[key] for r in rows) / max(1, len(rows))
 
-    # ---------------- timing ----------------
+    # timing
     timing_batch = eval_batches[0]
     t0 = time.perf_counter()
     endpoint(teacher, timing_batch, args.nfe_reference)
@@ -300,7 +300,6 @@ def main() -> int:
         "items": rows,
         "seconds_total": time.perf_counter() - t_start,
     }
-    # ---------------------------------------------------------------------------------
     # What this experiment can and cannot conclude.
     #
     # It validates the *sampler*: from identical noise and conditioning, does a distilled 2-step
@@ -312,7 +311,6 @@ def main() -> int:
     # steps the flow is nowhere near converged -- the NFE-32 endpoint itself sits far from the data
     # latent, so "closer to the data" measures model error, not sampler error, and reflow faithfully
     # reproduces a teacher that is still wrong.  Those numbers are reported as diagnostics.
-    # ---------------------------------------------------------------------------------
     checks = {
         "reflow_beats_naive_vs_teacher": mean("mse_reflow2_vs_ref") < mean("mse_naive2_vs_ref"),
         "reflow_matches_teacher_discretization": mean("mse_reflow2_vs_ref")

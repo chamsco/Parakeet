@@ -151,7 +151,7 @@ def main() -> int:
           f"vector-field temporal context: {rf} frames each side (~"
           f"{rf / (cfg.audio.sample_rate / cfg.audio.hop_length / cfg.flow.compress):.2f}s of audio)")
 
-    # ---------------- fixture ----------------
+    # fixture
     wave_source = SyntheticSpeechBatchSource(corpus, batch_size=2, seed=cfg.train.seed)
     run_stage("autoencoder", cfg, model=model, batches=wave_source, max_steps=args.steps_ae, out_dir=str(out))
     fit_latent_normalizer(model.latent_norm, model.autoencoder, wave_source, cfg, max_batches=4)
@@ -185,7 +185,7 @@ def main() -> int:
     print(f"[fixture] AE {args.steps_ae} steps + flow {args.steps_flow} steps | "
           f"final flow loss {float(loss.detach()):.4f} | {time.perf_counter() - t0:.0f}s elapsed")
 
-    # ---------------- 1. agreement ----------------
+    # 1. agreement
     _banner("agreement: blockwise vs full-sequence (identical noise and conditioning)")
     with torch.no_grad():
         memory, memory_mask, _ = model.conditions(ids, text_mask, log_mel)
@@ -286,7 +286,7 @@ def main() -> int:
             print(f"    {name:16s} latent MSE {entry['mse_vs_full']:.4f} | cosine "
                   f"{entry['cosine_vs_full']:+.4f}")
 
-    # ---------------- 2. TTFA scaling ----------------
+    # 2. TTFA scaling
     _banner("time to first audio: blockwise streaming vs one-shot")
     synth = Synthesizer(model, cfg, device="cpu", apply_phase_lock=False)
     timings = []
@@ -332,7 +332,7 @@ def main() -> int:
               f"{row['ttfa_speedup']:5.2f}x | {row['n_chunks']:3d} chunks | "
               f"total {total_stream:.3f}s vs {ttfa_one_shot:.3f}s")
 
-    # ---------------- 3. block-size trade-off ----------------
+    # 3. block-size trade-off
     _banner("streaming trade-off: block size vs TTFA vs total compute (longest utterance)")
     longest = args.lengths[-1]
     text = "the quick brown fox jumps over the lazy dog"
@@ -366,7 +366,7 @@ def main() -> int:
     print("  (streaming re-samples the context/lookahead band for every block, so it trades total "
           "compute for latency; larger blocks reduce that overhead)")
 
-    # ---------------- 4. chunked phase lock ----------------
+    # 4. chunked phase lock
     _banner("chunked phase-lock filter vs offline filter")
     with torch.no_grad():
         wav = wav_full
@@ -397,7 +397,7 @@ def main() -> int:
           f"{phase['waveform_cosine']:+.4f} | coherence {phase['coherence_offline']:.4f} vs "
           f"{phase['coherence_chunked']:.4f}")
 
-    # ---------------- report ----------------
+    # report
     def row_for(name: str) -> dict:
         return next(r for r in rows if r["variant"] == name)
 

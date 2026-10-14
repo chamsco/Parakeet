@@ -27,9 +27,7 @@ from ..config import FlowConfig
 from .blocks import ChannelLayerNorm, ConvNeXtBlock, CrossAttention, TimeEmbedding, sequence_mask
 
 
-# --------------------------------------------------------------------------------------
 # temporal (de)compression
-# --------------------------------------------------------------------------------------
 def fold_time(x: torch.Tensor, k: int) -> torch.Tensor:
     """``(B, C, T) -> (B, C*k, T//k)`` (drop the remainder)."""
     if k == 1:
@@ -52,9 +50,7 @@ def unfold_time(x: torch.Tensor, k: int, t_out: Optional[int] = None) -> torch.T
     return x
 
 
-# --------------------------------------------------------------------------------------
 # vector field estimator
-# --------------------------------------------------------------------------------------
 class FlowBlock(nn.Module):
     """ConvNeXt mixing + cross-attention into (text || speaker/style) memory."""
 
@@ -130,9 +126,7 @@ class ConvNeXtVFEstimator(nn.Module):
         return self.out_proj(self.out_norm(h))
 
 
-# --------------------------------------------------------------------------------------
 # flow matching utilities
-# --------------------------------------------------------------------------------------
 def make_xt(x1: torch.Tensor, x0: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
     """Rectified-flow interpolation: ``x_t = (1-t) x0 + t x1`` (t=0 noise, t=1 data)."""
     while t.dim() < x1.dim():
@@ -234,9 +228,7 @@ def consistency_sample(
     )
 
 
-# --------------------------------------------------------------------------------------
 # streaming sampling
-# --------------------------------------------------------------------------------------
 def vf_context_frames(model: ConvNeXtVFEstimator) -> int:
     """Frames of temporal context the vector field reads on each side.
 

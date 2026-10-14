@@ -102,9 +102,7 @@ def test_compare_fp32_int8_reports_deviation(fast_cfg, tmp_path):
     assert np.isfinite(report["int8_max_phase_deviation_rad"])
 
 
-# ---------------------------------------------------------------------------------------
 # text side: this is where the legacy exporter silently produces a single-length graph
-# ---------------------------------------------------------------------------------------
 def test_text_side_onnx_matches_pytorch_across_token_lengths(fast_cfg, tmp_path):
     pytest.importorskip("onnxscript", reason="dynamic-token export needs the dynamo exporter")
     from parakeet.inference.onnx_export import OnnxTextSide, _TextSide, export_text_side_onnx

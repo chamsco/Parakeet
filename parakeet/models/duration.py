@@ -201,9 +201,7 @@ class CausalDurationUpsampler(nn.Module):
         x, _ = align_tokens_to_frames(tokens, durations)
         return self.smooth(x.transpose(1, 2)).transpose(1, 2)
 
-# --------------------------------------------------------------------------------------
 # duration-target normalisation
-# --------------------------------------------------------------------------------------
 #: log-duration statistics, **measured on the real Kokoro corpus** (round 19):
 #: 1141 tokens, mean 1.728, std 0.390 (median 1.609).  Durations were the one prosody target still
 #: regressed in raw log space while F0 and energy had been normalised to O(1) since round 2 -- the

@@ -32,9 +32,7 @@ import torch
 import torch.nn.functional as F
 
 
-# --------------------------------------------------------------------------------------
 # configuration
-# --------------------------------------------------------------------------------------
 @dataclass
 class CurateConfig:
     min_duration_s: float = 3.0          # [published] CosyVoice 3: segments < 30 s
@@ -61,9 +59,7 @@ class CurateConfig:
     silence_floor_db: float = 40.0       # [proposed] frame energy below peak-40 dB counts as silence
 
 
-# --------------------------------------------------------------------------------------
 # objective measurements
-# --------------------------------------------------------------------------------------
 @dataclass
 class AudioQuality:
     duration_s: float
@@ -226,9 +222,7 @@ def apply_gates(q: AudioQuality, cfg: CurateConfig) -> AudioQuality:
     return q
 
 
-# --------------------------------------------------------------------------------------
 # text / alignment stages
-# --------------------------------------------------------------------------------------
 def word_error_rate(reference: str, hypothesis: str) -> float:
     """Levenshtein WER on whitespace tokens (no external dependency)."""
     ref = _tokens(reference)
@@ -315,9 +309,7 @@ def normalize_loudness(wav: torch.Tensor, peak_factor: float = 0.6) -> torch.Ten
     return x / peak * peak_factor
 
 
-# --------------------------------------------------------------------------------------
 # manifest driver
-# --------------------------------------------------------------------------------------
 @dataclass
 class CurationReport:
     n_total: int = 0
