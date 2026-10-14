@@ -4505,7 +4505,44 @@ representation (the trained autoencoder's 24-dim latent at 93.75 Hz) on **this**
 autoencoder would have a different ceiling, which is itself an argument that the *representation* deserves
 attention. The 0.845 ceiling says the task is possible; it does not say this model or this budget reaches it.
 
-## 122. Environment notes
+## 122. The predictable part decodes — but averaging latents costs 0.3 WER (round 135)
+
+§121 measured the reliability: two renditions of the same words agree at ρ 0.714, so their **mean** is the component
+any text-conditioned model could aim at, and √0.714 = 0.845 is the ceiling. That ceiling is a *correlation*; whether
+the target is **intelligible** is a question about audio, so all three were decoded through the same frozen
+autoencoder and scored by the same recogniser:
+
+| variant | WER |
+|---|---|
+| rendition A | 0.209 |
+| rendition B | 0.395 |
+| **shared mean** | **0.512** |
+| teacher control | 0.174 |
+
+**Two conclusions, pointing in opposite directions:**
+
+* **Averaging latents degrades the target.** The mean decodes worse than either rendition (0.512 vs 0.209), so it
+  sits off the autoencoder's manifold — the classic "the mean of two latents is not a latent". "Train on the shared
+  component" is therefore **not a free win**, which is worth knowing before spending CPU on it.
+* **But it is not worthless, and my first verdict said it was.** 0.512 is half the words, against the **WER 1.000**
+  this project's models actually produce. A model that hit the shared component exactly would be a large, measurable
+  improvement. The honest word is **QUALIFIED**: the shared component is a real *floor* for that route, just not an
+  ideal target.
+
+The correction matters for what it prevents: *"CLOSED for this method"* would have written off a route whose measured
+floor is **five times better** than the current model, on the strength of a comparison between the target and a
+**rendition** — and a rendition is not the thing being predicted.
+
+**A general result for this project:** latents that are not exact realisations of the autoencoder's encoder —
+corrupted, interpolated, averaged, or predicted — decode worse than their correlation with a real latent suggests.
+That is a caution for every "manufacture a latent and decode it" experiment here, **including round 37's ρ
+calibration**, which used exactly that technique.
+
+**Method note.** The first version of this script passed each clip as its **own** control, which makes the control
+gate vacuous and *hides* the number whenever a clip is poor — the failure mode the control exists to prevent. Fixed
+to use the teacher's audio from the manifest.
+
+## 123. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
