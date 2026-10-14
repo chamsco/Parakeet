@@ -5288,7 +5288,34 @@ remaining `reflow` is that docstring.
 20 claims on its own record and still passed one that a single `grep` refutes, which is the argument for checking a claim
 against the code before acting on it even when a second reviewer agrees.
 
-## 141. Environment notes
+## 141. The best model-level WER on record is 0.667, not 1.000 (round 152)
+
+This started as a check that the 0.512 in §122 is a **target's** decode WER and not a model's, which it is: that number
+is what the shared-mean latent decodes to, a floor for a route rather than anything a model produced. Checking it
+properly meant reading every WER in the committed evidence bundle, and the survey corrected a claim I was carrying.
+
+**Models cluster at 1.000**, exactly, in most files. But three are better, and one of them by a lot:
+
+| evidence | model WER | what it is |
+|---|---|---|
+| `objective_ab.json` | **0.6667** | text side trained **through the decoder** (a mel/audio loss), 2 400 steps, teacher control 0.0 in the same file |
+| `text_diversity_ab.json` | 0.9972 | the 185-prompt arm, against 1.000 for the 47-prompt arm |
+| `objective_fit_ab.json` | 0.9943 | the mean-invariant term's run, **on training prompts**, so not a capability |
+
+And the worse end, for scale: the ladder arm 1.393, the rate-1 token path 2.204, the seam-off student 2.796.
+
+**Two consequences.** The claim "every model here reads WER 1.000" is wrong in one direction and right in the one that
+matters: it understates the project's best result, and every one of those models is still unintelligible. The best
+measured objective is not the one this session's runs use. `objective_ab` trained the text side through the decoder and
+reached **0.667**, two-thirds of words wrong, against 1.000 for the same budget against a latent L1 — a real,
+already-measured difference in the objective rather than the corpus.
+
+That is deliberately **not** folded into the milestone-3 comparison: changing the corpus *and* the objective at once
+would make the result unattributable, and the corpus question has its own pre-registered prediction. It is recorded
+here so the final statement of what this project achieved does not understate it, and so the objective question
+(through-decoder against latent L1) is visible as an open, cheap, already-directional one.
+
+## 142. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
