@@ -12,20 +12,23 @@
 # does matter after all; inside the spread means it does not, and milestones 2 and 3 close with a negative result rather
 # than an open one.
 #
-# WHERE THE COMPARISON IS FAIR, because the two runs have different step budgets and therefore different schedules.
-# The comparison model ran 20000 steps with warmup 1000, so its cosine runs from step 1000 to 20000. The new one runs
-# 10000 with warmup clamped to 500, so its cosine runs from 500 to 10000. The fraction of peak learning rate at matched
-# steps is therefore:
+# WHERE THE COMPARISON IS FAIR. The two runs have different step budgets, so their schedules differ, and what decides
+# what a model has learned by step t is CUMULATIVE learning-rate exposure, the area under the schedule, not the
+# instantaneous fraction. Measured, in units of peak-LR x steps:
 #
-#   step 1000   base 1.00   new 0.99
-#   step 2000   base 0.99   new 0.95
-#   step 3000   base 0.97   new 0.84
-#   step 4000   base 0.95   new 0.71
-#   step 5000   base 0.90   new 0.54
+#   step   baseline   new      ratio
+#    500      125.2    250.5   2.00x
+#   1000      500.5    749.4   1.50x
+#   2000     1498.2   1720.1   1.15x
+#   3000     2482.4   2612.8   1.05x
+#   4000     3439.7   3385.0   0.98x
+#   5000     4357.8   4007.1   0.92x
 #
-# So steps 1000 to 3000 are a fair comparison and steps 4000 and 5000 handicap the new arm by 24 and 36 points of peak
-# learning rate. The verdict should be read on 1000 to 3000, and any win the new arm shows there is conservative. The
-# endpoints are not comparable at all: different budgets, so a difference there mixes text with training compute.
+# So the new run has twice the exposure at step 500 and 1.5x at step 1000, and the two are MATCHED at step 3000, which
+# is exactly the window the prediction was registered on. The first held-out reading, at step 1000, is 0.1792 against
+# the baseline's 0.0908, and it is NOT the verdict: that point carries a 1.5x exposure advantage. Beyond step 4000 the
+# new run is handicapped below 1x, so the endpoints are not comparable at all, because different budgets mix text with
+# training compute.
 #
 # AND THE COMPARISON IS TEXT ONLY, verified rather than assumed. The base cache carries 21 voices; the expansion's 11
 # Kokoro voices are all among them, adding ZERO new voices. So the merged corpus increases distinct prompts from 3744 to
