@@ -108,10 +108,12 @@ the measured reason, in order of discovery:
   folded rate, ConvNeXt blocks, character-level text, implicit alignment, `Ke = 4` and NFE 32 all line up,
   and this model is *smaller* (21.3M against 44M). The axis that does not line up was **945 hours of
   generative training data against ~1.9 h here** — which is why the work since has been generating more
-  teacher audio with the local, permissive teacher rather than searching for a missing trick. That corpus is
-  now **~8 h across ~4 500 utterances** (a ~4× increase), built with `scripts/expand_corpus.py`, which
-  caches, merges and per-voice-normalises in one command and fails loudly on each of the ways an expansion
-  went wrong before. See [docs/PAPER_COMPARISON.md](docs/PAPER_COMPARISON.md).
+  teacher audio with the local, permissive teacher rather than searching for a missing trick. That corpus is now
+  **about 12.3 h over 8 890 utterances and 19 voices**, of which **about 8 100 distinct prompts** are the text the
+  model has actually seen, built with `scripts/expand_corpus.py`, which caches, merges and per-voice-normalises in one
+  command and fails loudly on each of the ways an expansion went wrong before. **That corpus change is the one
+  intervention in this project that has moved a quality number**, and the size of the move is in the next bullet. See
+  [docs/PAPER_COMPARISON.md](docs/PAPER_COMPARISON.md).
 * **what is already solved:** size and speed. **9.63M parameters**, **42× real time** in fp32 and **85×**
   in int8 dynamic quantisation at **20.3 MB** with waveform cosine 0.9952; the full int8 ONNX pipeline runs
   at **103× real time**. The audio autoencoder's own round trip is *perfect* (WER 0.000), so the codec and
