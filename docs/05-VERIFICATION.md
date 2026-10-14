@@ -5238,18 +5238,26 @@ baseline run to free CPU:
 
 | step | no contrast | contrast live | difference | largest spread | verdict |
 |---|---|---|---|---|---|
-| 1 000 | 0.0889 | 0.1172 | **+0.0283** | 0.0194 | **SEPARATED** |
-| 2 000 | 0.1794 | 0.1841 | +0.0046 | 0.0075 | inside the spread |
-| 3 000 | 0.2074 | 0.2135 | +0.0061 | 0.0069 | inside the spread |
+| 1 000 | 0.0858 | 0.1198 | **+0.0340** | 0.0087 | **SEPARATED** |
+| 2 000 | 0.1715 | 0.1851 | +0.0135 | 0.0242 | inside the spread |
+| 3 000 | 0.2016 | 0.2077 | +0.0061 | 0.0309 | inside the spread |
+| 4 000 | 0.2277 | 0.2268 | **−0.0010** | 0.0364 | inside the spread |
 
-Three independent measurements now separate at step 1 000 and three agree that the arms are indistinguishable from
-step 2 000 onward. **The mean-invariant latent term is an early-training accelerator and nothing more**, which is why
-it is not being added to the token route's config: it would cost per-step compute and change the plateau not at all.
+**The advantage decays monotonically to zero**: +0.0340, +0.0135, +0.0061, −0.0010. Three independent measurements
+separate at step 1 000 and all of them agree the arms are indistinguishable from step 2 000 onward, with the contrast
+arm fractionally *behind* by step 4 000. **The mean-invariant latent term is an early-training accelerator and nothing
+more**, which is why it is not being added to the token route's config: it would cost per-step compute and change the
+plateau not at all.
+
+Note also that the within-checkpoint spread is not constant: it runs from 0.0087 at step 1 000 to 0.0364 at step
+4 000, so the resolution is worse at the points that matter most for a ceiling claim. That is the reason the plateau
+bound was measured with its own repeats over steps 3 000–7 000 rather than inferred from any single point.
 
 The baseline run (`runs/text_long384`) was stopped at step 8 900 after this measurement, and the reason is the
 measurement itself: its remaining 11 100 steps would have tested the annealed endpoint on the **base** corpus, while
 `scripts/run_milestone3.ps1` trains to 10 000 steps with the schedule annealing over its own budget on the **enlarged**
-corpus, which answers the same question and one more. Stopping it took the contrast arm from 1.80 s/step to 0.80.
+corpus, which answers the same question and one more. Stopping it took the contrast arm from 1.80 s/step to 0.80, and
+the contrast arm was itself stopped at step 4 100 once its advantage was measured to be gone.
 
 ## 140. Environment notes
 
