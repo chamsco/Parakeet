@@ -112,11 +112,16 @@ def main() -> int:
     counts = merge_caches(base, cache, out)
     print(f"merged: {json.dumps(counts)}")
 
-    fitted = fit_voice_norm(out)
+    fitted, sources = fit_voice_norm(out)
     meta = json.loads((out / "cache_meta.json").read_text(encoding="utf-8"))
     meta["voice_norm"] = fitted
+    if sources:
+        # Voices appearing in more than one source cache at different scales: the per-voice statistic is a
+        # mixture for those, so the source-specific one is written too and the dataset prefers it per item.
+        meta["voice_source_norm"] = sources
     (out / "cache_meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
-    print(f"fitted per-voice statistics for {len(fitted)} voices")
+    print(f"fitted per-voice statistics for {len(fitted)} voices"
+          + (f", plus {len(sources)} (voice, source) pairs for voices spanning sources" if sources else ""))
 
     report = verify(out, base_items)
     Path("runs/expand_corpus_report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")

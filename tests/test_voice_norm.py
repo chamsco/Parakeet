@@ -100,7 +100,7 @@ def test_refitting_a_cache_does_not_produce_no_op_statistics(tmp_path):
     from fit_voice_norm import fit_voice_norm
 
     _cache(tmp_path / "cache", {"loud": (0.4, 1.6), "quiet": (-0.3, 0.6)})
-    first = fit_voice_norm(tmp_path / "cache", min_items=1)
+    first, _sources = fit_voice_norm(tmp_path / "cache", min_items=1)
     assert first, "the first fit must produce statistics"
 
     # write them back the way fit_voice_norm's CLI does, then refit
@@ -109,7 +109,7 @@ def test_refitting_a_cache_does_not_produce_no_op_statistics(tmp_path):
     meta["voice_norm"] = first
     meta_path.write_text(json.dumps(meta), "utf-8")
 
-    second = fit_voice_norm(tmp_path / "cache", min_items=1)
+    second, _sources = fit_voice_norm(tmp_path / "cache", min_items=1)
     for name in first:
         assert second[name]["std"] == first[name]["std"], f"{name}: refit changed the statistics"
         assert second[name]["mean"] == first[name]["mean"], f"{name}: refit changed the statistics"
@@ -162,3 +162,73 @@ def test_a_model_without_the_table_is_left_alone(tmp_path):
     item = dataset[0]
     assert torch.allclose(denormalize_voice(model, item["latent"], torch.tensor([0])), item["latent"])
     assert not torch.allclose(item["latent"], raw) or True  # normalisation itself may be identity here
+
+
+def _two_source_cache(root):
+    """One voice, two sources, two scales -- what a merge of a base corpus and an expansion produces.
+
+    `af_alloy` exists in both this project's base corpus and its Kokoro expansion, at pooled std ~0.97 and ~0.5.
+    A single per-voice statistic is the *mixture*, so normalising by it leaves each half off scale -- measured at
+    round 122 as std 1.59 after normalisation, against 1.00 for single-source voices.
+    """
+    root.mkdir(parents=True, exist_ok=True)
+    generator = torch.Generator().manual_seed(0)
+    items = []
+    for source, std in ((0, 0.5), (1, 1.5)):
+        for _ in range(6):
+            items.append({
+                "ids": torch.tensor([1, 2, 3, 4]),
+                "latent": torch.randn(24, 40, generator=generator) * std,
+                "latent_token": torch.randn(4, 72, generator=generator) * std,
+                "durations": torch.tensor([10, 10, 10, 10]),
+                "f0": torch.zeros(4),
+                "energy": torch.zeros(4),
+                "voice": torch.tensor(0),          # the SAME voice in both sources
+                "source": torch.tensor(source),
+            })
+    torch.save({"items": items}, root / "shard_00000.pt")
+    (root / "index.json").write_text(json.dumps([{"path": "shard_00000.pt", "n": len(items)}]), "utf-8")
+    (root / "cache_meta.json").write_text(json.dumps({
+        "latent_dim": 24, "voice_names": ["af_alloy"],
+        "latent_norm": {"mean": [0.0] * 24, "var": [1.0] * 24, "samples": 100},
+    }), "utf-8")
+
+
+def test_a_voice_spanning_two_sources_is_normalised_per_source(tmp_path):
+    """The fix for the round-122 defect: a per-voice statistic cannot normalise a mixed-scale voice.
+
+    Without source-specific statistics the two halves land on different scales; with them each half reaches ~1.0.
+    """
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+
+    from fit_voice_norm import fit_voice_norm
+
+    cache = tmp_path / "cache"
+    _two_source_cache(cache)
+    fitted, sources = fit_voice_norm(cache, min_items=1)
+
+    # the fit must recognise that this voice spans sources, and produce one statistic per source
+    assert "af_alloy" in fitted, "the per-voice mixture statistic should still exist as a fallback"
+    assert "0|1" in sources, f"no per-source statistics were produced: {list(sources)}"
+    assert sources["0|0"]["items"] == 6 and sources["0|1"]["items"] == 6
+    # the per-source stds must differ, which is the whole point: one is a 0.5-scale source, the other 1.5
+    assert abs(sources["0|0"]["std"][0] - 0.5) < 0.15, sources["0|0"]["std"][0]
+    assert abs(sources["0|1"]["std"][0] - 1.5) < 0.25, sources["0|1"]["std"][0]
+
+    meta_path = cache / "cache_meta.json"
+    meta = json.loads(meta_path.read_text("utf-8"))
+    meta["voice_norm"] = fitted
+    meta["voice_source_norm"] = sources          # already keyed "<voice>|<source>", as the meta format expects
+    meta_path.write_text(json.dumps(meta), "utf-8")
+
+    dataset = LatentShardDataset(cache)
+    assert dataset.voice_source_norm, "the dataset must read the per-source table"
+    for source in (0, 1):
+        pooled = torch.cat([dataset[i]["latent"] for i in range(len(dataset))
+                            if int(dataset[i]["source"]) == source], dim=-1)
+        assert abs(float(pooled.std()) - 1.0) < 0.15, (
+            f"source {source} still off scale at std {float(pooled.std()):.3f} -- the mixture statistic was used"
+        )

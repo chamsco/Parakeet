@@ -4249,7 +4249,34 @@ against the manifest the cache was built from — is the third time this session
 the fix is the same each time: **compare the artefact against its own source before describing what is wrong with
 it.**
 
-## 115. Environment notes
+## 115. The source-aware normalisation fix (round 123)
+
+§112/§114 diagnosed a real defect and left it in place: a per-voice statistic cannot normalise a voice whose items
+come from two source caches at different scales, which is what a merge creates. Fixed, in four places:
+
+* merge_caches writes `item["source"]` (0 = base, 1 = extra, ...) — one int per item, and the thing that makes
+  the correct statistic expressible at all;
+* it_voice_norm returns a **second** table, oice_source_norm, keyed `"<voice>|<source>"`, produced **only**
+  for voices that actually span more than one source — so single-source voices and every existing cache are
+  unaffected;
+* LatentShardDataset reads it and prefers it per item, falling back to the per-voice entry when there is no
+  source tag or no matching pair;
+* xpand_corpus writes both tables into the merged cache's meta.
+
+Plus hardening: a malformed oice_norm entry (not a dict) is skipped rather than crashing the dataset with an
+AttributeError — which is exactly what the signature change did to an existing test before it was updated.
+
+**The test** pins both halves with a synthetic cache holding **one voice at two scales** (0.5 and 1.5 — the real
+situation): the fit must produce per-source statistics with the right per-source stds *and*, once written, each
+source must come back at pooled std ~1.0. Without the fix the two halves cannot both be normalised, which is the
+defect stated as an assertion. Suite 344 → **345**.
+
+**Still to do, so it is not mistaken for done:** uns/expanded_v3 has no source tags — it was merged before
+this change — so the fix only takes effect for caches built by the updated chain, and that cache needs rebuilding
+(~15–20 minutes) before any measurement that depends on its normalisation is trustworthy. The dialogue cache is
+single-source and unaffected either way.
+
+## 116. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).

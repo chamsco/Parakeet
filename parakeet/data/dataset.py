@@ -132,17 +132,33 @@ class LatentShardDataset(Dataset):
         #: until it is normalised.  Presence in `cache_meta.json` is what enables it, so a cache is
         #: self-describing and an existing run is unaffected unless its cache is fitted.
         self.voice_norm: Dict[int, Dict[str, torch.Tensor]] = {}
+        #: Per (voice, source) statistics, for voices whose items come from more than one source cache.  A
+        #: merge can put one voice's items at two scales -- the base corpus's Kokoro voice against an
+        #: expansion's -- and then a single per-voice statistic is a *mixture*: normalising by it leaves each
+        #: half off scale, and pooling gives a std larger than either (measured: 1.59 against 1.00 for
+        #: single-source voices).  When the cache provides these, they take precedence per item.
+        self.voice_source_norm: Dict[tuple, Dict[str, torch.Tensor]] = {}
         meta_path = self.cache_dir / "cache_meta.json"
         if meta_path.exists():
             meta = json.loads(meta_path.read_text(encoding="utf-8"))
             names = list(meta.get("voice_names") or [])
-            for name, stats in (meta.get("voice_norm") or {}).items():
-                if name not in names:
-                    continue
-                self.voice_norm[names.index(name)] = {
+
+            def _table(stats: dict) -> Dict[str, torch.Tensor]:
+                return {
                     "mean": torch.tensor(stats["mean"]).view(-1, 1),
                     "std": torch.tensor(stats["std"]).view(-1, 1).clamp_min(1e-6),
                 }
+
+            for name, stats in (meta.get("voice_norm") or {}).items():
+                if name not in names or not isinstance(stats, dict):
+                    continue
+                self.voice_norm[names.index(name)] = _table(stats)
+            for key, stats in (meta.get("voice_source_norm") or {}).items():
+                voice_part, _, source_part = str(key).partition("|")
+                try:
+                    self.voice_source_norm[(int(voice_part), int(source_part))] = _table(stats)
+                except ValueError:
+                    continue
 
     def __len__(self) -> int:
         return len(self._items) if self.indices is None else len(self.indices)
@@ -154,7 +170,14 @@ class LatentShardDataset(Dataset):
             item["latent"] = item["latent"][:, : self.max_frames]
             # NOTE: log_mel is the *reference prompt*, not a target, so it is deliberately not
             # truncated here -- reference length is capped separately at collation
-        stats = self.voice_norm.get(int(item["voice"])) if self.voice_norm else None
+        # A source-specific statistic wins over the per-voice one when the item carries a `source` tag and the
+        # cache provides stats for that (voice, source) pair -- which is what stops a merged cache from mixing
+        # two scales inside one voice.
+        stats = None
+        if self.voice_source_norm and item.get("source") is not None:
+            stats = self.voice_source_norm.get((int(item["voice"]), int(item["source"])))
+        if stats is None and self.voice_norm:
+            stats = self.voice_norm.get(int(item["voice"]))
         if stats is not None and self.apply_voice_norm:
             # per-voice normalisation, applied to the flow's frame target and to the token target: both are
             # the same 24-dimensional signal, so one voice's statistics describe both

@@ -56,12 +56,19 @@ def merge_caches(base: Path, extra: Path, out: Path, shard_size: int = 500) -> D
 
     counts = {"base": 0, "extra": 0, "voices_added": 0}
     widths: Dict[str, int] = {}
-    for cache, names, label in ((base, base_voices, "base"), (extra, None, "extra")):
+    # Each item records which cache it came from.  This is what lets per-voice normalisation be per-SOURCE as
+    # well: `expanded_v3` mixes the base corpus with a Kokoro expansion, and the voices common to both
+    # (`af_alloy`, `af_aoede`, ...) carry items at two different scales (the round-58 gap).  One statistic per
+    # voice is then a mixture, and normalising by it leaves each half off scale -- measured directly at round
+    # 122: voices spanning both sources pooled at std 1.59 after normalisation while single-source voices sat at
+    # 1.00.  The tag costs one int per item and makes the correct statistic expressible.
+    for source_id, (cache, names, label) in enumerate(((base, base_voices, "base"), (extra, None, "extra"))):
         extra_names = list(extra_meta.get("voice_names") or []) if label == "extra" else names
         for entry in _shard_entries(cache):
             payload = torch.load(cache / entry["path"], map_location="cpu", weights_only=False)
             for item in payload["items"]:
                 item = dict(item)
+                item["source"] = torch.tensor(source_id)
                 # A width mismatch merges silently and produces items the model cannot read: the expansion's
                 # cache was first built at latent_rate 1 (24-wide tokens) against this cache's 3 (72-wide).
                 # Refusing loudly is the only safe behaviour.
