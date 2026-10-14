@@ -27,14 +27,20 @@ the measured reason, in order of discovery:
   *perfectly* at per-dimension correlation **ρ ≥ 0.75** and fails at 0.60, so ρ is the progress metric —
   and unlike a mel-spectrogram proxy it cannot be satisfied by noise. The flow once measured ρ ≈ 0 with a
   log-mel cosine of **0.90**, which is why the envelope looks right and the words are absent.
-* **the "one-shot regressor cannot get there" story was based on a training number, and is withdrawn.** The
-  text side memorises 8 utterances to ρ **0.998** in 300 steps, so capacity and optimisation are fine. The figure
-  quoted here for months — **ρ ≈ 0.37** with "validation ≈ training" — was measured on the items the model
-  **trained on**. Held out, the same model reads **ρ ≈ 0.15**, and on its training items **0.82**: a
-  training-versus-generalisation gap of **five**. So it is not "close to its ceiling and fitting as well as it
-  can" — it has **memorised its corpus**, which is also why every conditioning and data intervention moved
-  nothing.* What remains genuinely unexplained is why it cannot generalise, and the measurements above now put a
-  number on the headroom rather than closing it.
+* **the figure quoted here for months, ρ ≈ 0.37 with "validation ≈ training", was a training number and is
+  withdrawn. What replaced it is worse and better measured.** On **400 prompts from four unseen books**, with **no
+  text overlap** against the 10 549 prompts that built any training corpus, held-out ρ over steps **3 000–7 000** is
+  **mean 0.2223, max 0.2315**, each checkpoint read **twice**: the drift across those 4 000 steps has sd **0.0093**,
+  smaller than the instrument's own within-checkpoint spread of **0.0202**, so it is a plateau rather than a slow
+  climb. The model card carries that as a machine-checked bound (`text_plateau`, `summary.max ≤ 0.30`) that fails if
+  it stops being true.
+  **The diagnosis is under-fitting, not memorisation.** The same configuration fits its own training data at in-sample
+  ρ **0.4157**, so the gap is **2×**, not the factor of five this file used to quote from a different 304-item setup,
+  and at 0.42 the model cannot yet reproduce even the data it saw. **Every lever available on this machine has now
+  been measured and none moves the plateau**: 9× the text (418 → 3 744 distinct prompts), 3× the capacity (9.62M →
+  ~30M), and objective re-weighting — the mean-invariant latent term gave **+0.028 at step 1 000 and +0.005 by step
+  2 000**, an early-training accelerator rather than a higher ceiling. What remains is the paper's regime: 945 h of
+  audio and the compute to use it.
 * **and there is a concrete route out of WER 1.000, measured, that needs no GPU.** Two renditions of the same
   words by the same voice share a component — the *rendition-independent* part — and it can be manufactured:
   give a prompt a **punctuation variant**, average the two **waveforms**, re-encode through the frozen
