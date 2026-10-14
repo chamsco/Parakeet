@@ -38,6 +38,17 @@ CLAIMS: List[Dict[str, Any]] = [
     # Rounds 108-121.  These are the claims that bound what is *possible* from the data on hand, so they belong
     # next to the advertised numbers: the negative results are the most load-bearing things this project measured.
     {
+        "id": "token_route_wer",
+        "statement": "the deterministic route's own audio, measured by WER — this is the FLOOR the residual route "
+                     "would sample at (a field that adds nothing leaves the plan), and it is the metric that "
+                     "applies to a sampler",
+        "report": ["runs/token_route_wer_report.json"],
+        "field": "wer.student",
+        "op": ">=",
+        "target": 1.0,
+        "fmt": "WER {:.3f} (unintelligible; teacher control 0.000)",
+    },
+    {
         "id": "token_route_frame_rho",
         "statement": "the deterministic (token) route's frames against the target — the best available text "
                      "conditioning, and 91% of the text+voice ceiling (0.445)",

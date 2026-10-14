@@ -1,11 +1,18 @@
 {
-  "generated": "2026-10-14T03:04:40",
+  "generated": "2026-10-14T03:10:33",
   "git": {
-    "rev": "71aef90",
+    "rev": "9f8ff72",
     "dirty": true
   },
   "note": "Committed snapshots of the reports the model card cites.  Refresh with `python scripts/model_card.py --refresh-evidence` after re-running the demos; the hashes make a stale bundle visible.",
   "entries": [
+    {
+      "claim": "token_route_wer",
+      "status": "copied",
+      "source": "runs/token_route_wer_report.json",
+      "evidence": "docs/evidence/token_route_wer.json",
+      "sha256": "7ca21fa232f5aa15b1ef5cfab543adda0d8a2887f98610987dde709eac010f03"
+    },
     {
       "claim": "token_route_frame_rho",
       "status": "copied",

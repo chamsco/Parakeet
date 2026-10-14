@@ -4310,7 +4310,38 @@ that no longer exists and cannot be re-measured.
 **Going forward:** uns/v3_fixed — 4 533 items, same size, per-source normalisation — replaces xpanded_v3 as
 the merged corpus.
 
-## 117. Environment notes
+## 117. The residual route's closure cited a threshold I had just declared inapplicable (round 129)
+
+Round 119 closed the residual route by arithmetic — floor ρ 0.406, ceiling ρ 0.445, deterministic fail threshold
+ρ 0.60, so its whole 0.039 window sits below the level where the recogniser already fails. **The same round also
+established that the ρ bar was calibrated on a deterministic regressor judged against a particular recording and
+does not apply to a sampler** — which the residual route is. So the closure cited a threshold that, by its own
+round's finding, does not govern the thing being closed. **The conclusion survives; the reasoning did not.**
+
+**The route is closed by the metric that applies.** Its floor is the token route's own audio — if the field adds
+nothing, the sample *is* the plan — so the floor's WER decides. Measured fresh in 34 seconds (6 utterances,
+faster-whisper base.en):
+
+`
+token route (distill-text step 5000)
+  student WER 1.000
+  teacher WER 0.000   <- control: the recogniser works on this text
+`
+
+Even the route's **floor** is unintelligible by the metric that governs a sampler, and the field would have to add
+the entire difference — when its measured contribution to everything here has been indistinguishable from zero
+across eight conditioning interventions and two architectures.
+
+**Supported independently, and already:** §110's energy measurement — the plan removes only **2.1 %** of the
+target's energy, because the energy is dominated by high-variance dimensions the text does not predict. A residual
+still carrying ~98 % of the energy is not a materially easier task for a field that has never learned the easier
+one.
+
+Same conclusion as §111, now resting on WER rather than on a threshold that does not apply. Pinned as a model-card
+claim (**41 verified, 0 failing**) with its report committed as evidence, so the number the closure depends on is
+reproducible rather than quoted.
+
+## 118. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
