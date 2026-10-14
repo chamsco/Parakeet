@@ -5633,6 +5633,20 @@ machine's ceiling, and the whole difference is the corpus lever measured once an
 uncertainty on the label. The loop's rule follows from it: keep doubling, measure each doubling's increment, and stop
 when the increment collapses rather than when a round count runs out.
 
+**And what v5 decides, which is sharper than "does it keep rising".** The corpus-size points on record are:
+
+| items | distinct texts | held-out ρ at matched steps | caveat |
+|---|---|---|---|
+| 1 207 | 418 | ~0.176 | the dim-256 ladder, so confounded by capacity |
+| 4 533 | 3 744 | 0.1702 at step 2 000, 0.2211 at 4 000 | clean |
+| 8 890 | ~8 100 | 0.3256 at step 2 000, **0.3612** at 4 000 | clean |
+
+The response is therefore **flat from 1 207 items to 4 533 and then jumps**, which is the signature of a **threshold**
+rather than a smooth curve in corpus size. That distinction decides the extrapolation: if it is a threshold, each new
+doubling may keep jumping past it, and 0.60 is two or three doublings away; if it is smooth, the +0.14 will shrink with
+each doubling and saturate below the bar. The scenario table above is those two ends, and **v5 — the next doubling — is
+the measurement that says which one the machine is on.**
+
 **The loop's measured cost, so a handover does not have to rediscover it.** Per round: about **3 hours** of synthesis at
 the measured 19.3 utterances per minute for roughly 3 800 prompts; about **12 minutes** to cache and merge, which scales
 with the base it merges onto (18 shards took about 10 minutes); and about **2.4 hours** of training at the measured
