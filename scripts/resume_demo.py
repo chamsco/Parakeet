@@ -25,23 +25,19 @@ from __future__ import annotations
 import argparse
 import copy
 import json
-import sys
 import time
 from pathlib import Path
 from typing import Dict, List, Optional
 
 import torch
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 
-from parakeet.config import load_config  # noqa: E402
-from parakeet.data.dataset import LatentShardBatchSource, LatentShardDataset  # noqa: E402
-from parakeet.data.features import cache_teacher_corpus, fit_latent_normalizer  # noqa: E402
-from parakeet.data.teacher import build_backend, synthesize_corpus  # noqa: E402
-from parakeet.models import build_model  # noqa: E402
-from parakeet.train.stages import run_stage  # noqa: E402
+from parakeet.config import load_config
+from parakeet.data.dataset import LatentShardBatchSource, LatentShardDataset
+from parakeet.data.features import cache_teacher_corpus, fit_latent_normalizer
+from parakeet.data.teacher import build_backend, synthesize_corpus
+from parakeet.models import build_model
+from parakeet.train.stages import run_stage
 
 PROMPTS = [
     "the quick brown fox jumps over the lazy dog",

@@ -24,34 +24,30 @@ from __future__ import annotations
 import argparse
 import copy
 import json
-import sys
 import time
 from pathlib import Path
 
 import torch
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 
-from parakeet.config import load_config  # noqa: E402
-from parakeet.data.features import (  # noqa: E402
+from parakeet.config import load_config
+from parakeet.data.features import (
     TokenTargetBatchSource,
     fit_latent_normalizer,
     token_targets_from_corpus,
 )
-from parakeet.data.synthetic import SyntheticSpeechBatchSource, make_corpus  # noqa: E402
-from parakeet.data.text import TextTokenizer  # noqa: E402
-from parakeet.eval import (  # noqa: E402
+from parakeet.data.synthetic import SyntheticSpeechBatchSource, make_corpus
+from parakeet.data.text import TextTokenizer
+from parakeet.eval import (
     ae_reconstruction_l1,
     duration_error_frames,
     end_to_end_mel_l1,
     latent_normalizer_summary,
     teacher_signal_loss,
 )
-from parakeet.inference import phase_coherence, phase_lock, write_wav  # noqa: E402
-from parakeet.models import build_model, count_parameters  # noqa: E402
-from parakeet.train.stages import run_stage  # noqa: E402
+from parakeet.inference import phase_coherence, phase_lock, write_wav
+from parakeet.models import build_model, count_parameters
+from parakeet.train.stages import run_stage
 
 CRITERIA_DOC = """
   autoencoder_learned   ae_recon_after  < 0.90 x ae_recon_before   representation fits

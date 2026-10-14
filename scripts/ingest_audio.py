@@ -18,17 +18,13 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from pathlib import Path
 from typing import Dict, List
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 
-from parakeet.data.segment import split_long_segment  # noqa: E402
-from parakeet.data.segment import segment_by_words  # noqa: E402
-from parakeet.data.teacher import TEACHERS, check_teacher  # noqa: E402
+from parakeet.data.segment import split_long_segment
+from parakeet.data.segment import segment_by_words
+from parakeet.data.teacher import TEACHERS, check_teacher
 
 
 def transcribe_with_words(path: Path, model_size: str) -> tuple:

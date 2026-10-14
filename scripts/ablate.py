@@ -23,25 +23,21 @@ import argparse
 import copy
 import json
 import statistics
-import sys
 import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import torch
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 
-from parakeet.config import load_config  # noqa: E402
-from parakeet.data.dataset import LatentShardBatchSource, LatentShardDataset  # noqa: E402
-from parakeet.data.features import cache_teacher_corpus  # noqa: E402
-from parakeet.data.teacher import build_backend, synthesize_corpus  # noqa: E402
-from parakeet.eval import duration_error_frames, teacher_signal_loss  # noqa: E402
-from parakeet.inference import Synthesizer  # noqa: E402
-from parakeet.models import build_model, count_parameters  # noqa: E402
-from parakeet.train.stages import run_stage  # noqa: E402
+from parakeet.config import load_config
+from parakeet.data.dataset import LatentShardBatchSource, LatentShardDataset
+from parakeet.data.features import cache_teacher_corpus
+from parakeet.data.teacher import build_backend, synthesize_corpus
+from parakeet.eval import duration_error_frames, teacher_signal_loss
+from parakeet.inference import Synthesizer
+from parakeet.models import build_model, count_parameters
+from parakeet.train.stages import run_stage
 
 PROMPTS = [
     "the quick brown fox jumps over the lazy dog",

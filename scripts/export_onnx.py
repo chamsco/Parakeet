@@ -19,23 +19,19 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 import time
 from pathlib import Path
 
 import numpy as np
 import torch
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 
-from parakeet.audio.mel import MelSpectrogram  # noqa: E402
-from parakeet.config import load_config  # noqa: E402
-from parakeet.data.synthetic import make_corpus  # noqa: E402
-from parakeet.inference import write_wav  # noqa: E402
-from parakeet.inference.onnx_export import OnnxVocoder, compare_fp32_int8  # noqa: E402
-from parakeet.models import build_model  # noqa: E402
+from parakeet.audio.mel import MelSpectrogram
+from parakeet.config import load_config
+from parakeet.data.synthetic import make_corpus
+from parakeet.inference import write_wav
+from parakeet.inference.onnx_export import OnnxVocoder, compare_fp32_int8
+from parakeet.models import build_model
 
 
 def main() -> int:

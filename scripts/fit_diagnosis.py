@@ -22,22 +22,18 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import sys
 from pathlib import Path
 from typing import Dict, List
 
 import torch
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 
-from parakeet.config import load_config  # noqa: E402
-from parakeet.data.dataset import LatentShardDataset  # noqa: E402
-from parakeet.data.text import TextTokenizer  # noqa: E402
-from parakeet.models import build_model  # noqa: E402
-from parakeet.models.duration import normalized_to_durations  # noqa: E402
-from parakeet.train.common import apply_checkpoint_geometry, infer_model_geometry  # noqa: E402
+from parakeet.config import load_config
+from parakeet.data.dataset import LatentShardDataset
+from parakeet.data.text import TextTokenizer
+from parakeet.models import build_model
+from parakeet.models.duration import normalized_to_durations
+from parakeet.train.common import apply_checkpoint_geometry, infer_model_geometry
 
 
 def collect(

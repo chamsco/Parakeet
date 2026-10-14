@@ -16,28 +16,24 @@ the offline decoder.
 from __future__ import annotations
 
 import argparse
-import sys
 import time
 from pathlib import Path
 
 import torch
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 
-from parakeet.config import load_config  # noqa: E402
-from parakeet.data.dataset import SyntheticBatchSource  # noqa: E402
-from parakeet.eval.metrics import measure_rtf  # noqa: E402
-from parakeet.inference import (  # noqa: E402
+from parakeet.config import load_config
+from parakeet.data.dataset import SyntheticBatchSource
+from parakeet.eval.metrics import measure_rtf
+from parakeet.inference import (
     Synthesizer,
     phase_coherence,
     phase_lock,
     quantize_weights_,
     size_report,
 )
-from parakeet.models import build_model, count_parameters, parameter_report  # noqa: E402
-from parakeet.train.stages import run_stage  # noqa: E402
+from parakeet.models import build_model, count_parameters, parameter_report
+from parakeet.train.stages import run_stage
 
 STAGES_TINY = ["autoencoder", "distill-text", "distill-decoder"]
 STAGES_SMALL = ["autoencoder", "flow", "reflow"]

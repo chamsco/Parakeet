@@ -32,7 +32,6 @@ from __future__ import annotations
 import argparse
 import json
 import statistics
-import sys
 import time
 from dataclasses import replace
 from pathlib import Path
@@ -40,18 +39,15 @@ from typing import Dict, List, Optional
 
 import torch
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 
-from parakeet.audio.mel import MelSpectrogram  # noqa: E402
-from parakeet.config import load_config  # noqa: E402
-from parakeet.data.dataset import WaveformCorpusSource  # noqa: E402
-from parakeet.eval.metrics import dnsmos_score, whisper_wer_with_control  # noqa: E402
-from parakeet.inference import phase_coherence, write_wav  # noqa: E402
-from parakeet.models import build_model, count_parameters  # noqa: E402
-from parakeet.train.common import load_checkpoint  # noqa: E402
-from parakeet.train.stages import run_stage  # noqa: E402
+from parakeet.audio.mel import MelSpectrogram
+from parakeet.config import load_config
+from parakeet.data.dataset import WaveformCorpusSource
+from parakeet.eval.metrics import dnsmos_score, whisper_wer_with_control
+from parakeet.inference import phase_coherence, write_wav
+from parakeet.models import build_model, count_parameters
+from parakeet.train.common import load_checkpoint
+from parakeet.train.stages import run_stage
 
 
 def fidelity(model, waves: List[torch.Tensor], mel: MelSpectrogram, cfg) -> Dict[str, float]:

@@ -12,21 +12,17 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 import time
 from pathlib import Path
 from typing import Callable, Dict, Tuple
 
 import torch
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 
-from parakeet.config import load_config  # noqa: E402
-from parakeet.inference import Synthesizer, phase_lock  # noqa: E402
-from parakeet.models import build_model  # noqa: E402
-from parakeet.models.duration import normalized_to_durations  # noqa: E402
+from parakeet.config import load_config
+from parakeet.inference import Synthesizer, phase_lock
+from parakeet.models import build_model
+from parakeet.models.duration import normalized_to_durations
 
 TEXTS = [
     "the quick brown fox jumps over the lazy dog",

@@ -21,15 +21,11 @@ from __future__ import annotations
 import argparse
 import html
 import json
-import sys
 from pathlib import Path
 from typing import Dict, List
 
 import torch
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 
 #: sentences the demo always renders: short, ordinary English, disjoint from nothing in particular --
 #: the point is to let a listener judge, and the WER row below says whether it is intelligible

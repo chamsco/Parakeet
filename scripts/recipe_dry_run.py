@@ -25,26 +25,22 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 import time
 from pathlib import Path
 
 import torch
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 
-from parakeet.audio.mel import MelSpectrogram  # noqa: E402
-from parakeet.config import load_config  # noqa: E402
-from parakeet.data.dataset import LatentShardBatchSource, LatentShardDataset  # noqa: E402
-from parakeet.data.features import build_latent_cache, fit_latent_normalizer  # noqa: E402
-from parakeet.data.teacher import build_backend, resolve_mix, synthesize_corpus  # noqa: E402
-from parakeet.data.text import TextTokenizer  # noqa: E402
-from parakeet.eval import ae_reconstruction_l1, teacher_signal_loss  # noqa: E402
-from parakeet.inference import Synthesizer, phase_coherence, write_wav  # noqa: E402
-from parakeet.models import build_model  # noqa: E402
-from parakeet.train.stages import flow_step, run_stage  # noqa: E402
+from parakeet.audio.mel import MelSpectrogram
+from parakeet.config import load_config
+from parakeet.data.dataset import LatentShardBatchSource, LatentShardDataset
+from parakeet.data.features import build_latent_cache, fit_latent_normalizer
+from parakeet.data.teacher import build_backend, resolve_mix, synthesize_corpus
+from parakeet.data.text import TextTokenizer
+from parakeet.eval import ae_reconstruction_l1, teacher_signal_loss
+from parakeet.inference import Synthesizer, phase_coherence, write_wav
+from parakeet.models import build_model
+from parakeet.train.stages import flow_step, run_stage
 
 PROMPTS = [
     "the quick brown fox jumps over the lazy dog",

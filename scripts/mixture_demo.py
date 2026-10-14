@@ -21,24 +21,20 @@ from __future__ import annotations
 import argparse
 import copy
 import json
-import sys
 import time
 from pathlib import Path
 from typing import Dict, List
 
 import torch
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 
-from parakeet.audio.f0 import normalized_to_f0  # noqa: E402
-from parakeet.config import ParakeetConfig, load_config  # noqa: E402
-from parakeet.data.features import token_targets_from_corpus  # noqa: E402
-from parakeet.data.synthetic import make_corpus  # noqa: E402
-from parakeet.data.text import TextTokenizer  # noqa: E402
-from parakeet.models import build_model  # noqa: E402
-from parakeet.train.stages import tiny_text_step  # noqa: E402
+from parakeet.audio.f0 import normalized_to_f0
+from parakeet.config import ParakeetConfig, load_config
+from parakeet.data.features import token_targets_from_corpus
+from parakeet.data.synthetic import make_corpus
+from parakeet.data.text import TextTokenizer
+from parakeet.models import build_model
+from parakeet.train.stages import tiny_text_step
 
 
 def _banner(text: str) -> None:

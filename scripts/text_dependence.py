@@ -16,11 +16,6 @@ gradient is a different bug from one that receives gradient and is not yet learn
 from __future__ import annotations
 
 import argparse
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
 import torch
 
 from parakeet.config import load_config

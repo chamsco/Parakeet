@@ -21,19 +21,15 @@ from __future__ import annotations
 import argparse
 import json
 import statistics
-import sys
 import time
 from pathlib import Path
 from typing import Dict, List
 
 import os
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 
-from parakeet.data.curate import CurateConfig, curate_manifest  # noqa: E402
-from parakeet.data.teacher import (  # noqa: E402
+from parakeet.data.curate import CurateConfig, curate_manifest
+from parakeet.data.teacher import (
     SPEECHIFY_ENGLISH_VOICES,
     build_backend,
     check_teacher,

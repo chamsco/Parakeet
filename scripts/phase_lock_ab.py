@@ -27,23 +27,19 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import sys
 import time
 from pathlib import Path
 from typing import Dict, List
 
 import torch
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 
-from parakeet.audio.f0 import estimate_f0  # noqa: E402
-from parakeet.config import load_config  # noqa: E402
-from parakeet.data.synthetic import make_corpus  # noqa: E402
-from parakeet.eval.metrics import buzz  # noqa: E402
-from parakeet.eval.metrics import log_mel_l1  # noqa: E402
-from parakeet.inference import phase_coherence, phase_lock  # noqa: E402
+from parakeet.audio.f0 import estimate_f0
+from parakeet.config import load_config
+from parakeet.data.synthetic import make_corpus
+from parakeet.eval.metrics import buzz
+from parakeet.eval.metrics import log_mel_l1
+from parakeet.inference import phase_coherence, phase_lock
 
 METHODS = ("ramp", "smooth")
 STRENGTHS = (0.3, 0.7, 1.0)

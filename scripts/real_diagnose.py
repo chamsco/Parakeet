@@ -32,25 +32,21 @@ from __future__ import annotations
 import argparse
 import json
 import statistics
-import sys
 from pathlib import Path
 from typing import Dict, List, Sequence
 
 import numpy as np
 import torch
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 
-from parakeet.audio.mel import MelSpectrogram  # noqa: E402
-from parakeet.config import load_config  # noqa: E402
-from parakeet.data.dataset import LatentShardDataset  # noqa: E402
-from parakeet.eval.metrics import dnsmos_score, whisper_wer  # noqa: E402
-from parakeet.inference import Synthesizer, write_wav  # noqa: E402
-from parakeet.models import build_model  # noqa: E402
-from parakeet.train.common import infer_model_geometry  # noqa: E402
-from parakeet.models.duration import normalized_to_durations  # noqa: E402
+from parakeet.audio.mel import MelSpectrogram
+from parakeet.config import load_config
+from parakeet.data.dataset import LatentShardDataset
+from parakeet.eval.metrics import dnsmos_score, whisper_wer
+from parakeet.inference import Synthesizer, write_wav
+from parakeet.models import build_model
+from parakeet.train.common import infer_model_geometry
+from parakeet.models.duration import normalized_to_durations
 
 
 def _banner(text: str) -> None:

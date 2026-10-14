@@ -21,21 +21,17 @@ from __future__ import annotations
 import argparse
 import json
 import statistics
-import sys
 from pathlib import Path
 from typing import Dict, List
 
 import torch
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 
-from parakeet.audio.mel import MelSpectrogram  # noqa: E402
-from parakeet.config import load_config  # noqa: E402
-from parakeet.data.dataset import LatentShardDataset  # noqa: E402
-from parakeet.eval.metrics import dnsmos_score, whisper_wer_with_control  # noqa: E402
-from parakeet.models import build_model  # noqa: E402
+from parakeet.audio.mel import MelSpectrogram
+from parakeet.config import load_config
+from parakeet.data.dataset import LatentShardDataset
+from parakeet.eval.metrics import dnsmos_score, whisper_wer_with_control
+from parakeet.models import build_model
 
 
 def build_latent_at_rate(

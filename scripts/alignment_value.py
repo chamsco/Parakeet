@@ -18,19 +18,15 @@ from __future__ import annotations
 import argparse
 import json
 import statistics
-import sys
 from pathlib import Path
 from typing import List
 
 import torch
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 
-from parakeet.config import load_config  # noqa: E402
-from parakeet.data.features import extract_signals  # noqa: E402
-from parakeet.data.text import TextTokenizer  # noqa: E402
+from parakeet.config import load_config
+from parakeet.data.features import extract_signals
+from parakeet.data.text import TextTokenizer
 
 
 def pearson(a: List[float], b: List[float]) -> float:

@@ -16,7 +16,6 @@ solution and learns nothing about the text.
 
 import sys
 
-sys.path.insert(0, ".")
 
 import torch
 

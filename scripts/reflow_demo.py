@@ -27,7 +27,6 @@ from __future__ import annotations
 import argparse
 import copy
 import json
-import sys
 import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -35,18 +34,15 @@ from typing import Dict, List, Optional, Tuple
 import torch
 import torch.nn.functional as F
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 
-from parakeet.audio.mel import MelSpectrogram  # noqa: E402
-from parakeet.config import load_config  # noqa: E402
-from parakeet.data.features import fit_latent_normalizer  # noqa: E402
-from parakeet.data.synthetic import SyntheticSpeechBatchSource, make_corpus  # noqa: E402
-from parakeet.models import build_model  # noqa: E402
-from parakeet.models.flow import consistency_sample, fold_time, unfold_time  # noqa: E402
-from parakeet.train.common import EMAModel, build_optimizer, seed_everything  # noqa: E402
-from parakeet.train.stages import flow_step, reflow_step, run_stage  # noqa: E402
+from parakeet.audio.mel import MelSpectrogram
+from parakeet.config import load_config
+from parakeet.data.features import fit_latent_normalizer
+from parakeet.data.synthetic import SyntheticSpeechBatchSource, make_corpus
+from parakeet.models import build_model
+from parakeet.models.flow import consistency_sample, fold_time, unfold_time
+from parakeet.train.common import EMAModel, build_optimizer, seed_everything
+from parakeet.train.stages import flow_step, reflow_step, run_stage
 
 
 def _banner(text: str) -> None:

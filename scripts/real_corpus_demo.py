@@ -21,7 +21,6 @@ from __future__ import annotations
 import argparse
 import json
 import statistics
-import sys
 import time
 from pathlib import Path
 from typing import Dict, List
@@ -29,16 +28,13 @@ from typing import Dict, List
 import numpy as np
 import torch
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 
-from parakeet.audio import estimate_f0  # noqa: E402
-from parakeet.config import load_config  # noqa: E402
-from parakeet.data.curate import CurateConfig, curate_manifest  # noqa: E402
-from parakeet.data.features import cache_teacher_corpus  # noqa: E402
-from parakeet.data.teacher import build_backend, check_teacher, synthesize_corpus  # noqa: E402
-from parakeet.models import build_model  # noqa: E402
+from parakeet.audio import estimate_f0
+from parakeet.config import load_config
+from parakeet.data.curate import CurateConfig, curate_manifest
+from parakeet.data.features import cache_teacher_corpus
+from parakeet.data.teacher import build_backend, check_teacher, synthesize_corpus
+from parakeet.models import build_model
 
 PROMPTS = [
     "The quick brown fox jumps over the lazy dog.",

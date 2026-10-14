@@ -25,28 +25,24 @@ from __future__ import annotations
 import argparse
 import json
 import statistics
-import sys
 import time
 from pathlib import Path
 from typing import Dict, List
 
 import torch
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 
-from parakeet.audio.mel import MelSpectrogram  # noqa: E402
-from parakeet.config import load_config  # noqa: E402
-from parakeet.eval.metrics import (  # noqa: E402
+from parakeet.audio.mel import MelSpectrogram
+from parakeet.config import load_config
+from parakeet.eval.metrics import (
     OptionalMetric,
     dnsmos_score,
     speechlikeness,
     utmos,
     whisper_wer,
 )
-from parakeet.inference import Synthesizer, phase_coherence, write_wav  # noqa: E402
-from parakeet.models import build_model  # noqa: E402
+from parakeet.inference import Synthesizer, phase_coherence, write_wav
+from parakeet.models import build_model
 
 
 def _banner(text: str) -> None:

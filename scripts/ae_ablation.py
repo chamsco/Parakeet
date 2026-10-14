@@ -34,25 +34,21 @@ from __future__ import annotations
 import argparse
 import json
 import statistics
-import sys
 import time
 from pathlib import Path
 from typing import Dict, List
 
 import torch
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 
-from parakeet.audio.mel import MelSpectrogram  # noqa: E402
-from parakeet.config import load_config  # noqa: E402
-from parakeet.data.dataset import WaveformCorpusSource  # noqa: E402
-from parakeet.eval.metrics import dnsmos_score  # noqa: E402
-from parakeet.inference import phase_coherence  # noqa: E402
-from parakeet.models import build_model, count_parameters  # noqa: E402
-from parakeet.train.losses import build_loss_bundle  # noqa: E402
-from parakeet.train.stages import autoencoder_step, discriminator_step  # noqa: E402
+from parakeet.audio.mel import MelSpectrogram
+from parakeet.config import load_config
+from parakeet.data.dataset import WaveformCorpusSource
+from parakeet.eval.metrics import dnsmos_score
+from parakeet.inference import phase_coherence
+from parakeet.models import build_model, count_parameters
+from parakeet.train.losses import build_loss_bundle
+from parakeet.train.stages import autoencoder_step, discriminator_step
 
 
 def evaluate(model, waves: List[torch.Tensor], mel: MelSpectrogram, cfg, want_dnsmos: bool = True) -> Dict[str, float]:

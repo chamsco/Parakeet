@@ -23,26 +23,22 @@ from __future__ import annotations
 import argparse
 import copy
 import json
-import sys
 import time
 from pathlib import Path
 from typing import Dict, List
 
 import torch
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 
-from parakeet.audio.f0 import normalized_to_f0  # noqa: E402
-from parakeet.config import ParakeetConfig, load_config  # noqa: E402
-from parakeet.data.dataset import LatentShardBatchSource, LatentShardDataset  # noqa: E402
-from parakeet.data.features import build_latent_cache, fit_latent_normalizer  # noqa: E402
-from parakeet.data.teacher import build_backend, synthesize_corpus  # noqa: E402
-from parakeet.data.text import TextTokenizer  # noqa: E402
-from parakeet.inference import Synthesizer, write_wav  # noqa: E402
-from parakeet.models import build_model  # noqa: E402
-from parakeet.train.stages import run_stage  # noqa: E402
+from parakeet.audio.f0 import normalized_to_f0
+from parakeet.config import ParakeetConfig, load_config
+from parakeet.data.dataset import LatentShardBatchSource, LatentShardDataset
+from parakeet.data.features import build_latent_cache, fit_latent_normalizer
+from parakeet.data.teacher import build_backend, synthesize_corpus
+from parakeet.data.text import TextTokenizer
+from parakeet.inference import Synthesizer, write_wav
+from parakeet.models import build_model
+from parakeet.train.stages import run_stage
 
 TEXTS = [
     "the quick brown fox jumps over the lazy dog",

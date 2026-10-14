@@ -12,23 +12,19 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from pathlib import Path
 
 import torch
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 
-from parakeet.config import load_config  # noqa: E402
-from parakeet.train.common import (  # noqa: E402
+from parakeet.config import load_config
+from parakeet.train.common import (
     derive_latent_rate_from_cache,
     derive_n_voices_from_cache,
 )
-from parakeet.data.dataset import make_batch_source  # noqa: E402
-from parakeet.models import build_model, count_parameters  # noqa: E402
-from parakeet.train.stages import STAGE_STEPS, run_stage  # noqa: E402
+from parakeet.data.dataset import make_batch_source
+from parakeet.models import build_model, count_parameters
+from parakeet.train.stages import STAGE_STEPS, run_stage
 
 STAGES = list(STAGE_STEPS)
 

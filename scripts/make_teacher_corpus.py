@@ -16,19 +16,15 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from pathlib import Path
 
 import torch
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 
-from parakeet.config import load_config  # noqa: E402
-from parakeet.data.curate import curate_manifest  # noqa: E402
-from parakeet.data.features import cache_teacher_corpus  # noqa: E402
-from parakeet.data.teacher import (  # noqa: E402
+from parakeet.config import load_config
+from parakeet.data.curate import curate_manifest
+from parakeet.data.features import cache_teacher_corpus
+from parakeet.data.teacher import (
     DEFAULT_MIX,
     TeacherLicenseError,
     build_backend,
@@ -36,8 +32,8 @@ from parakeet.data.teacher import (  # noqa: E402
     resolve_mix,
     synthesize_corpus,
 )
-from parakeet.data.text import TextTokenizer  # noqa: E402
-from parakeet.models import build_model  # noqa: E402
+from parakeet.data.text import TextTokenizer
+from parakeet.models import build_model
 
 DEFAULT_VOICES = {
     "orpheus": ["tara", "leah", "jess", "leo", "dan", "mia", "zac", "zoe"],

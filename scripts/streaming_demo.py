@@ -26,33 +26,29 @@ from __future__ import annotations
 import argparse
 import copy
 import json
-import sys
 import time
 from pathlib import Path
 
 import torch
 import torch.nn.functional as F
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 
-from parakeet.audio.mel import MelSpectrogram  # noqa: E402
-from parakeet.config import load_config  # noqa: E402
-from parakeet.data.features import fit_latent_normalizer  # noqa: E402
-from parakeet.data.synthetic import SyntheticSpeechBatchSource, make_corpus  # noqa: E402
-from parakeet.data.text import TextTokenizer  # noqa: E402
-from parakeet.inference import StreamingPhaseLock, phase_coherence, phase_lock  # noqa: E402
-from parakeet.models import build_model  # noqa: E402
-from parakeet.models.flow import (  # noqa: E402
+from parakeet.audio.mel import MelSpectrogram
+from parakeet.config import load_config
+from parakeet.data.features import fit_latent_normalizer
+from parakeet.data.synthetic import SyntheticSpeechBatchSource, make_corpus
+from parakeet.data.text import TextTokenizer
+from parakeet.inference import StreamingPhaseLock, phase_coherence, phase_lock
+from parakeet.models import build_model
+from parakeet.models.flow import (
     blockwise_sample,
     consistency_sample,
     unfold_time,
     vf_context_frames,
 )
-from parakeet.train.common import build_optimizer, seed_everything  # noqa: E402
-from parakeet.train.stages import flow_step, run_stage  # noqa: E402
-from parakeet.inference.synthesize import Synthesizer  # noqa: E402
+from parakeet.train.common import build_optimizer, seed_everything
+from parakeet.train.stages import flow_step, run_stage
+from parakeet.inference.synthesize import Synthesizer
 
 
 def _banner(text: str) -> None:

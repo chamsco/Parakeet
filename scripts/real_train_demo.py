@@ -25,7 +25,6 @@ from __future__ import annotations
 import argparse
 import json
 import statistics
-import sys
 import time
 from pathlib import Path
 from typing import Dict, List
@@ -33,18 +32,15 @@ from typing import Dict, List
 import numpy as np
 import torch
 
-ROOT = Path(__file__).resolve().parents[1]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 
-from parakeet.config import load_config  # noqa: E402
-from parakeet.data.dataset import LatentShardBatchSource, LatentShardDataset, WaveformCorpusSource  # noqa: E402
-from parakeet.data.features import cache_teacher_corpus, fit_latent_normalizer  # noqa: E402
-from parakeet.inference import Synthesizer, write_wav  # noqa: E402
-from parakeet.audio.mel import MelSpectrogram  # noqa: E402
-from parakeet.eval import ae_reconstruction_l1, teacher_signal_loss  # noqa: E402
-from parakeet.models import build_model, count_parameters  # noqa: E402
-from parakeet.train.stages import run_stage  # noqa: E402
+from parakeet.config import load_config
+from parakeet.data.dataset import LatentShardBatchSource, LatentShardDataset, WaveformCorpusSource
+from parakeet.data.features import cache_teacher_corpus, fit_latent_normalizer
+from parakeet.inference import Synthesizer, write_wav
+from parakeet.audio.mel import MelSpectrogram
+from parakeet.eval import ae_reconstruction_l1, teacher_signal_loss
+from parakeet.models import build_model, count_parameters
+from parakeet.train.stages import run_stage
 
 
 def _banner(text: str) -> None:
