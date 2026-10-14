@@ -30,10 +30,15 @@
 # new run is handicapped below 1x, so the endpoints are not comparable at all, because different budgets mix text with
 # training compute.
 #
-# AND THE COMPARISON IS TEXT ONLY, verified rather than assumed. The base cache carries 21 voices; the expansion's 11
-# Kokoro voices are all among them, adding ZERO new voices. So the merged corpus increases distinct prompts from 3744 to
-# about 8100 and holds voices constant, which is what makes this a text-diversity test rather than a general "more data"
-# test. Had it added voices, the result would have mixed two changes.
+# AND WHAT THE COMPARISON CANNOT SEPARATE, corrected after the result rather than before it. The base cache is 4533
+# items over 3744 distinct texts (1.21 renditions each) and the merged one is 8890 over about 8100 (1.10 each), so the
+# text count grew 2.16x and the item count 1.96x: both roughly doubled at once. The comparison therefore establishes
+# that CORPUS SIZE is the lever and does NOT establish that text diversity is, which is what an earlier version of this
+# header claimed. The voice SET is unchanged (the expansion adds zero new voices), which rules out new speakers, and the
+# renditions-per-text ratio is similar, which rules out an augmentation effect as the explanation for THIS result. What
+# would separate them is re-synthesising the existing texts with additional voices: the same texts, several times the
+# records. Until that is run, "more data" is the claim the evidence supports and "more text" is one step further than
+# the measurement goes.
 param(
   [string]$Base = "runs/text_long384",
   [string]$New = "runs/text_v4",

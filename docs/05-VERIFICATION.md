@@ -5402,8 +5402,15 @@ The expansion named in the objective's second milestone is finished and checked,
 
 Merged with the base this becomes roughly **8 890 items over 12.3 h** and, the number that matters, about **8 100
 distinct prompts against the 3 744** the comparison model trained on. The voice set does not change: the expansion's 11
-Kokoro voices are all already in the base cache's 21, so **zero new voices**, which is what makes the comparison a
-text-diversity test rather than a general "more data" test.
+Kokoro voices are all already in the base cache's 21, so **zero new voices** — which rules out new *speakers* as the
+explanation for the milestone-3 result.
+
+**But it does not make the comparison a text-only test, and the first version of this paragraph said it did.** The base
+cache is 4 533 items over 3 744 texts (1.21 renditions each) and the merged one is 8 890 over about 8 100 (1.10 each), so
+the **item count grew 1.96× and the text count 2.16× at the same time**. Corpus size is therefore the lever the
+comparison establishes; that the lever is specifically *text diversity* is one step further than the measurement goes.
+The way to separate them is to re-synthesise the **existing** texts with additional voices — the same texts, several
+times the records — which costs no new books and would say which of the two the model is responding to.
 
 **Eight public-domain books, never used before**, supplied the text: Great Expectations, Emma, Huckleberry Finn,
 Treasure Island, The Jungle Book, Anne of Green Gables, Walden and Peter Pan, drawn with a 500 000-character budget
