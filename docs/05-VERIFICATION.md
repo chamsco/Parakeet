@@ -5782,6 +5782,21 @@ Prepared and waiting, so a round never stalls on finding text: `prompts_v5.txt` 
 for the curve while it trains, and `scripts/compare_runs.ps1` at five readings per checkpoint for the comparison — with
 the cumulative-exposure table above saying which step range is fair.
 
+**And the synthesis bottleneck costs 2.9× less than this document first recorded, measured.** `make_teacher_corpus.py`
+is **strictly serial** — no `--jobs`, no worker path — and runs at about 20 prompts per minute, while this machine has 16
+logical cores and the synthesis uses one. `scripts/shard_synthesis.ps1` splits the prompt list **round-robin** so every
+shard sees the same book and voice mix, runs N teachers side by side, and merges their manifests into one corpus.
+Measured on 60 prompts across 6 shards: **61.7 s, or 58.3 utterances per minute against the serial 20 — 2.9×.** That
+takes a round's synthesis from about three hours to about one, and the two-scenario estimate for reaching the
+recogniser's 0.60 from **24–42 hours to roughly 8–15**.
+
+**The merge needed the care, and the care was repaid.** Every shard numbers its utterances from zero, so the first
+version of the script merged **four duplicate `utt_id`s** — and **the project's own validator refused it** ("WOULD CORRUPT
+THE MERGE: 4 duplicate utt_ids") before any of it could reach a cache. The ids are now prefixed per shard, the wav paths
+are rewritten to resolve against the merged directory rather than each shard's, and the merged corpus passes
+`validate_corpus.py` clean. That is the sixth time in this session that an artifact was checked against what it was
+supposed to be and found wanting — and the first time the check was done by the project's own gate rather than by me.
+
 **And the experiment that would separate text count from record count, designed but not run.** §142's correction named
 it; here is the design. Take N texts from the existing corpus and synthesise each with k voices by **duplicating each
 prompt line k times**, so the voice round-robin assigns a different voice to each copy — the builder takes voices in
