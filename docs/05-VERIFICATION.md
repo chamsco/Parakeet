@@ -5337,6 +5337,13 @@ prediction more likely to hold and means a better result is **not** a clean repl
 with more than a third of its schedule spent before the cosine began. Worth knowing before anyone compares the two
 numbers directly.
 
+**A leading indicator that costs nothing.** Every `distill-audio` step line carries `rendered_frames` against
+`target_frames`, which is the length head's error, and length error is what WER punishes hardest. The measured
+2 400-step run ended at **413.8 / 405.9 = 1.020**, so it had converged; the extension prints **1.189, 1.248, 1.208** at
+steps 50, 100 and 150, so nothing has converged yet. Three noisy points do not make a trend, but the ratio gives a
+signal before any WER reading exists and without spending a real-eval pass, which is why it is worth watching rather
+than only reading the endpoint.
+
 ## 142. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
