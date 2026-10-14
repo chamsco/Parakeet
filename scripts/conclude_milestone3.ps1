@@ -11,6 +11,21 @@
 # The prediction is in scripts/run_milestone3.ps1: above +0.02 at matched steps of 3000 or beyond means text diversity
 # does matter after all; inside the spread means it does not, and milestones 2 and 3 close with a negative result rather
 # than an open one.
+#
+# WHERE THE COMPARISON IS FAIR, because the two runs have different step budgets and therefore different schedules.
+# The comparison model ran 20000 steps with warmup 1000, so its cosine runs from step 1000 to 20000. The new one runs
+# 10000 with warmup clamped to 500, so its cosine runs from 500 to 10000. The fraction of peak learning rate at matched
+# steps is therefore:
+#
+#   step 1000   base 1.00   new 0.99
+#   step 2000   base 0.99   new 0.95
+#   step 3000   base 0.97   new 0.84
+#   step 4000   base 0.95   new 0.71
+#   step 5000   base 0.90   new 0.54
+#
+# So steps 1000 to 3000 are a fair comparison and steps 4000 and 5000 handicap the new arm by 24 and 36 points of peak
+# learning rate. The verdict should be read on 1000 to 3000, and any win the new arm shows there is conservative. The
+# endpoints are not comparable at all: different budgets, so a difference there mixes text with training compute.
 param(
   [string]$Base = "runs/text_long384",
   [string]$New = "runs/text_v4",
