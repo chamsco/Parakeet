@@ -66,18 +66,22 @@ CLAIMS: List[Dict[str, Any]] = [
     },
     {
         "id": "text_plateau",
-        "statement": "the deterministic text side's held-out ceiling: frame rho on 400 prompts from four unseen "
-                     "books, over steps 3 000-7 000, each checkpoint read twice. The bound claimed here is that no "
-                     "checkpoint exceeds 0.30, which is half the 0.60 at which the recogniser stops failing. The "
-                     "drift across those 4 000 steps measured SMALLER than the instrument's own within-checkpoint "
-                     "spread, so this is a plateau rather than a slow climb, and no trend is claimed from these "
-                     "points. Text count (418 against 3 744 distinct prompts) and capacity (9.62M against ~30M) "
-                     "both moved this readout not at all at matched steps",
+        "statement": "the held-out ceiling of ONE corpus, not of the method: frame rho on 400 prompts from four unseen "
+                     "books for runs/text_long384, which trained on 3 744 distinct prompts, over steps 3 000-7 000, "
+                     "each checkpoint read twice. The bound claimed here is that no checkpoint of THAT run exceeds "
+                     "0.30, which is half the 0.60 at which the recogniser stops failing, and the drift across those "
+                     "4 000 steps measured SMALLER than the instrument's own within-checkpoint spread, so it is a "
+                     "plateau rather than a slow climb. **It has since been exceeded, which is why this statement says "
+                     "one corpus.** Doubling the distinct prompts to about 8 100 raised held-out rho to 0.3256 at step "
+                     "2 000, above this bound and above that run's whole plateau of 0.2223, in a same-configuration "
+                     "comparison that also took the in-sample-against-held-out gap from 1.94x to 1.07x. So the "
+                     "memorisation plateau belongs to the smaller corpus, and corpus size is the variable that moves "
+                     "it",
         "report": ["runs/text_plateau.json"],
         "field": "summary.max",
         "op": "<=",
         "target": 0.30,
-        "fmt": "held-out rho ceiling {:.4f} over steps 3000-7000 (bound 0.30)",
+        "fmt": "that corpus's held-out rho ceiling {:.4f} over steps 3000-7000 (bound 0.30; a larger corpus has since reached 0.3256)",
     },
     {
         "id": "token_route_wer",
