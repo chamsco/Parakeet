@@ -5615,6 +5615,24 @@ flat plateau; the real increment is +0.0141. One reading would have written "the
 this log. The five-reading number is the one on record, which is the fourth time in this session that a single reading
 and a repeated one disagreed by more than the effect being claimed.
 
+**And what the offset implies, so the remaining path has a size rather than an adjective.** From 0.361 the threshold
+needs **+0.239**, and one doubling bought **+0.140**. Two scenarios bracket a saturating effect:
+
+| scenario | crossing after | corpus | wall clock |
+|---|---|---|---|
+| A: the offset stays constant | 2 more doublings | ~32 400 prompts, ~49 h of audio | ~26 h |
+| B: the offset halves per doubling | 3 more doublings | ~64 800 prompts, ~98 h | ~40 h |
+
+At the measured cost of about six hours of wall clock per round and about 3 800 prompts per round, that is **four to
+seven more rounds, or 24 to 42 hours**, on a machine that is otherwise idle.
+
+**Both are extrapolations from a single doubling and neither is a forecast.** What they establish is narrower and more
+useful than a forecast would be: **the remaining distance is a day or two of running rather than an impossibility.** That
+is a different claim from the one this log carried before the corpus result, when ρ ≈ 0.22 was being reported as the
+machine's ceiling, and the whole difference is the corpus lever measured once and extrapolated twice with its
+uncertainty on the label. The loop's rule follows from it: keep doubling, measure each doubling's increment, and stop
+when the increment collapses rather than when a round count runs out.
+
 **The loop's measured cost, so a handover does not have to rediscover it.** Per round: about **3 hours** of synthesis at
 the measured 19.3 utterances per minute for roughly 3 800 prompts; about **12 minutes** to cache and merge, which scales
 with the base it merges onto (18 shards took about 10 minutes); and about **2.4 hours** of training at the measured
