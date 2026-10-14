@@ -5315,6 +5315,17 @@ would make the result unattributable, and the corpus question has its own pre-re
 here so the final statement of what this project achieved does not understate it, and so the objective question
 (through-decoder against latent L1) is visible as an open, cheap, already-directional one.
 
+**And the extension differs from the original in two ways, found by diffing the two runs' `run.json` field by field.**
+The measured run recorded `warmup_steps: 1000` out of 2400, which is **42 % of its own schedule spent warming up**.
+`scripts/train.py:119` now clamps warmup to `max(50, steps // 20)` and prints the change, so the 4 000-step extension
+runs warmup **200**, or 5 %. The clamp postdates the measured run and carries a measured rationale in its comment (the
+flow's length head sat at 0.35 against a 6.75 target after 400 steps with an effective learning rate near 1e-5).
+
+So the extension changes the step budget *and* the schedule shape. Both should help, which makes the registered
+prediction more likely to hold and means a better result is **not** a clean replication of 0.667: the 0.667 was reached
+with more than a third of its schedule spent before the cosine began. Worth knowing before anyone compares the two
+numbers directly.
+
 ## 142. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated

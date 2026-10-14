@@ -36,8 +36,12 @@ $py = ".\.venv\Scripts\python.exe"
 New-Item -ItemType Directory -Force $Out | Out-Null
 
 Write-Host "[audio_long] distill-audio, $Steps steps, cache runs\v3_fixed (latent_rate derived = 3)"
+# warmup is pinned to the measured run's 1000. configs/parakeet_tiny.yaml sets 200, which is 5 % of a 4000-step
+# schedule against the 42 % that 1000 was of the measured 2400, so leaving it would confound the extension with a
+# different schedule shape. Found by diffing this run's run.json against runs/real_audio_long/run.json field by field.
 & $py -u scripts\train.py --config configs\parakeet_tiny.yaml --stage distill-audio `
     --cache runs\v3_fixed --steps $Steps --batch-size 16 --device cpu `
+    --set train.warmup_steps=1000 `
     --set train.save_every=1000 --out $Out > "$Out\train.log" 2>&1
 Write-Host "[audio_long] training exit $LASTEXITCODE"
 
