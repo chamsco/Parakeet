@@ -5344,6 +5344,17 @@ steps 50, 100 and 150, so nothing has converged yet. Three noisy points do not m
 signal before any WER reading exists and without spending a real-eval pass, which is why it is worth watching rather
 than only reading the endpoint.
 
+**Watched further, and it predicts a WER at or above 1.000.** By step 700 the ratio has not moved: 1.248, 1.213, 1.233,
+1.252, 1.208, 1.253, 1.231 across steps 100 to 700, flat inside its own noise, and the mel loss has fallen only from
+3.570 to **3.073**. The small-corpus run reached a ratio of 1.020 and a mel loss of **0.514**. At the observed rate the
+mel loss would be near 1.9 at 2 400 steps, three to four times above the small-corpus endpoint, and the length ratio
+shows no sign of converging at all.
+
+So the prediction, registered before its WER reading: **this run reads at or above 1.000, not near 0.6**. That is the
+same conclusion the recorded metadata reached from the other direction — 0.667 was a three-voice, six-utterance result —
+and it means the leading indicator earned its place: it has already answered the question the run was launched to ask,
+four hours before the run ends.
+
 **Its provenance, checked because the number looked too good not to check, and it is not comparable.** Reading
 `runs/real_audio_long/run.json` and its evaluation report rather than assuming the run matched this project's usual
 setup: it trained on **one shard and three voices** (`af_bella`, `af_heart`, `af_sky`) and was evaluated on
