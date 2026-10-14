@@ -87,7 +87,26 @@ Corpus growth is now mechanical rather than exploratory: a voice's latent scale 
 (the corpus's Kokoro voices pool at 0.83–0.85, other Kokoro voices at 0.44–0.52), which is why two earlier
 expansions measured *worse* when mixed in; per-voice normalisation fixes it, and
 `scripts/expand_corpus.py` caches, merges and normalises a new corpus in one command with each of those
-failures as a test.
+failures as a test. A **merge** then exposed a case per-voice normalisation cannot cover — one voice whose items
+come from two sources at different scales — so normalisation is now **per (voice, source)**, with each item
+carrying a compound provenance tag; see [docs/05-VERIFICATION.md](docs/05-VERIFICATION.md) §§112–117.
+
+**Conversational data: the premise is measured, and it holds.** Every corpus element here was *narration* — one
+speaker, smooth prosody, no turn-taking — which is an unusually easy distribution to model unconditionally, and
+that is exactly what makes text look worthless to a flow that only has to fit the marginal. A dialogue set built
+from public-domain plays (`scripts/expansion_dialogue.py`, 1 461 turns) leaves **37.4 %** of the target's variance
+for the text against narration's **21.3 %** — ~1.75× more conditional signal — measured before training anything.
+The honest limitation: Kokoro *reads* those turns, so this is dialogue-shaped text in narration delivery, not
+spontaneous prosody or overlap. A genuine test needs a duplex corpus.
+
+**Scaling to 7B, and a duplex (conversational) mode**, are costed in
+[docs/PLAN.md](docs/PLAN.md#scaling-to-7b-and-adding-a-conversational-duplex-mode). The short version: 7B is
+**179×** this project's research flow and would take **~8 minutes per step** on this CPU (~56 days for 10 k
+steps), so it is a GPU question — and a *fine-tuning* one, not from scratch: NVIDIA's PersonaPlex fine-tuned
+open Moshi weights, and QLoRA on a frozen 7B fits a single 24–48 GB card. What carries over is the autoencoder
+work, the streaming inference, the evaluation discipline, and the corpus pipeline; what is missing is the duplex
+architecture (two streams, Mimi-style codec, inner/depth transformer for the codebook axis, role-prompt and voice
+conditioning).
 
 One licence note, stated plainly: the Speechify teacher's written permission covers
 **demonstration/quantization work**, which is narrower than "train on the audio and publish derivative
