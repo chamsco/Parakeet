@@ -5457,6 +5457,20 @@ could not name its autoencoder, and now an identity global normaliser. **Every o
 artefact against the thing it was supposed to match, and none was visible in any result**, because the metrics in use
 happened to be invariant to the error. The evaluation path, not the model, keeps being the weak point.
 
+**And the convention is worth 0.02 in ρ, measured.** The four measurement conventions now in play were quantified by
+scoring one checkpoint on the same 60 held-out items under each:
+
+| held-out convention | frame ρ |
+|---|---|
+| identity global normaliser, no per-voice table (the old state) | **0.2343** |
+| training global normaliser plus the per-voice table (the current state) | **0.2149** |
+
+A difference of **0.0194**, which is the same size as the instrument's own resolution and therefore large enough to
+matter in a comparison. It is why both arms of the corpus comparison are re-measured under one convention by
+`scripts/conclude_milestone3.ps1`, and why both runs' accumulated monitor logs carry a note saying which convention
+their readings above it were taken under — the baseline's are old, and the enlarged run's are current because it started
+after the correction.
+
 ## 145. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
