@@ -57,7 +57,9 @@ def fit_voice_norm(cache: Path, min_items: int = 4) -> Dict[str, Dict[str, List[
         per_voice.setdefault(int(voice), []).append(item["latent"])
         source = item.get("source")
         if source is not None:
-            per_voice_source.setdefault((int(voice), int(source)), []).append(item["latent"])
+            # the tag is a compound path ("0", "0>1") so every merge level stays separable
+            key = str(int(source)) if isinstance(source, torch.Tensor) else str(source)
+            per_voice_source.setdefault((int(voice), key), []).append(item["latent"])
 
     def _stats(latents: List[torch.Tensor]) -> Dict[str, List[float]]:
         stacked = torch.cat(latents, dim=-1)

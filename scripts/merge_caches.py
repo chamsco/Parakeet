@@ -68,7 +68,14 @@ def merge_caches(base: Path, extra: Path, out: Path, shard_size: int = 500) -> D
             payload = torch.load(cache / entry["path"], map_location="cpu", weights_only=False)
             for item in payload["items"]:
                 item = dict(item)
-                item["source"] = torch.tensor(source_id)
+                # COMPOUND source tag.  A single int would be overwritten by the next merge in a chain, losing
+                # the distinction the tag exists for: `(base + kokoro_v3) + kokoro_v3b` collapses base and
+                # kokoro_v3 back into one source at step two, so af_alloy's two scales would be pooled again --
+                # the same defect one level down.  Storing the path ("0>1") keeps every level separable, and
+                # each item's tag describes its own provenance rather than its position in the last merge.
+                existing = item.get("source")
+                prefix = "" if existing is None else str(existing) + ">"
+                item["source"] = f"{prefix}{source_id}"
                 # A width mismatch merges silently and produces items the model cannot read: the expansion's
                 # cache was first built at latent_rate 1 (24-wide tokens) against this cache's 3 (72-wide).
                 # Refusing loudly is the only safe behaviour.

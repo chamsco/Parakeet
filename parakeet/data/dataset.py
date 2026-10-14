@@ -155,8 +155,13 @@ class LatentShardDataset(Dataset):
                 self.voice_norm[names.index(name)] = _table(stats)
             for key, stats in (meta.get("voice_source_norm") or {}).items():
                 voice_part, _, source_part = str(key).partition("|")
+                if not source_part or not isinstance(stats, dict):
+                    continue
                 try:
-                    self.voice_source_norm[(int(voice_part), int(source_part))] = _table(stats)
+                    # the source is kept as a STRING: it is a compound path in a chain of merges ("0>1"), and
+                    # the per-item lookup builds the same string.  Coercing to int here silently missed every
+                    # entry, which is what the regression test caught.
+                    self.voice_source_norm[(int(voice_part), str(source_part))] = _table(stats)
                 except ValueError:
                     continue
 
@@ -172,10 +177,13 @@ class LatentShardDataset(Dataset):
             # truncated here -- reference length is capped separately at collation
         # A source-specific statistic wins over the per-voice one when the item carries a `source` tag and the
         # cache provides stats for that (voice, source) pair -- which is what stops a merged cache from mixing
-        # two scales inside one voice.
+        # two scales inside one voice.  The tag is a compound path ("0", "0>1") because a chain of merges would
+        # otherwise overwrite the earlier level, which is the same defect one level down.
         stats = None
-        if self.voice_source_norm and item.get("source") is not None:
-            stats = self.voice_source_norm.get((int(item["voice"]), int(item["source"])))
+        source = item.get("source")
+        if self.voice_source_norm and source is not None:
+            key = str(int(source)) if isinstance(source, torch.Tensor) else str(source)
+            stats = self.voice_source_norm.get((int(item["voice"]), key))
         if stats is None and self.voice_norm:
             stats = self.voice_norm.get(int(item["voice"]))
         if stats is not None and self.apply_voice_norm:

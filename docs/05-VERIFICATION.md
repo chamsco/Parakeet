@@ -4276,7 +4276,41 @@ this change — so the fix only takes effect for caches built by the updated cha
 (~15–20 minutes) before any measurement that depends on its normalisation is trustworthy. The dialogue cache is
 single-source and unaffected either way.
 
-## 116. Environment notes
+## 116. Per-source normalisation: applied, and one level deeper than the first attempt (round 124)
+
+The §115 fix was in code but not in any cache, so this round rebuilt the chain. The rebuild immediately exposed a
+**second copy of the same defect**, one level down: a single-int source tag is overwritten by the next merge, so
+(base + kokoro_v3) + kokoro_v3b collapsed base and kokoro_v3 back into one source — step 1 produced 4
+(voice, source) pairs and step 2 would have produced 4 again instead of 24. The tag is now a **compound path**
+("0", then "0>0" / "0>1"), and each item's tag describes its own provenance rather than its position in the
+last merge.
+
+**Evidence from the rebuilt chain:**
+
+| step | result |
+|---|---|
+| 1: mixed_v2 + kokoro_v3 | 1 932 items, **4** (voice, source) pairs |
+| 2: + kokoro_v3b | 4 533 items, **24** (voice, source) pairs |
+
+Both verify at 0.0419, and in the finished cache the 32 groups with n ≥ 4 all pool at std 1.000. The regression
+test pins it on a synthetic cache holding **one voice at two scales** (0.5 and 1.5): the per-source statistics must
+carry the right per-source stds *and* each source must come back at ~1.0 — impossible when the per-voice mixture is
+used.
+
+Also fixed en route: the dataset's table parser coerced the source to int while the per-item lookup built a
+str, so **every** per-source entry was silently missed. The regression test caught it immediately.
+
+**What this does not show, stated rather than implied:** that the original 1.59-on-real-data symptom is gone
+*because of* this change. uns/expanded_v3 was refitted earlier in the session with the round-78 fix and the
+pooled-std probe reads 1.000 on it too — but that statistic is partly **tautological**, since measuring the pooled
+std of the very group the fit pooled returns 1.0 by construction. The clean evidence is the synthetic test (which
+discriminates) and the 24 per-source entries that did not exist before. The original 1.59 came from a cache state
+that no longer exists and cannot be re-measured.
+
+**Going forward:** uns/v3_fixed — 4 533 items, same size, per-source normalisation — replaces xpanded_v3 as
+the merged corpus.
+
+## 117. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
