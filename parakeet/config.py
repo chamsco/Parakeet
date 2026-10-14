@@ -52,6 +52,7 @@ class AutoencoderConfig:
     layer_scale_init: float = 1e-6
     #: decoder is causal (streaming capable)
     causal_decoder: bool = True
+    #: NO READER in the package: the autoencoder's head type is fixed in code. Kept as the record of intent.
     spec_head: str = "magphase"  # magphase | complex
     #: ``distill-decoder`` builds its input with :meth:`ParakeetTiny.decoder_latent_from_tokens`
     #: (per-token latents expanded exactly as inference does) instead of consuming the cached
@@ -91,7 +92,10 @@ class DurationConfig:
     hidden: int = 256
     n_layers: int = 2
     kernel_size: int = 5
-    #: per-token durations (Tiny path) and/or utterance length (Small path)
+    #: per-token durations (Tiny path) and/or utterance length (Small path).  NEITHER FLAG IS READ: the duration
+    #: predictor and the length predictor are both built unconditionally, so both modes are always active and these
+    #: two switches select nothing.  Kept as the record of intent rather than deleted, because the capability they
+    #: name is real and a future variant may want to make one of them optional.
     predict_token_durations: bool = True
     predict_utterance_length: bool = True
     #: initial value for the utterance-length head's output bias, in log latent frames.  Zero leaves the
@@ -176,6 +180,8 @@ class LossConfig:
     duration: float = 1.0
     f0: float = 1.0
     energy: float = 1.0
+    #: NO READER in the package, and six shipped configs set it, so it reads as the latent term's weight when the
+    #: real weight is `DistillSignalWeights.latent` in loss.py.  The token-latent term is not configurable here.
     latent_feature: float = 1.0
     #: push style tokens away from a *different* speaker's (identity debiasing; needs paired refs)
     style_separation: float = 0.1
@@ -201,6 +207,8 @@ class LossConfig:
     #: exactly the "healthy mel proxy, unintelligible speech" signature.  This term centres both sides
     #: across tokens so it can only be reduced by matching the variation.
     signal_latent_contrast: float = 0.0
+    #: NO READER in the package: no speed-perturbation augmentation is implemented.  The default of 0.0 means setting
+    #: it looks like an off switch rather than a missing feature.
     speed_perturb: float = 0.0
 
 
@@ -217,6 +225,8 @@ class TrainConfig:
     max_steps: int = 100_000
     grad_clip: float = 1.0
     ema_decay: float = 0.999
+    #: NO READER in either case.  `amp` defaults to True while nothing implements mixed precision, so it advertises a
+    #: speed feature that does not run; `num_workers` is set by no config and the loader's worker count is fixed.
     amp: bool = True
     num_workers: int = 4
     save_every: int = 5000

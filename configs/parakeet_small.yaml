@@ -39,7 +39,7 @@ duration:
   hidden: 256
   n_layers: 2
   predict_token_durations: false
-  predict_utterance_length: true   # single scalar total length (SupertonicTTS)
+  predict_utterance_length: true   # inert: both predictors are built regardless of these flags (config.py)
 
 speaker:
   n_mels: 80

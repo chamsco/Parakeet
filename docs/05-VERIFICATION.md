@@ -5105,7 +5105,37 @@ step      100 duration=0.7281 f0=0.4190 energy=0.3883 latent=1.0879 latent_contr
 so the term is present and, at equal weight, of the same magnitude as the raw latent term. That means it changes the
 objective materially rather than marginally, which is the condition for the A/B to be worth its CPU.
 
-## 136. Environment notes
+## 136. An audit for the same defect class: seven config fields have no reader (round 152)
+
+The silent no-op in §135 is one instance of a class, so the class was audited rather than the instance. A script
+enumerated every dataclass field the config exposes (98 of them) and counted word-boundary occurrences of each name in
+every `.py` under `parakeet/`, excluding `config.py` itself. Fields with **zero** readers:
+
+| owner | field | status |
+|---|---|---|
+| `LossConfig` | `latent_feature` | **set by six shipped configs**, so it reads as the token-latent weight. The real weight is `DistillSignalWeights.latent` in `loss.py`; this field is not connected to anything |
+| `TrainConfig` | `amp` | defaults to **True**, and nothing implements mixed precision, so it advertises a speed feature that never runs |
+| `TrainConfig` | `num_workers` | set by no config; the loader's worker count is fixed in code |
+| `DurationConfig` | `predict_token_durations` | **set by every shipped config** |
+| `DurationConfig` | `predict_utterance_length` | **set by every shipped config**, and `parakeet_small.yaml` documents it as the SupertonicTTS scalar-length mode |
+| `AutoencoderConfig` | `spec_head` | the head type is fixed in code |
+| `LossConfig` | `speed_perturb` | no speed-perturbation augmentation exists; the 0.0 default makes a missing feature look like an off switch |
+
+**The two duration switches are vestigial rather than a missing feature, which matters for how the finding is read.**
+`UtteranceLengthPredictor` and `DurationPredictor` both exist in `parakeet/models/duration.py`, and
+`ParakeetTiny.__init__` constructs both unconditionally, so both modes are always active and the switches select
+nothing. `log_length_init`, the field next to them, **is** read (`duration.py:78`), which is why the pair stood out:
+the neighbouring knob works.
+
+Recorded rather than deleted. The fields document real intent, the capabilities they name exist, and removing public
+config keys is an operator-facing change that belongs with the decision to make one of the modes optional. What the
+annotations buy is that the next reader does not spend CPU on a knob that is not connected, which is exactly what
+happened in §135.
+
+The negative result is worth stating too: **91 of 98 config fields are read**, so this is a tail of seven rather than a
+config surface in disarray.
+
+## 137. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
