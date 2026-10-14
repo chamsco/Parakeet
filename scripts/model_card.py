@@ -47,6 +47,20 @@ CLAIMS: List[Dict[str, Any]] = [
         "fmt": "rho {:.4f} (implied ceiling sqrt = 0.845)",
     },
     {
+        "id": "best_model_wer",
+        "statement": "the BEST model-level WER anywhere in this project, so the status line above is not read as \"no "
+                     "model ever did better than 1.000\". It comes from training the text side THROUGH the decoder with "
+                     "a mel/audio loss rather than regressing cached latents: 0.667 at 2 400 steps, against 1.000 for "
+                     "the same objective at 600 steps and 1.648 for a latent L1. Two-thirds of words wrong is still "
+                     "unintelligible, and it is the only objective here whose WER trend points down, which is why it "
+                     "is the one being continued",
+        "report": ["runs/objective_ab.json"],
+        "field": "student.wer.through_decoder_2400",
+        "op": "<=",
+        "target": 0.7,
+        "fmt": "best model WER {:.4f} (through-decoder, 2400 steps)",
+    },
+    {
         "id": "text_plateau",
         "statement": "the deterministic text side's held-out ceiling: frame rho on 400 prompts from four unseen "
                      "books, over steps 3 000-7 000, each checkpoint read twice. The bound claimed here is that no "

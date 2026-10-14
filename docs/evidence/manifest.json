@@ -1,7 +1,7 @@
 {
-  "generated": "2026-10-14T11:15:41",
+  "generated": "2026-10-14T12:15:35",
   "git": {
-    "rev": "53821e1",
+    "rev": "c68e2e2",
     "dirty": true
   },
   "note": "Committed snapshots of the reports the model card cites.  Refresh with `python scripts/model_card.py --refresh-evidence` after re-running the demos; the hashes make a stale bundle visible.",
@@ -12,6 +12,13 @@
       "source": "runs/rendition_reliability.json",
       "evidence": "docs/evidence/rendition_reliability.json",
       "sha256": "4c92cce51e4a94646470b6eebe633f2abe7c94955cb6b8d67b76e60f670801d7"
+    },
+    {
+      "claim": "best_model_wer",
+      "status": "copied",
+      "source": "runs/objective_ab.json",
+      "evidence": "docs/evidence/best_model_wer.json",
+      "sha256": "70f774377d0a222ff65f01da4e4eb19536b8ad025d632ca7c1bdf9679ddd683c"
     },
     {
       "claim": "text_plateau",
