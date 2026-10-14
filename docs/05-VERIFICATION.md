@@ -5668,6 +5668,7 @@ in both runs and the larger corpus holds it off rather than preventing it.
 |---|---|---|---|
 | 5 000 | 0.2228 | 0.3630 | +0.1402 |
 | 6 000 | 0.2301 | **0.3648** | **+0.1347** |
+| 7 000 | — | 0.3649 | — |
 
 The enlarged run's increment is **+0.0018** — its **second consecutive flat point**, so its plateau is **~0.364** and
 the first doubling's ceiling is found. The baseline's increment is +0.0073, but it arrives with a **spread of 0.0521**,
