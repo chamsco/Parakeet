@@ -5441,7 +5441,7 @@ The prompt builder excluded the 400 held-out prompts and all 5 097 previously us
 training, from validation, and from the first expansion. If the corpus lever turns out to be real, adding these takes
 the distinct-prompt count from about 8 100 to about 11 900 for roughly 2.2 hours of synthesis and no new books to find.
 
-**And a fourth set behind it**, because held-out ρ turned out to be rising and milestone 4 says to keep growing: eight
+**And a third set behind it**, because held-out ρ turned out to be rising and milestone 4 says to keep growing: eight
 more unused books — Persuasion (105), Northanger Abbey (121), Mansfield Park (141), The Republic (1497), Meditations
 (2680), The Prince (1232), Grimms' Tales (2591), A Modest Proposal (1080) — give **3 451 prompts and 442 092 characters**
 under the same exclusions. That carries the chain to about **15 350 distinct prompts** without stopping to look for text.
