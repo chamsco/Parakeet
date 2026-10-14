@@ -5662,6 +5662,20 @@ memorisation-versus-generalisation knob**, and the same configuration moved from
 having more text. Both gaps widen with training (at step 2 000 they were 1.94× and 1.07×), so memorisation sets in late
 in both runs and the larger corpus holds it off rather than preventing it.
 
+**And the outcome metrics at that plateau, which is the half of milestone 3 the objective asks for in the same breath.**
+On 24 held-out utterances at step 5 000:
+
+| run | held-out ρ | WER | teacher control | DNSMOS |
+|---|---|---|---|---|
+| baseline, 3 744 distinct prompts | 0.2228 | **1.0000** | 0.0219 | 1.236 |
+| enlarged, ~8 100 distinct prompts | **0.3630** | **1.0000** | 0.0219 | **1.238** |
+
+**The corpus bought 63 % more held-out ρ and nothing the recogniser or the naturalness scorer can see.** That is not a
+disappointment, it is the calibration: the transition is a step between 0.60 and 0.75, so every ρ below 0.60 decodes to
+WER 1.0000 and DNSMOS moves only with noise. The objective's third milestone therefore has both of its readouts, and
+they say different things **on purpose** — the lever is real in the latent metric and invisible in the outcome metric,
+and the step at 0.60 is what separates them.
+
 **And what v5 decides, which is sharper than "does it keep rising".** The corpus-size points on record are:| items | distinct texts | held-out ρ at matched steps | caveat |
 |---|---|---|---|
 | 1 207 | 418 | ~0.176 | the dim-256 ladder, so confounded by capacity |
