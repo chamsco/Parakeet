@@ -1,7 +1,7 @@
 {
-  "generated": "2026-10-14T04:53:21",
+  "generated": "2026-10-14T07:10:49",
   "git": {
-    "rev": "d4a1f91",
+    "rev": "6ec819c",
     "dirty": true
   },
   "note": "Committed snapshots of the reports the model card cites.  Refresh with `python scripts/model_card.py --refresh-evidence` after re-running the demos; the hashes make a stale bundle visible.",

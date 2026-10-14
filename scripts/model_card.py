@@ -683,15 +683,19 @@ def render(results: List[Dict[str, Any]], args) -> str:
         "Every row below is read from a report file written by a demo; nothing is typed in by hand.*"
     )
     out.append("")
-    out.append("## Status: research scaffold, no trained weights")
+    out.append("## Status: research scaffold, no usable weights")
     out.append("")
     if checkpoints:
         out.append(
             f"Checkpoint files present in this workspace: **{len(checkpoints)}** "
             f"({', '.join(f'`{c}`' for c in checkpoints[:3])}{' …' if len(checkpoints) > 3 else ''}).  "
-            "These are run artifacts from the demos below, trained on **synthetic fixtures** -- they "
-            "are not released weights and their audio is not speech.  A model trained on a real "
-            "corpus does not exist yet."
+            "**Models trained on a REAL corpus do exist** -- a Kokoro+Speechify mixture of ~8 h across 21 "
+            "voices, with the autoencoder's round trip at **WER 0.000** and the token/flow routes measured at "
+            "**WER 1.000 against a teacher control of 0.000-0.014**, on held-out text as well as training text.  "
+            "So the size and speed claims below are real and the *speech* is not: these are not released "
+            "weights, and nothing here should be read as a working TTS model.  The measured reason is in "
+            "`docs/05-VERIFICATION.md` -- the model memorises its corpus rather than generalising from it "
+            "(rho 0.82 in-sample against 0.15 held out)."
         )
     else:
         out.append(
