@@ -5675,8 +5675,22 @@ three times its spread at the previous point, so its step-6 000 mean is the leas
 honest reading is a gap of **+0.135 to +0.140** rather than a moving one. A point whose spread is 7× its increment is a
 point to average, not to interpret.
 
-**And the corpus buys both speed and ceiling, of which only one can cross the threshold.** The enlarged run reaches the
-baseline's established plateau of **0.2228** at about **step 1 350**, where the baseline itself takes until roughly step
+**The token route moves with the frame route, measured with the repeats it never had.** Step 6 000, five readings per
+arm, both metrics from the same readings:
+
+| run | frame ρ | token ρ |
+|---|---|---|
+| baseline, 3 744 distinct prompts | 0.2208 (spread 0.0397) | 0.1791 (spread 0.0328) |
+| enlarged, ~8 100 distinct prompts | **0.3613** (spread 0.0082) | **0.3147** (spread 0.0079) |
+| difference | **+0.1405** | **+0.1356** |
+
+Both metrics agree, so the corpus is not buying something only the frame readout can see. Two details are worth keeping:
+the **baseline's spread is about five times the enlarged run's** (0.0397 against 0.0082), so the noisier arm is the one
+that memorised, and this run's baseline frame mean is 0.2208 where an earlier five-reading run on the same checkpoint
+gave 0.2301 — **even five-reading means move by about 0.01**, which is the level the +0.14 gap clears by a factor of
+fourteen.
+
+**And the corpus buys both speed and ceiling, of which only one can cross the threshold.** The enlarged run reaches thebaseline's established plateau of **0.2228** at about **step 1 350**, where the baseline itself takes until roughly step
 5 000 to settle there — about **3.7× fewer steps** for the same quality. Its own ceiling is **1.59× higher** (+0.1347).
 Both effects are real and both matter for the loop, but only the ceiling can cross the 0.60 step: a corpus that only
 converged faster would reach a plateau that never becomes audible. That is why each new doubling is read as a **ceiling
