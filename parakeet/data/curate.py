@@ -195,7 +195,7 @@ def _dnsmos_available() -> bool:
         from speechmos import dnsmos  # type: ignore  # noqa: F401
 
         return True
-    except Exception:  # noqa: BLE001 - optional dependency
+    except (ImportError, OSError):
         return False
 
 

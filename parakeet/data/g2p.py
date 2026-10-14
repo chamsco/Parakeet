@@ -34,7 +34,7 @@ def phonemize_available() -> bool:
         import phonemizer  # type: ignore  # noqa: F401
 
         return True
-    except Exception:  # noqa: BLE001 - optional dependency
+    except (ImportError, OSError):
         return False
 
 

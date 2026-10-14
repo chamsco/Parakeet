@@ -737,7 +737,7 @@ def _batch_state(batches) -> Optional[Dict[str, Any]]:
         return None
     try:
         return getter()
-    except Exception:  # noqa: BLE001 - a source without serialisable state must not break saving
+    except (AttributeError, TypeError, KeyError, RuntimeError):
         return None
 
 

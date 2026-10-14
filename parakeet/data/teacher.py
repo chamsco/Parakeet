@@ -580,7 +580,9 @@ class SpeechifyBackend(TeacherBackend):
                 # 4xx other than rate limiting will not improve by retrying
                 if exc.code < 500 and exc.code != 429:
                     break
-            except Exception as exc:  # noqa: BLE001 - network flakes are expected on a long build
+            except (OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+                # ValueError is deliberately absent: a malformed billable count is a data error, and retrying it as
+                # though it were a network flake is what hid the last one.
                 last_error = exc
             self.failures += 1
             if attempt < self.attempts:
@@ -657,18 +659,17 @@ class OrpheusBackend(TeacherBackend):
         self.verify()
 
     def verify(self) -> None:
-        for name, value in [
-            ("<custom_token_0>", self.START_OF_HUMAN),
-        ]:
-            try:
-                got = self.tokenizer.convert_tokens_to_ids(name)
-            except Exception:  # pragma: no cover - depends on tokenizer version
-                continue
-            if got != value:
-                raise RuntimeError(
-                    f"Orpheus token layout changed: {name} -> {got}, expected {value}. "
-                    "Re-derive the constants from the model card before trusting output."
-                )
+        """Fail loudly when the loaded tokenizer contradicts the constants above.
+
+        ``<custom_token_0>`` is the one constant whose token name is expressible here. The remaining five are checked
+        against the model card rather than by this method.
+        """
+        got = self.tokenizer.convert_tokens_to_ids("<custom_token_0>")
+        if got != self.START_OF_HUMAN:
+            raise RuntimeError(
+                f"Orpheus token layout changed: <custom_token_0> -> {got}, expected {self.START_OF_HUMAN}. "
+                "Re-derive the constants from the model card before trusting output."
+            )
 
     @torch.no_grad()
     def synthesize(self, text: str, voice: str = "tara") -> Tuple[np.ndarray, int]:

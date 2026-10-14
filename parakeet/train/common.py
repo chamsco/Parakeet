@@ -233,7 +233,7 @@ def git_revision(short: bool = True) -> Optional[Dict[str, Optional[str]]]:
             "rev": rev.stdout.strip(),
             "dirty": bool(status.stdout.strip()) if status.returncode == 0 else None,
         }
-    except Exception:  # noqa: BLE001 - provenance must never break a run
+    except (OSError, subprocess.SubprocessError):
         return None
 
 

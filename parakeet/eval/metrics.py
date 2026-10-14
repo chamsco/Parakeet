@@ -243,11 +243,13 @@ def dnsmos_score(audio: Sequence[torch.Tensor], sample_rate: int = 24000) -> Opt
             if sample_rate != 16000:
                 try:
                     from scipy.signal import resample_poly
-
+                except ImportError:
+                    resample_poly = None
+                if resample_poly is not None:
                     mono = torch.from_numpy(
                         resample_poly(mono.numpy(), 16000, sample_rate).astype("float32")
                     )
-                except Exception:  # noqa: BLE001 - scipy is optional; linear is a fallback
+                else:
                     target = int(mono.numel() * 16000 / sample_rate)
                     mono = torch.nn.functional.interpolate(
                         mono.reshape(1, 1, -1), size=target, mode="linear", align_corners=False

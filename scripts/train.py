@@ -240,19 +240,23 @@ def main() -> int:
     # cosine 0.805, per-dimension correlation 0.126).  Only the head's last linear layer is touched.
     calibration: dict = {}
     if not args.dry_run and args.cache and args.stage in {"distill-audio", "distill-text"}:
-        try:
-            probe = next(iter([source()])) if callable(source) else None
-            if probe is not None and "latent_token" in probe:
-                from parakeet.train.common import calibrate_head_scale
+        probe = source() if callable(source) else None
+        if probe is not None and "latent_token" in probe:
+            from parakeet.train.common import calibrate_head_scale
 
+            try:
                 measured = calibrate_head_scale(model, probe)
-                if measured:
-                    calibration = {f"head_calibration_{k}": v for k, v in measured.items()}
-                    print(f"[train] latent head scale: predicted std {measured['predicted_std']:.4f} "
-                          f"-> target {measured['target_std']:.4f} (x{measured['ratio']:.2f}); "
-                          f"after calibration {measured.get('predicted_std_after', float('nan')):.4f}")
-        except Exception as exc:  # noqa: BLE001 - a calibration must never take the run down
-            print(f"[train] head calibration skipped: {type(exc).__name__}: {exc}")
+            except (KeyError, ValueError, RuntimeError) as exc:
+                # A cache without token targets, or a head the calibrator cannot measure, is a reason to skip. A
+                # NameError or TypeError is a defect in this call, and hiding it behind "calibration skipped" is how
+                # an uncalibrated run stays unnoticed.
+                measured = None
+                print(f"[train] head calibration skipped: {type(exc).__name__}: {exc}")
+            if measured:
+                calibration = {f"head_calibration_{k}": v for k, v in measured.items()}
+                print(f"[train] latent head scale: predicted std {measured['predicted_std']:.4f} "
+                      f"-> target {measured['target_std']:.4f} (x{measured['ratio']:.2f}); "
+                      f"after calibration {measured.get('predicted_std_after', float('nan')):.4f}")
 
     def log_fn(logs):
         printable = " ".join(
