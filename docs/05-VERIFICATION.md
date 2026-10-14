@@ -5675,9 +5675,15 @@ three times its spread at the previous point, so its step-6 000 mean is the leas
 honest reading is a gap of **+0.135 to +0.140** rather than a moving one. A point whose spread is 7× its increment is a
 point to average, not to interpret.
 
+**And the corpus buys both speed and ceiling, of which only one can cross the threshold.** The enlarged run reaches the
+baseline's established plateau of **0.2228** at about **step 1 350**, where the baseline itself takes until roughly step
+5 000 to settle there — about **3.7× fewer steps** for the same quality. Its own ceiling is **1.59× higher** (+0.1347).
+Both effects are real and both matter for the loop, but only the ceiling can cross the 0.60 step: a corpus that only
+converged faster would reach a plateau that never becomes audible. That is why each new doubling is read as a **ceiling
+increment** at matched steps rather than as a convergence curve.
+
 **And the outcome metrics at that plateau, which is the half of milestone 3 the objective asks for in the same breath.**
-On 24 held-out utterances at step 5 000:
-| run | held-out ρ | WER | teacher control | DNSMOS |
+On 24 held-out utterances at step 5 000:| run | held-out ρ | WER | teacher control | DNSMOS |
 |---|---|---|---|---|
 | baseline, 3 744 distinct prompts | 0.2228 | **1.0000** | 0.0219 | 1.236 |
 | enlarged, ~8 100 distinct prompts | **0.3630** | **1.0000** | 0.0219 | **1.238** |
