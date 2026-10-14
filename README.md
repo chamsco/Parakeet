@@ -28,19 +28,31 @@ the measured reason, in order of discovery:
   and unlike a mel-spectrogram proxy it cannot be satisfied by noise. The flow once measured ρ ≈ 0 with a
   log-mel cosine of **0.90**, which is why the envelope looks right and the words are absent.
 * **the figure quoted here for months, ρ ≈ 0.37 with "validation ≈ training", was a training number and is
-  withdrawn. What replaced it is worse and better measured.** On **400 prompts from four unseen books**, with **no
-  text overlap** against the 10 549 prompts that built any training corpus, held-out ρ over steps **3 000–7 000** is
-  **mean 0.2223, max 0.2315**, each checkpoint read **twice**: the drift across those 4 000 steps has sd **0.0093**,
-  smaller than the instrument's own within-checkpoint spread of **0.0202**, so it is a plateau rather than a slow
-  climb. The model card carries that as a machine-checked bound (`text_plateau`, `summary.max ≤ 0.30`) that fails if
-  it stops being true.
-  **The diagnosis is under-fitting, not memorisation.** The same configuration fits its own training data at in-sample
-  ρ **0.4157**, so the gap is **2×**, not the factor of five this file used to quote from a different 304-item setup,
-  and at 0.42 the model cannot yet reproduce even the data it saw. **Every lever available on this machine has now
-  been measured and none moves the plateau**: 9× the text (418 → 3 744 distinct prompts), 3× the capacity (9.62M →
-  ~30M), and objective re-weighting — the mean-invariant latent term gave **+0.028 at step 1 000 and +0.005 by step
-  2 000**, an early-training accelerator rather than a higher ceiling. What remains is the paper's regime: 945 h of
-  audio and the compute to use it.
+  withdrawn. What replaced it is smaller, and then a corpus change moved it.** On **400 prompts from four unseen
+  books**, with **no text overlap** against the 10 549 prompts that built any training corpus, the original
+  3 744-distinct-prompt model plateaus at held-out ρ **0.2223 over steps 3 000–7 000** (max 0.2315, each checkpoint read
+  twice; the drift across those 4 000 steps has sd **0.0093**, smaller than the instrument's own within-checkpoint spread
+  of **0.0202**, so it is a plateau rather than a slow climb).
+* **and then doubling the corpus moved it, which is the first thing in this project to move it.** Merging in 4 357 more
+  prompts — **8 890 items over about 8 100 distinct prompts** against 4 533 over 3 744 — raises held-out ρ to
+  **0.3471 at step 3 000** against the baseline's **0.2046**, a difference of **+0.1425, SEPARATED**, with five readings
+  per checkpoint, both arms under one convention, and cumulative learning-rate exposure matched at 1.05×. **The
+  mechanism is visible in the same measurement:** the baseline fits its training data at in-sample ρ 0.3190 and
+  generalises at 0.1645, a gap of **1.94×**, while the enlarged model fits at 0.3520 and generalises at 0.3297, a gap of
+  **1.07×**. Same architecture, same capacity, same step count, same schedule shape; only the corpus differs, and one
+  memorises while the other generalises. Earlier flat results (418 against 3 744 distinct prompts) were taken **below a
+  threshold**, which is not a place from which a threshold can be seen.
+* **what that does not yet establish.** The comparison doubles the text count (2.16×) and the record count (1.96×) at
+  the same time, so it shows **corpus size** is the lever and not that **text diversity** specifically is. It also does
+  not make the speech intelligible: WER is **1.0000** for both arms, because `correlation_threshold` in the evidence
+  shows the intelligibility transition is a **step between ρ 0.60 and 0.75** and 0.35 is on the wrong side of it. The
+  growth loop is therefore running — 3 779 more prompts prepared and synthesising, taking the count to about 11 900 —
+  and the honest expectation is that the lever is **real and still insufficient at this scale**.
+* **the older negative results, kept because they are still true of what they measured.** Ninefold text at *matched
+  steps below the threshold*, 3× the capacity (9.62M → ~30M), and objective re-weighting — the mean-invariant latent
+  term gave **+0.028 at step 1 000 and +0.005 by step 2 000**, an early-training accelerator rather than a higher
+  ceiling — all moved nothing. Through-decoder against latent-L1 on the real corpus reads WER 1.0000 both ways, with
+  DNSMOS 1.200 against 1.278, so the one objective with a better record did so on three voices and six utterances.
 * **and there is a concrete route out of WER 1.000, measured, that needs no GPU.** Two renditions of the same
   words by the same voice share a component — the *rendition-independent* part — and it can be manufactured:
   give a prompt a **punctuation variant**, average the two **waveforms**, re-encode through the frozen
