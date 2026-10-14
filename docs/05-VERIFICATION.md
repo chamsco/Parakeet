@@ -4669,7 +4669,46 @@ fails is the assumption that a model can be *pointed* at it and arrive.
 model **does not generalise from its training texts**, and every route that assumes otherwise — including this one —
 inherits that.
 
-## 126. Environment notes
+## 126. The shared-target "negative" is inconclusive, not clean (round 145)
+
+§125 recorded the matched target experiment as a clean negative. **Too strong**, and the reason is a measurement
+flaw introduced there.
+
+**The flaw.** The arms were compared by ρ against the **held-out original renditions**. Arm S was trained on the
+**rendition-independent** target — a different signal, with roughly half the variance (its calibration reports
+std 0.54; averaging two renditions is what removes the rest). A model trained to predict the shared component
+*should* score lower against the specific renditions: it is not failing to predict them, it is predicting something
+else. **The comparison is biased against arm S by construction.**
+
+A second matched point shows the same pattern and does not remove the problem:
+
+| step | arm O (originals) | arm S (shared) |
+|---|---|---|
+| 500 | +0.1994 | +0.0335 |
+| 1000 | +0.2084 | +0.0540 |
+| (baseline) | +0.2057 | — |
+
+Arm S's number **climbs** with training (0.034 → 0.054) — which is what adapting to a different target looks like,
+and ρ against the *wrong* target cannot separate that from failure.
+
+**What is actually established**, which is less than §125 claimed and still worth having:
+
+* arm S's samples transcribe at **WER 1.000** on 24 held-out utterances with the control at 0.022 ⇒ the route did
+  **not** produce intelligible speech in this pilot. A fact about the outcome;
+* arm O's samples also read 1.000 ⇒ **WER cannot separate the arms**; it is saturated in this regime;
+* therefore the pilot does **not** distinguish *"the shared target is worse"* from *"the shared target is
+  different, and the model must be trained on it rather than fine-tuned onto it"*. §125's own caveat said the second
+  was live; the ρ numbers should not have been read as ruling it out.
+
+**The fair test, now running:** punctuation variants of the **400 held-out prompts**, so the shared target exists
+for data no run has seen — and arm S can be scored against the signal it was actually trained to predict, and by
+WER on its samples rather than by a comparison the design biased.
+
+**The pattern, eighth time in this span and the same every time:** the measurements were right and the
+**interpretation outran them**. A ρ against a target the model was never asked to predict is not a quality measure,
+and calling its outcome a "clean negative" gave a number authority it had not earned.
+
+## 127. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
