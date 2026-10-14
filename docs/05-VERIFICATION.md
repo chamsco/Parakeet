@@ -4207,25 +4207,49 @@ to a cache whose table turned out to be partly ineffective (below). Raw, the hon
 | 2 | 1.4459 | 1.0050 | **not normalised** |
 | 3 | 0.9973 | 0.0085 | normalised |
 
-An **alternating** pattern, which is what a permutation mismatch looks like: the cache's `voice_names` order
-interleaves Kokoro and Speechify voices while the items' `voice` fields appear to follow the base corpus's own
-numbering — so the per-voice statistics are applied to the **wrong voices for roughly half of them**.
+An **alternating** pattern, which *looked* like a permutation mismatch — and round 121 reported it as one. **That
+claim is withdrawn** (§114): the direct check refutes it, and the real cause is different and more interesting.
 
-**Not a stale table**: refitting with the current (round-78-fixed) code writes 19 voices and the anomaly is
-unchanged. And `expand_corpus.py`'s `verify()` passed at 0.0419 because it samples every 13th item and the scale
-tolerance is 0.15 — a permutation mismatch of this kind slips through both.
+**Round 122's check.** The base cache's `voice_names` matches the manifest's order of first appearance exactly, and
+comparing **every** cache item's `voice` index against the manifest index of the corresponding record:
 
-**Consequence, stated plainly:** every run trained on the merged cache — rounds 91–118, including the 8 000-step
-training-time experiment and the A/B — trained with per-voice normalisation applied to the **wrong voices for part
-of the corpus**. The effect is a scale/DC nuisance the model must fit, not corrupted targets (those voices are
-internally consistent, just unnormalised), so comparisons that relied on *within-run* consistency still hold; but
-any claim that depended on the merged cache being correctly normalised does not. §106's 0.434 was one.
+```
+1207 items checked, 0 mismatches
+```
 
-The premise test used the raw comparison precisely because normalisation changes what the per-voice term can
-explain, and the two caches were in different states — 11/11 fitted and effective for dialogue, 19/21 fitted but
-partly ineffective for narration. That is what forced the check that found the bug.
+**What the pattern actually is.** The alternation is not parity — it is **source**. `expanded_v3` was built as
+`(mixed_v2 + kokoro_v3) + kokoro_v3b`, and:
 
-## 113. Environment notes
+* voices appearing in **both** the base corpus and the Kokoro expansion (`af_alloy`, `af_aoede`, `af_heart`, …) have
+  their items at **two different scales** — the round-58 phenomenon — so a single pooled per-voice statistic is a
+  *mixture*, normalising by it leaves each half off scale, and pooling the halves gives a std *larger* than either
+  (the 1.59);
+* voices appearing in **one** source only (`alicia`, `alec`, `alfonso` — all Speechify) have one scale, normalise
+  cleanly, and sit at 1.00.
+
+So the defect is real but it is **not** a mapping bug: **a per-voice statistic cannot normalise a voice whose items
+come from two sources at different scales.** Per-voice normalisation was the right fix for the round-58 gap *between
+corpora*; it is insufficient for a gap *between sources within one voice*, which is what a merge creates.
+
+**Corrected blast radius:** the dialogue cache is single-source, so all eleven of its voices sit at std ~1.00 with
+|mean| ~0.01 — the §112 premise result (37.4 % vs 21.3 %, measured **raw** on both sides) stands unqualified. The
+narration numbers measured *with* normalisation applied are the affected ones: §106's 0.434 was one and is
+superseded by the raw 0.213. Runs trained on `expanded_v3` (rounds 91–118) carried a scale/DC nuisance for the
+voices that span sources — not corrupted targets, and within-run comparisons are unaffected.
+
+## 114. The mapping-bug claim, withdrawn (round 122)
+
+Round 121 reported a permutation mismatch in the merged cache's voice mapping and said every run since round 91 was
+affected. **Withdrawn**: the direct check takes one minute and refutes it (1 207 items, 0 mismatches, above).
+
+The real cause is the source-mixture effect described in §112, which *looks* like a permutation from a statistical
+fingerprint: voices spanning two sources sit at a mixture scale, voices in one source do not, and the two alternate
+in the merged table. Reporting the bug and its blast radius from the fingerprint — instead of from the direct check
+against the manifest the cache was built from — is the third time this session the same mistake has appeared, and
+the fix is the same each time: **compare the artefact against its own source before describing what is wrong with
+it.**
+
+## 115. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
