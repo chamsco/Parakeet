@@ -1,11 +1,18 @@
 {
-  "generated": "2026-10-14T03:55:53",
+  "generated": "2026-10-14T04:16:21",
   "git": {
-    "rev": "79e4a76",
+    "rev": "48d2da5",
     "dirty": true
   },
   "note": "Committed snapshots of the reports the model card cites.  Refresh with `python scripts/model_card.py --refresh-evidence` after re-running the demos; the hashes make a stale bundle visible.",
   "entries": [
+    {
+      "claim": "rendition_reliability",
+      "status": "copied",
+      "source": "runs/rendition_reliability.json",
+      "evidence": "docs/evidence/rendition_reliability.json",
+      "sha256": "4c92cce51e4a94646470b6eebe633f2abe7c94955cb6b8d67b76e60f670801d7"
+    },
     {
       "claim": "token_route_wer",
       "status": "copied",

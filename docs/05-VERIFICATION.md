@@ -4464,7 +4464,48 @@ different question: different voices cannot share a rendition, so it bounds *clo
 has one take per (text, voice). A genuine reliability estimate needs repeated stochastic generations of the same
 text and voice — a GPU-and-licence job, not a CPU one.
 
-## 121. Environment notes
+## 121. The ceiling is 0.845, not 0.445 — the reliability measured on 110 pairs instead of 4 (round 134)
+
+The ceiling that was used to close the deterministic route — §109 quoted 0.445, §119 corrected it to √0.445 = 0.667,
+§120 showed it rested on FOUR pairs with a CI of [−0.90, +0.99] — now has a real measurement.
+
+**Method.** Repeat generations do not exist here (Kokoro is deterministic; one take per (text, voice)), so a
+**conservative** stand-in was manufactured: 110 sentences with only their **punctuation** changed — identical words,
+therefore identical phonetic content, different rendering. Punctuation alters prosody *systematically* rather than
+independently, so the rendition difference is at least as large as between independent generations, which pushes
+agreement **down**. A lower bound is what a headroom argument wants. The builder also lays the pairs out so the
+second block starts at index 110 and **110 % 11 == 0**, making the generator's round-robin put both members of every
+pair on the **same voice**, without touching the generator. 220 utterances, one free teacher, latents from the
+trained autoencoder (§121's trap avoided).
+
+**Result, 110 pairs, bootstrap CIs:**
+
+| alignment | ρ | 95 % CI | implied ceiling √ρ |
+|---|---|---|---|
+| zero shift (lower bound) | **+0.7138** | [+0.6714, +0.7511] | **0.845** |
+| best shift (upper bound) | **+0.7719** | [+0.7381, +0.8004] | **0.879** |
+
+Median shift **0 frames**; length mismatch mean 0.055 s — so the zero-shift figure is not an alignment artefact.
+
+**This reverses the reading.** The recogniser fails at ρ 0.60 and reads perfectly at 0.75 (§37). The *conservative*
+reliability is 0.714 ⇒ ceiling **0.845**, i.e. **above both**. The deterministic text→latent route is **not excluded
+by the data at all** — in principle a model that captured the shared signal perfectly would transcribe its own
+corpus. Every "at its ceiling" reading — 91 %, 61 %, and the one-to-many story behind them — was an artefact of a
+4-pair estimate that happened to land low.
+
+**Where the token route actually is:** ρ **0.354** at n=40, which is **42 %** of this ceiling (not 61 %, not 91 %),
+and the samples' 0.0045 is **0.5 %**. The honest description of the project's state changes: the wall is not "there
+is almost nothing to learn from this text" but "**0.35 of an available 0.85 has been learned, and the reason for the
+gap is not established**".
+
+**Caveats, stated rather than buried:** this is a lower bound by construction (the true repeat-generation
+reliability is *at least* 0.714, so the conclusion is robust in the direction that matters); punctuation variants
+are not independent renders, which is exactly why the estimate is conservative; and it measures **this**
+representation (the trained autoencoder's 24-dim latent at 93.75 Hz) on **this** voice set — so a different
+autoencoder would have a different ceiling, which is itself an argument that the *representation* deserves
+attention. The 0.845 ceiling says the task is possible; it does not say this model or this budget reaches it.
+
+## 122. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).

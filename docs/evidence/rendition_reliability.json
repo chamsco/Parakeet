@@ -1,0 +1,29 @@
+{
+  "pairs": 110,
+  "zero_shift": {
+    "mean": 0.7137566859034864,
+    "ci95": [
+      0.671373309193807,
+      0.7511163518721746
+    ],
+    "ceiling_sqrt": 0.8448412193444911
+  },
+  "best_shift": {
+    "mean": 0.7718681531224513,
+    "ci95": [
+      0.738086721899383,
+      0.8003892627403592
+    ],
+    "ceiling_sqrt": 0.8785602729024635,
+    "median_shift_frames": 0.0
+  },
+  "length_mismatch_seconds": {
+    "mean": 0.05517575757575758,
+    "max": 0.224
+  },
+  "bar": {
+    "recogniser_fails": 0.6,
+    "reads_perfectly": 0.75
+  },
+  "verdict": "OPEN: the conservative reliability implies a ceiling at or above the recogniser's fail point, so the deterministic route has room by this measure too."
+}

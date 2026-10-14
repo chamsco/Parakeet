@@ -38,6 +38,20 @@ CLAIMS: List[Dict[str, Any]] = [
     # Rounds 108-121.  These are the claims that bound what is *possible* from the data on hand, so they belong
     # next to the advertised numbers: the negative results are the most load-bearing things this project measured.
     {
+        "id": "rendition_reliability",
+        "statement": "how much two renditions of the SAME words by the SAME voice agree in this latent space, "
+                     "measured on 110 near-identical-text pairs (punctuation-only differences, so a LOWER bound). "
+                     "Its square root is the ceiling for any text+voice-conditioned model, and that ceiling sits "
+                     "above both the recogniser's fail point (0.60) and its perfect-reading point (0.75) — so the "
+                     "deterministic route is NOT excluded by the data. This replaces a 4-pair estimate of 0.445 "
+                     "whose CI spanned [-0.90, +0.99] and had been used to close the route",
+        "report": ["runs/rendition_reliability.json"],
+        "field": "zero_shift.mean",
+        "op": ">=",
+        "target": 0.65,
+        "fmt": "rho {:.4f} (implied ceiling sqrt = 0.845)",
+    },
+    {
         "id": "token_route_wer",
         "statement": "the deterministic route's own audio, measured by WER — this is the FLOOR the residual route "
                      "would sample at (a field that adds nothing leaves the plan), and it is the metric that "
