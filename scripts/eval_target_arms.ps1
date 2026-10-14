@@ -33,9 +33,13 @@ $models = @(
   @{ name = "armO_original";     ckpt = "" },
   @{ name = "armS_shared";       ckpt = "" }
 )
-# pick each arm's LAST checkpoint, whatever it is called
+# pick each arm's LAST checkpoint by STEP NUMBER.  Sorting by name picks distill-text_step500.pt over
+# distill-text_step1000.pt, because "1" sorts before "5" -- the first run of this script evaluated step 500 while
+# step 1000 existed.
 foreach ($arm in @(@{k="armO_original";d="runs\arm_original"}, @{k="armS_shared";d="runs\arm_shared"})) {
-  $last = Get-ChildItem "$($arm.d)\*.pt" -EA SilentlyContinue | Sort-Object Name | Select-Object -Last 1
+  $last = Get-ChildItem "$($arm.d)\*.pt" -EA SilentlyContinue |
+          Sort-Object { [int]([regex]::Match($_.Name, 'step(\d+)').Groups[1].Value) } |
+          Select-Object -Last 1
   if ($last) {
     ($models | Where-Object { $_.name -eq $arm.k }).ckpt = $last.FullName
   }
