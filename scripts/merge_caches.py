@@ -112,6 +112,22 @@ def merge_caches(base: Path, extra: Path, out: Path, shard_size: int = 500) -> D
     merged_meta["voice_names"] = list(voice_map)
     # the base cache's normaliser wins: checkpoints were trained against it (see the module docstring)
     merged_meta["latent_norm"] = base_meta.get("latent_norm")
+    # The merge is the one place two caches meet, so it is the one place an autoencoder mismatch can be caught. The
+    # metadata used to be the base's alone, which meant the merged cache could not say which weights encoded it even
+    # when both halves recorded it. Record both and refuse a disagreement: two autoencoders put latents from two
+    # different spaces into one training set, and the pooled-scale check would not see a subtle one.
+    base_fp = base_meta.get("autoencoder_fingerprint")
+    extra_fp = extra_meta.get("autoencoder_fingerprint")
+    if base_fp and extra_fp and base_fp != extra_fp:
+        raise SystemExit(
+            f"refusing to merge: the base cache was encoded by autoencoder {base_fp} and the incoming one by "
+            f"{extra_fp}. Re-encode one of them before merging."
+        )
+    merged_meta["autoencoder_fingerprint"] = base_fp or extra_fp
+    merged_meta["autoencoder_fingerprints"] = {"base": base_fp, "extra": extra_fp}
+    # `n_shards` came along in the copy of the base's metadata and described the base, not the merge: the run measured
+    # here wrote 18 shards while its metadata said 3. Same root cause as the fingerprint, one field over.
+    merged_meta["n_shards"] = len(written)
     (out / "cache_meta.json").write_text(json.dumps(merged_meta, indent=2), encoding="utf-8")
     counts["total"] = counts["base"] + counts["extra"]
     counts["voices"] = len(voice_map)
