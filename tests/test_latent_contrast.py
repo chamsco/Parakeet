@@ -63,3 +63,19 @@ def test_the_loss_only_pays_for_the_contrast_when_asked():
     total, logs_on = with_term(pred, target)
     assert "latent_contrast" in logs_on
     assert float(total) > float(logs_on["latent_contrast"]) - 1e-6
+
+
+def test_the_text_stage_reads_the_contrast_weight_from_the_config():
+    """The flag has to reach the stage that trains the text side, or it is a silent no-op.
+
+    `run_stage` used to construct `TextSideDistillLoss()` with no weights, so `--set
+    train.loss.signal_latent_contrast=1.0` was accepted by the config and ignored by a `distill-text`
+    run. Two runs set up as an A/B were therefore identical, and only their RNG differed.
+    """
+    from parakeet.config import ParakeetConfig
+    from parakeet.train.stages import build_text_criterion
+
+    cfg = ParakeetConfig(variant="tiny").validate()
+    assert build_text_criterion(cfg).w.latent_contrast == 0.0, "the default must stay off"
+    cfg.train.loss.signal_latent_contrast = 1.0
+    assert build_text_criterion(cfg).w.latent_contrast == 1.0, "the config value must reach the criterion"

@@ -5057,7 +5057,38 @@ opposite directions, and that neither substitutes for the other.
 That also validates the monitor's design: the held-out ρ readout is the only instrument with a gradient here, which is
 why the curve is read every 1 000 steps from ρ rather than from WER.
 
-## 135. Environment notes
+## 135. The contrast flag was a silent no-op on the text stage (round 152)
+
+Setting up the A/B for the mean-invariant latent term, I checked that the flag reached the stage instead of trusting
+that it did, and it did not.
+
+`run_stage` built its text criterion as `TextSideDistillLoss()` with **no weights argument**, and the only reader of
+`cfg.train.loss.signal_latent_contrast` was `text_audio_step`, the **audio** stage. So
+`--set train.loss.signal_latent_contrast=1.0` on a `distill-text` run was accepted by the config, validated, recorded
+in the run's fingerprint, and silently ignored. The two runs I had launched as an A/B were therefore the same
+objective, differing only by RNG.
+
+**That accident produced a number worth keeping.** The step-1 000 held-out ρ of the two identical runs is **0.0854**
+and **0.0908**, a spread of **0.0054**. That is the *training-seed* spread of the whole curve, as distinct from the
+0.004 repeated-measurement spread of one checkpoint, and it is the right scale to judge an increment against. It also
+means the +0.0029 dip at step 4 000, which I briefly read as a plateau, was well inside seed noise.
+
+**The fix.** `build_text_criterion(cfg)` in `parakeet/train/stages.py`, called by `run_stage`, with
+`tests/test_latent_contrast.py` pinning both that the default stays 0.0 and that a config value of 1.0 reaches the
+criterion. The default is unchanged, so no existing recipe is affected.
+
+**What this reopens.** Round 30 measured the mean-invariant term at **+59 % train and +66 % validation**
+per-dimension correlation, with WER unchanged at 1.000, and it did so on the **audio** stage, which is where the key
+was reachable. The term has never been applied to the stage that actually trains the text side. That is a genuinely
+untested intervention rather than a repeat of a finished experiment, and `scripts/run_contrast_arm.ps1` now runs it
+with its prediction registered: a win above 0.02 at matched steps puts the term in the token route's config, and a
+result inside the 0.0054 seed spread means the remaining lever is steps alone.
+
+**The lesson, which is the same one as the plateau.** Both errors were found by checking rather than assuming, and
+both had cheap checks: one more held-out point for the plateau, one look at which code path reads the key for the
+flag. A config key that no reader in the active path consumes is invisible in every log the run produces.
+
+## 136. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).

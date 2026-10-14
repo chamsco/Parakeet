@@ -386,6 +386,20 @@ def _module_trainable(module: nn.Module) -> bool:
     return any(p.requires_grad for p in params) if params else True
 
 
+def build_text_criterion(cfg: ParakeetConfig) -> TextSideDistillLoss:
+    """The text stage's criterion, carrying the config's mean-invariant weight.
+
+    This read the config only on the audio stage, so `--set train.loss.signal_latent_contrast=1.0` on a
+    `distill-text` run was accepted by the config and silently ignored here, and the run trained with the
+    default weights. Found while setting up an A/B: the two arms were identical and only their RNG differed.
+    """
+    return TextSideDistillLoss(
+        DistillSignalWeights(
+            latent_contrast=float(getattr(cfg.train.loss, "signal_latent_contrast", 0.0))
+        )
+    )
+
+
 def run_stage(
     stage: str,
     cfg: ParakeetConfig,
@@ -502,7 +516,7 @@ def run_stage(
         else None
     )
     anneal = SpectralAnnealer()
-    text_criterion = TextSideDistillLoss()
+    text_criterion = build_text_criterion(cfg)
     teacher = ema_model
 
     # ------------------------------------------------------------------ resume
