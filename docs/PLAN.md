@@ -116,8 +116,9 @@ steps, only the corpus size changing):
 ## What would change the picture
 
 * **more teacher audio.** This is the measured gap, not a hunch: SupertonicTTS trained its generative module
-  on **945 hours** and this project has **~8 h** (1.9 h corpus plus 6.1 h generated since, per-voice normalised
-  so it is usable). See [PAPER_COMPARISON.md](PAPER_COMPARISON.md) — the architectural axes line up one by one
+  on **945 hours** and this project has about **12.3 h** after the expansion — 1.9 h corpus plus 6.1 h generated since,
+  plus the expansion's 4 357 records over 7.49 h, merged and per-voice normalised so it is usable. See
+  [PAPER_COMPARISON.md](PAPER_COMPARISON.md) — the architectural axes line up one by one
   (144-dim folded latents at ~15 Hz, ConvNeXt, character-level text, implicit alignment, `Ke = 4`, NFE 32), so
   the difference is data and compute rather than a missing trick;
 * **and the number that matters is distinct prompts, not hours.** The comparison model's cache holds 4 533
