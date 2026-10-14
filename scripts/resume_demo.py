@@ -178,7 +178,6 @@ def main() -> int:
     cache = build_cache(cfg, out)
     print(f"  -> cache {cache} ({len(LatentShardDataset(cache))} items)")
 
-    # run A: uninterrupted
     _banner("run A: uninterrupted")
     torch.manual_seed(cfg.train.seed)
     weights_a, curve_a = train(cfg, cache, args.steps, out / "full")

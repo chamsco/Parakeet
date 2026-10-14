@@ -156,7 +156,6 @@ class Synthesizer:
         rep["sample_rate"] = float(self.cfg.audio.sample_rate)
         return rep
 
-    # ------------------------------------------------------------------ text
     def prepare_text(self, text: str) -> Tuple[torch.Tensor, torch.Tensor, list[str]]:
         """Tokenise for inference.
 

@@ -151,7 +151,6 @@ def main() -> int:
     cfg = cfg.validate()
     print(f"  -> voices present: {corpus_voices} (n_voices={cfg.n_voices})")
 
-    # 2. autoencoder on the corpus
     _banner(f"2/6 autoencoder | {args.steps_ae} steps on the corpus audio")
     import soundfile as sf
 
@@ -182,7 +181,6 @@ def main() -> int:
     print(f"  -> reconstruction log-mel L1 {ae_before:.4f} -> {ae_after:.4f}")
     strict["autoencoder_improved"] = ae_after < ae_before
 
-    # 3. curation + latent cache
     _banner("3/6 curation (P1 gates) + latent cache")
     import soundfile as sf
 
@@ -276,7 +274,6 @@ def main() -> int:
               f"final stage loss {float(logs.get('loss', float('nan'))):.4f}")
         strict["student_improved"] = text_after < text_before
 
-    # 5. synthesis
     _banner("5/6 synthesis from text")
     synth = Synthesizer(model, cfg, device="cpu", apply_phase_lock=True)
     text = prompts[0]

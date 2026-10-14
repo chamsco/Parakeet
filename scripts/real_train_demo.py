@@ -145,7 +145,6 @@ def main() -> int:
     strict["autoencoder_improved_on_real_speech"] = ae_after < ae_before
     strict["autoencoder_materially_improved"] = ae_after < 0.95 * ae_before
 
-    # 2. cache from the trained autoencoder
     _banner("2/4 latent cache from the trained autoencoder")
     fit_latent_normalizer(model.latent_norm, model.autoencoder, source, cfg, max_batches=4)
     # via the library helper, not build_latent_cache directly: it resolves record paths against the
