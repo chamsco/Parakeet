@@ -6,7 +6,7 @@ package runs with nothing but ``torch`` + ``numpy``.  Heavier reference implemen
 """
 
 from .mel import MelSpectrogram, hz_to_mel, mel_filterbank, mel_to_hz
-from .f0 import (  # noqa: F401
+from .f0 import (
     bins_to_f0,
     energy_to_normalized,
     estimate_f0,

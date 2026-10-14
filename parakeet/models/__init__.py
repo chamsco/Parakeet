@@ -1,7 +1,7 @@
 """Parakeet model components."""
 
 from .autoencoder import LatentNormalizer, SpeechAutoencoder
-from .blocks import (  # noqa: F401
+from .blocks import (
     CausalConv1d,
     ChannelLayerNorm,
     ConvNeXtBlock,
@@ -13,13 +13,13 @@ from .blocks import (  # noqa: F401
     sequence_mask,
     sinusoidal_embedding,
 )
-from .duration import (  # noqa: F401
+from .duration import (
     CausalDurationUpsampler,
     DurationPredictor,
     UtteranceLengthPredictor,
     align_tokens_to_frames,
 )
-from .flow import (  # noqa: F401
+from .flow import (
     ConvNeXtVFEstimator,
     build_memory,
     consistency_sample,
@@ -29,7 +29,7 @@ from .flow import (  # noqa: F401
     reflow_pair,
     unfold_time,
 )
-from .parakeet import (  # noqa: F401
+from .parakeet import (
     ParakeetFlow,
     ParakeetTiny,
     build_model,

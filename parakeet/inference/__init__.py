@@ -1,12 +1,12 @@
 """Inference and deployment: streaming synthesis, phase locking, int8 export."""
 
-from .phase_lock import (  # noqa: F401
+from .phase_lock import (
     StreamingPhaseLock,
     phase_coherence,
     phase_lock,
     phase_lock_with_f0,
 )
-from .quantize import (  # noqa: F401
+from .quantize import (
     checkpoint_bytes,
     model_size_bytes,
     quantize_dynamic_int8,

@@ -1,13 +1,13 @@
 """Data: teacher corpus construction, feature caching, datasets, tokenisation."""
 
-from .dataset import (  # noqa: F401
+from .dataset import (
     LatentShardBatchSource,
     LatentShardDataset,
     SyntheticBatchSource,
     collate,
     infinite,
 )
-from .features import (  # noqa: F401
+from .features import (
     LatentShardWriter,
     SignalTargets,
     TokenTargetBatchSource,
@@ -17,7 +17,7 @@ from .features import (  # noqa: F401
     latents_from_waveforms,
     token_targets_from_corpus,
 )
-from .teacher import (  # noqa: F401
+from .teacher import (
     DEFAULT_MIX,
     KOKORO,
     MINIMAX,
@@ -40,7 +40,7 @@ from .teacher import (  # noqa: F401
     synthesize_corpus,
 )
 from .text import TAGS, CharVocab, TextTokenizer, normalize_text
-from .synthetic import (  # noqa: F401
+from .synthetic import (
     FORMANTS,
     LAYOUTS,
     SyntheticSpeechBatchSource,

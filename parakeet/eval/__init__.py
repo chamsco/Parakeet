@@ -1,6 +1,6 @@
 """Evaluation: dependency-free diagnostics + optional UTMOS/WER/SECS."""
 
-from .metrics import (  # noqa: F401
+from .metrics import (
     EvalReport,
     OptionalMetric,
     RTFResult,
@@ -16,7 +16,7 @@ from .metrics import (  # noqa: F401
     utmos,
     whisper_wer,
 )
-from .probes import (  # noqa: F401
+from .probes import (
     ae_reconstruction_l1,
     duration_error_frames,
     end_to_end_mel_l1,
