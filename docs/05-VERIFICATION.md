@@ -5662,9 +5662,21 @@ memorisation-versus-generalisation knob**, and the same configuration moved from
 having more text. Both gaps widen with training (at step 2 000 they were 1.94× and 1.07×), so memorisation sets in late
 in both runs and the larger corpus holds it off rather than preventing it.
 
+**Step 6 000 confirms the plateau, and the baseline's own spread is the caution.** Five readings per arm:
+
+| step | baseline | enlarged | difference |
+|---|---|---|---|
+| 5 000 | 0.2228 | 0.3630 | +0.1402 |
+| 6 000 | 0.2301 | **0.3648** | **+0.1347** |
+
+The enlarged run's increment is **+0.0018** — its **second consecutive flat point**, so its plateau is **~0.364** and
+the first doubling's ceiling is found. The baseline's increment is +0.0073, but it arrives with a **spread of 0.0521**,
+three times its spread at the previous point, so its step-6 000 mean is the least reliable number in the table and the
+honest reading is a gap of **+0.135 to +0.140** rather than a moving one. A point whose spread is 7× its increment is a
+point to average, not to interpret.
+
 **And the outcome metrics at that plateau, which is the half of milestone 3 the objective asks for in the same breath.**
 On 24 held-out utterances at step 5 000:
-
 | run | held-out ρ | WER | teacher control | DNSMOS |
 |---|---|---|---|---|
 | baseline, 3 744 distinct prompts | 0.2228 | **1.0000** | 0.0219 | 1.236 |
