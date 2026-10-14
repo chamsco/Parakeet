@@ -55,7 +55,12 @@ Log "base held-out plateau, from section 137: mean 0.2223, sd across steps 0.020
 
 Log ""
 Log "--- held-out rho, matched steps ---"
-.\scripts\compare_runs.ps1 -Runs "$Base,$New" -Steps 1000,2000,3000,4000,5000 -Repeats $Repeats 2>&1 |
+# 6>&1 IS REQUIRED. compare_runs.ps1 prints with Write-Host, which writes to the HOST stream and does not travel down a
+# pipeline, so `| Tee-Object` sees nothing and the artifact ends up with the headers and none of the numbers. The first
+# run of this instrument produced exactly that: an 8527-byte log with a complete verdict and a 228-byte artifact with an
+# empty rho table. That is the fifth defect of this project's recurring kind - an artifact that does not contain what it
+# claims - and it was found by reading the artifact rather than the log.
+.\scripts\compare_runs.ps1 -Runs "$Base,$New" -Steps 1000,2000,3000,4000,5000 -Repeats $Repeats 2>&1 6>&1 |
   Where-Object { $_ -notmatch 'InvalidOperation|Line \||~~~|CategoryInfo|FullyQualified|^\s*\+' } |
   Tee-Object -FilePath $Out -Append | Out-Null
 Get-Content $Out | Select-Object -Last 12 | Write-Host

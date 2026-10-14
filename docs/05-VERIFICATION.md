@@ -5703,8 +5703,19 @@ Both effects are real and both matter for the loop, but only the ceiling can cro
 converged faster would reach a plateau that never becomes audible. That is why each new doubling is read as a **ceiling
 increment** at matched steps rather than as a convergence curve.
 
-**The run is complete, and its endpoint thickens the result rather than changing it.** `runs/text_v4` finished its
-10 000 steps with `nonfinite_steps: 0.0`. Its plateau readings now stand at six points — 0.3630, 0.3648, 0.3649, 0.3619,
+**And a defect in the registered instrument itself, found by reading its artifact rather than its log.** The first run of
+`conclude_milestone3.ps1` produced an **8 527-byte log carrying the whole verdict and a 228-byte artifact carrying
+headers and an empty ρ table**. The cause: `compare_runs.ps1` prints with `Write-Host`, which writes to the *host*
+stream and therefore does not travel down a pipeline, so `| Tee-Object` saw nothing at all. My first diagnosis —
+PowerShell buffering — was wrong, and the tell was that the file's timestamp preceded the rows' appearance on stdout,
+which points at the pipeline rather than at a buffer. The fix is `6>&1`, proven on a live probe before re-running.
+
+This is the **fifth** defect of this project's recurring kind: an artifact that does not contain what it claims to
+contain. The other four were the unpersisted normaliser, the missing per-voice table, cache metadata that could not name
+its autoencoder, and the identity global normaliser — and all five were found by comparing a recorded artefact against
+what it was supposed to be, never by reading a result, because in every case the result looked fine.
+
+**The run is complete, and its endpoint thickens the result rather than changing it.** `runs/text_v4` finished its10 000 steps with `nonfinite_steps: 0.0`. Its plateau readings now stand at six points — 0.3630, 0.3648, 0.3649, 0.3619,
 0.3698 and **0.3616 at the endpoint with five readings and a spread of 0.0044** — so the ceiling is **0.362 to 0.370**
 and the first doubling is finished, not sampled. The last matched point the *baseline* still has is step 8 000 (its later
 checkpoints were pruned), where five readings per arm give **0.2108 against 0.3657, a difference of +0.1548, SEPARATED**
