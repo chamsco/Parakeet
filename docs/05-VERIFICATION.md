@@ -5344,6 +5344,22 @@ steps 50, 100 and 150, so nothing has converged yet. Three noisy points do not m
 signal before any WER reading exists and without spending a real-eval pass, which is why it is worth watching rather
 than only reading the endpoint.
 
+**Its provenance, checked because the number looked too good not to check, and it is not comparable.** Reading
+`runs/real_audio_long/run.json` and its evaluation report rather than assuming the run matched this project's usual
+setup: it trained on **one shard and three voices** (`af_bella`, `af_heart`, `af_sky`) and was evaluated on
+**`kept.jsonl` with six utterances**, where one word moves WER by about 0.17. This project's standard corpus is 4 533
+items across 11 voices, scored on 24 held-out utterances or 400 held-out prompts.
+
+So 0.667 is a **small-corpus, six-utterance** number, and the honest reading is that the through-decoder objective beat
+a latent L1 *on easy data*, not that it reaches two-thirds of words right on the real corpus. The right baseline is
+therefore the same cache: the latent L1 objective on `runs/v3_fixed` reads **WER 1.0000** on 24 held-out utterances, and
+the question being measured now is whether the through-decoder objective beats that **on 4 533 items across 11 voices**.
+A WER near 0.6 there would be a far stronger result than the 0.667 it replaces; a WER of 1.0000 would mean the objective
+difference was a small-corpus effect.
+
+The card's claim carries the provenance in the statement and in its format string for the same reason: a bounded number
+with no data description is how a small-corpus result becomes a project headline.
+
 ## 142. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated

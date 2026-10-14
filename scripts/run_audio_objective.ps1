@@ -19,14 +19,23 @@
 # derives from the cache rather than from the config. Only the step budget changes, from 2400 to 12000, so the schedule
 # anneals over the longer run.
 #
-# PREDICTION, registered before the result: if WER keeps falling the way it fell from 600 to 2400 steps, 12000 steps
-# should put it below 0.5 and the objective question is answered in the affirmative. If it settles near 0.6, the
-# through-decoder direction is exhausted at this data scale too, and the two remaining statements about this machine are
-# that the latent-L1 text side plateaus at rho 0.22 and the through-decoder side plateaus near two-thirds wrong.
+# CORRECTION TO THE COMPARISON, found by reading both runs' recorded metadata rather than assuming they matched. That
+# 0.667 was measured on a SMALL corpus: runs/real_audio_long/run.json records n_shards 1 and only three voices
+# (af_bella, af_heart, af_sky), and its evaluation ran on kept.jsonl with SIX utterances. This run trains on
+# runs/v3_fixed: 4533 items, 11 voices, 3 shards, scored on 24 held-out utterances from four unseen books. Fewer voices
+# on one shard is a much easier problem, and a six-utterance WER is noisy to the point that a single word moves it by
+# about 0.17. So 0.667 is not the number to beat here and the two runs are not comparable.
+#
+# THE RIGHT BASELINE is the same cache and the same holdout. runs/text_long384, the latent L1 objective on
+# runs/v3_fixed, reads WER 1.0000 on 24 held-out utterances, and its held-out rho plateaus at 0.2223.
+#
+# PREDICTION, restated against that baseline: this run reads BELOW 1.0000 at 4000 steps if training through the decoder
+# beats regressing cached latents on the same data, and at or above 1.0000 if the objective's advantage on tiny data
+# does not survive 4533 items across 11 voices. A WER near 0.6 here would be a far stronger result than the 0.667 it
+# replaces, and a WER of 1.0 would mean the objective difference was a small-corpus effect.
 #
 # WER is read at two checkpoints, not all four. Measured cost: 3.60 s/step, so the budget is set by wall clock, and a
-# 4000-step run is about four hours alone and longer under contention. 4000 still answers the question, because the
-# known point is the annealed 2400 and this asks what the next 1600 with a longer schedule do.
+# 4000-step run is about four hours alone and longer under contention.
 param(
   [int]$Steps = 4000,
   [string]$Out = "runs\text_audio_long"

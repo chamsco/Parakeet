@@ -48,17 +48,21 @@ CLAIMS: List[Dict[str, Any]] = [
     },
     {
         "id": "best_model_wer",
-        "statement": "the BEST model-level WER anywhere in this project, so the status line above is not read as \"no "
-                     "model ever did better than 1.000\". It comes from training the text side THROUGH the decoder with "
-                     "a mel/audio loss rather than regressing cached latents: 0.667 at 2 400 steps, against 1.000 for "
-                     "the same objective at 600 steps and 1.648 for a latent L1. Two-thirds of words wrong is still "
-                     "unintelligible, and it is the only objective here whose WER trend points down, which is why it "
-                     "is the one being continued",
+        "statement": "the best model-level WER in this project's evidence, with its provenance, because the status "
+                     "line above says the token and flow routes read 1.000 and a reader would take that to mean no "
+                     "model ever did better. It comes from training the text side THROUGH the decoder with a mel/audio "
+                     "loss: 0.667 at 2 400 steps, against 1.000 for the same objective at 600 and 1.648 for a latent "
+                     "L1. THE PROVENANCE MATTERS AND IS NOT FLATTERING: that run trained on one shard, three voices, "
+                     "and was evaluated on SIX utterances, where one word moves WER by about 0.17, so it is not "
+                     "comparable to the 400-prompt held-out numbers elsewhere in this card. On the 4 533-item, "
+                     "11-voice cache the latent-L1 baseline reads 1.0000, and whether the through-decoder objective "
+                     "does better there is being measured. Two-thirds of words wrong is still unintelligible either "
+                     "way",
         "report": ["runs/objective_ab.json"],
         "field": "student.wer.through_decoder_2400",
         "op": "<=",
         "target": 0.7,
-        "fmt": "best model WER {:.4f} (through-decoder, 2400 steps)",
+        "fmt": "best model WER {:.4f} (through-decoder, 2400 steps, 3 voices, 6-utterance eval)",
     },
     {
         "id": "text_plateau",
