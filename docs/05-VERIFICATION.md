@@ -5604,6 +5604,19 @@ Prepared and waiting, so a round never stalls on finding text: `prompts_v5.txt` 
 for the curve while it trains, and `scripts/compare_runs.ps1` at five readings per checkpoint for the comparison — with
 the cumulative-exposure table above saying which step range is fair.
 
+**And the experiment that would separate text count from record count, designed but not run.** §142's correction named
+it; here is the design. Take N texts from the existing corpus and synthesise each with k voices by **duplicating each
+prompt line k times**, so the voice round-robin assigns a different voice to each copy — the builder takes voices in
+turn per line, which is why the v4 expansion used 11 voices at 362-363 records each. Then train two models from scratch
+at the same budget: one on the N single-voice items, one on the N×k multi-voice items. **Same texts, k times the
+records.** If the multi-voice arm reaches the enlarged corpus's ρ, the lever is records rather than text and a cheap
+lever exists that needs no new books; if it merely tracks the single-voice arm, text is the lever and the growth loop has
+to keep finding text.
+
+Cost at the measured rates: N×k prompts of synthesis at about 20 per minute, plus two 10 000-step runs at about 2.4
+hours each. For N = 2 000 and k = 3 that is about 5 hours of synthesis and 5 hours of training, so it is a round-sized
+commitment rather than a cheap probe — which is why the v5 round is finishing first rather than being displaced by it.
+
 ## 146. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
