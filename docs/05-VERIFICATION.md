@@ -5420,7 +5420,44 @@ refuted survivor: the audit's own adversarial pass had cleared it. That is the t
 the 215 suppressions and comment lines removed, which are cosmetic, but that a config key or a refactor claim is worth
 one `grep` against the code before it is acted on.
 
-## 144. Environment notes
+## 144. The held-out cache was decoding under the identity normaliser (round 152)
+
+Comparing the global latent normaliser across every cache in play:
+
+| cache | `latent_norm` |
+|---|---|
+| `runs/mixed_v2/latent_cache`, `runs/v3_fixed`, `runs/v4_fixed` | mean avg **−0.08015**, var avg **0.43680** — identical to thirteen decimals, because the merge keeps the base's |
+| `runs/holdout_cache` | **mean 0, var 1 exactly** — the identity |
+| `runs/kokoro_v4_cache` | **mean 0, var 1 exactly** |
+
+The evaluator installs the normaliser of whichever cache it is pointed at, so every held-out evaluation has been
+decoding under a convention the model was never trained in. Tested directly rather than argued, same checkpoint and same
+24 utterances, only the cache's normaliser differing:
+
+| normaliser | WER | DNSMOS |
+|---|---|---|
+| identity | 1.0000 | 1.156 |
+| training | 1.0000 | **1.238** |
+
+**So the mismatch is real, moves a decoded-audio metric by 0.082, and does not move WER**, which is saturated at 1.0000
+in this regime and has no gradient; per-dimension ρ is affine-invariant and never saw it either. **Nothing in this
+session's conclusions changes.**
+
+Fixed anyway, because DNSMOS and anything else read off a decode was being measured under the wrong convention:
+`runs/holdout_cache`'s `latent_norm` now carries the training statistics, copied from `runs/v4_fixed` and **not fitted
+on the held-out set**, with the source and the measured effect written into the metadata beside it.
+
+**The training path was never affected**, which is why this is a measurement bug rather than a model bug:
+`merge_caches` keeps the base's normaliser, so `runs/v4_fixed` matches `runs/v3_fixed` exactly and the comparison run
+trains in the right space.
+
+**A pattern worth naming.** This is the fourth evaluation-convention defect found in this thread: the normaliser that
+was not persisted across processes (round 36), the held-out cache's missing per-voice table, the cache metadata that
+could not name its autoencoder, and now an identity global normaliser. **Every one was found by comparing a recorded
+artefact against the thing it was supposed to match, and none was visible in any result**, because the metrics in use
+happened to be invariant to the error. The evaluation path, not the model, keeps being the weak point.
+
+## 145. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
