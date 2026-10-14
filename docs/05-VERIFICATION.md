@@ -5036,6 +5036,27 @@ model has not learned the mapping yet.** The training log agrees: the latent ter
 
 That changes what the next spend should be, and it is why the curve's asymptote is the only thing worth measuring now.
 
+**The outcome metric has no gradient in the range this configuration can reach.** `real_eval.py` at 24 held-out
+utterances per point, on the same five checkpoints the ρ curve was read from:
+
+| step | held-out frame ρ | WER | DNSMOS | teacher control WER |
+|---|---|---|---|---|
+| 1 000 | 0.0908 | 1.0000 | 1.220 | 0.0219 |
+| 2 000 | 0.1741 | 1.0000 | 1.202 | 0.0219 |
+| 3 000 | 0.2113 | 1.0000 | 1.184 | 0.0219 |
+| 4 000 | 0.2142 | 1.0000 | 1.158 | 0.0219 |
+| 5 000 | 0.2331 | 1.0000 | 1.158 | 0.0219 |
+
+Five checkpoints spanning ρ 0.09 to 0.23 all read WER **1.0000**, so **WER carries no signal at all between 0.09 and
+0.23** and progress in this range can only be read from ρ. That is consistent with the earlier calibration (the
+recogniser reads a latent perfectly at ρ ≥ 0.75 and fails at 0.60) and it means there is no partial credit to chase:
+either ρ crosses the reading threshold or the output stays unintelligible. DNSMOS drifts **down** slightly across the
+same five checkpoints, 1.220 to 1.158, which is a reminder that a fit metric and a naturalness metric can move in
+opposite directions, and that neither substitutes for the other.
+
+That also validates the monitor's design: the held-out ρ readout is the only instrument with a gradient here, which is
+why the curve is read every 1 000 steps from ρ rather than from WER.
+
 ## 135. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
