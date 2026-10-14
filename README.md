@@ -44,8 +44,8 @@ the measured reason, in order of discovery:
   **The route has been tested on matched terms, and the target is not the problem.** A matched experiment —
   identical 304 items, the target the only variable — read out on a **held-out corpus built from four books the
   training data never used**, with both arms trained **from scratch** and each scored against the signal it was
-  actually trained to predict: the shared-target arm reaches ρ **0.1245** where the original-target arm reaches
-  **0.1388** — **90 % of it.** Two earlier readings said the route failed (0.041 against 0.200); both were
+  actually trained to predict: the shared-target arm reaches **82–90 %** of the original-target arm's ρ across
+  three checkpoints (0.1245/0.1388, 0.1485/0.1736, 0.1372/0.1670). Two earlier readings said the route failed (0.041 against 0.200); both were
   artefacts, first of a readout biased against the shared arm, then of a **fine-tuning handicap** — the same target
   trained from scratch is three times better than the same target fine-tuned onto a model that had learned the
   originals. *The target is viable; that is now measured rather than argued.*

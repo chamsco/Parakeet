@@ -4833,7 +4833,34 @@ items. So the plateau was a property of **that run**, not of the method — and 
 point. Rising for another thousand steps does not cross that gap, and the correction is about what the numbers
 *mean*, not about the audio getting better.
 
-## 131. Environment notes
+## 131. Third matched point: the shared target holds at 82–90 %, both arms plateau, outcome unchanged (round 150)
+
+Both from-scratch arms reached 3 000 steps, so the matched comparison now has three points, each arm scored against
+the signal it was **trained to predict**, on 400 held-out prompts from four unseen books:
+
+| step | arm O (originals) | arm S (shared) | S as % of O |
+|---|---|---|---|
+| 1000 | +0.1388 | +0.1245 | **90 %** |
+| 2000 | +0.1736 | +0.1485 | **86 %** |
+| 3000 | +0.1670 | +0.1372 | **82 %** |
+
+**The shared target holds at 82–90 % across all three points.** §129's reversal is now established three times over:
+*target quality is not what this route is missing.*
+
+**Both arms plateau by step 2000** (O 0.139 → 0.174 → 0.167; S 0.125 → 0.149 → 0.137). The rise then flattening is
+the first *held-out* learning curve this project has measured that shows both phases — and it again contradicts
+§124's "held-out ρ does not move", which was a property of the 1 207-item run rather than of the method.
+
+**Outcome, unchanged and measured on the outcome metric:** arm S's samples transcribe at **WER 1.000** (control
+0.022) with DNSMOS **1.118** — the highest naturalness score recorded for any model here, and still unintelligible.
+ρ ≈ 0.14–0.17 against held-out targets is far below the 0.60 at which the recogniser fails.
+
+**The complete picture this route now has:** the target is viable (82–90 % of a plain rendition's predictability,
+three matched points, from scratch); the training procedure is not the blocker (that was the fine-tuning handicap);
+and **the wall is the level of generalisation every arm here reaches**, which is roughly the same whether the model
+is fine-tuned (0.200), trained from scratch on 304 items (0.139–0.174), or the 1 207-item baseline (0.221).
+
+## 132. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
