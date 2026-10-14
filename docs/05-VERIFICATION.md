@@ -5756,6 +5756,20 @@ pwsh scripts\compare_runs.ps1 -Runs "runs/text_v4,runs/text_v6" -Steps 3000,4000
 Read the result as an **increment**: +0.14 again means the threshold reading and two more rounds reach the bar; a
 shrinking increment means the smooth reading and the bar is further than the corpus lever can carry at this model size.
 
+**And the reading rule, pre-registered before v5 exists.** v5 takes the corpus to about 11 900 distinct prompts, a 1.47×
+increase where the measured doubling was 2.16×, so the increment to expect if the offset scales with the corpus is
+roughly +0.14 × log₂(1.47) ≈ **+0.08**, and if it scales with the doubling it is **+0.14**. The rule:
+
+| v5's ceiling increment | reading | what follows |
+|---|---|---|
+| **≥ +0.10** | the offset is roughly constant per doubling, threshold-like | two more rounds reach the 0.60 step |
+| **+0.05 to +0.10** | the offset is shrinking, smooth-like | four to six more rounds, and the machine keeps running |
+| **< +0.05** | the lever is saturating below the bar | stop, and report the ceiling as **real and insufficient at this model size** |
+
+The middle row is the one I expect, and writing down all three before the number exists is the point: the milestone-3
+prediction was registered, defended and then falsified by data, and that was the most useful thing that happened in this
+session.
+
 ## 146. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
