@@ -5011,6 +5011,23 @@ The long run is better than the ladder arm at the same step count on both outcom
 DNSMOS 1.184 against 1.101. So more text and capacity did move the outcome slightly even though they did not move the
 ρ readout at 3 000 steps.
 
+**The gap is 2×, not 5×, so this configuration is under-fit rather than memorising.** Measured on the step-3 000
+checkpoint of each run, in-sample and held-out read with the same script and the same item count:
+
+| run | data | in-sample frame ρ | held-out frame ρ | gap |
+|---|---|---|---|---|
+| long run, dim 384 / 6 | 4 533 items, 3 744 texts | 0.4157 | 0.2127 | 2.0× |
+| ladder, dim 256 / 4 | 1 207 items, 418 texts | 0.4429 | 0.2071 | 2.1× |
+
+The figure the objective was written around, in-sample ρ 0.82 against held-out 0.15, came from a different
+configuration (304 items, more steps per item). In both runs measured here the in-sample fit is only **0.42**, so the
+model cannot yet reproduce even its own training data, and the held-out number is half of that. **Under-fitting plus a
+2× gap means the binding constraint in this configuration is not generalisation and not memorisation. It is that the
+model has not learned the mapping yet.** The training log agrees: the latent term in normalised space is 0.724 at step
+3 300, which is R² ≈ 0.28, against the 1.0 a constant predictor would score.
+
+That changes what the next spend should be, and it is why the curve's asymptote is the only thing worth measuring now.
+
 ## 135. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
