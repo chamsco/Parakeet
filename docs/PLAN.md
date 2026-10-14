@@ -62,20 +62,24 @@ compute.**" That is **withdrawn**, and the measurements that withdraw it are in 
   held-out ρ at matched steps. The one variable with an effect is the step counter.
 * **The 0.37 figure was an in-sample number.** In-sample ρ at step 3 000 is **0.4157**, which is where that
   figure came from.
-* **"Validation ≈ training" does not reproduce.** Held-out is **0.2127**, half of in-sample, a **2×** gap. At
-  in-sample 0.42 the model cannot yet reproduce its own training data, so this configuration is under-fit
-  rather than a converged fit against a one-to-many ceiling.
+* **"Validation ≈ training" does not reproduce.** Held-out is **0.2127**, half of in-sample, a **2×** gap. The
+  diagnosis recorded here was "at in-sample 0.42 the model cannot yet reproduce its own training data, so this
+  configuration is under-fit rather than a converged fit against a one-to-many ceiling" — **and that diagnosis was half
+  right and has since been corrected.** Measured at step 5 000 on the same configuration, the 3 744-distinct-prompt
+  model fits at in-sample 0.5201 with a **2.33×** gap, and a corpus of about 8 100 prompts fits at 0.4919 with a
+  **1.36×** gap: the model does eventually reproduce its training data, and what looked like under-fitting was the
+  smaller corpus being memorised. The "one-to-many ceiling" reading was right; the "cannot yet" was wrong.
 * **What is still open is the asymptote, and the increments are noisy.** The deltas run +0.0833, +0.0372, +0.0029,
   +0.0189. The +0.0029 was briefly read as a plateau and the reading was wrong: the next point came in at 0.2331,
   above everything before it. Against a measurement sd near 0.005, two adjacent deltas cannot tell "flat" from
-  "slow", so the stop rule needs several consecutive points. `runs/text_long384` runs to 20 000 steps to find the
-  asymptote. Taking the mean of the last three increments, +0.020 per 1 000 steps, the 0.60 the recogniser needs is
-  about 18 000 steps away **if that rate held**, which a decelerating curve will not do. That is a bound, not a
-  forecast.
+  "slow", so the stop rule needs several consecutive points. That run has since finished: it plateaus at **0.2228**.
+  Taking the mean of the last three increments was worth nothing in the end — the ceiling was not in the steps, and
+  the 0.60 the recogniser needs was not reachable at this corpus size at any step count.
 
-So the correct statement is narrower than "not worth more compute" and narrower than "compute will fix it":
-**more steps is the only untested lever left on CPU, its effect is real and its size is not yet measured, and the
-decision to spend beyond it belongs to the asymptote measurement.**
+So the correct statement is no longer "more steps is the only untested lever". **The corpus is the lever, it is
+measured, and its per-doubling gain is the number that decides what happens next**: +0.140 for the first doubling, with
+two scenario extrapolations in `docs/05-VERIFICATION.md` section 145 giving two to three more doublings to reach the
+recogniser's 0.60.
 
 
 **Flow route** (sampling, the structurally correct tool for a one-to-many target). Its blocker is measured:
@@ -116,17 +120,26 @@ steps, only the corpus size changing):
   so it is usable). See [PAPER_COMPARISON.md](PAPER_COMPARISON.md) — the architectural axes line up one by one
   (144-dim folded latents at ~15 Hz, ConvNeXt, character-level text, implicit alignment, `Ke = 4`, NFE 32), so
   the difference is data and compute rather than a missing trick;
-* **and the number that matters is distinct prompts, not hours.** The training cache holds 4 533 utterances over
-  **3 744 distinct prompts**, because the base corpus reads each prompt across several voices, against 400 held-out
-  prompts from four unseen books that share **no text** with any of them. Repeating a prompt across voices is useful
-  signal; it is not new text. The expansion in flight takes the distinct count to about 8 100, and the comparison
-  against the current run is pre-registered in `scripts/run_milestone3.ps1`;
-* **the levers that are now closed, so a GPU run does not retest them.** Held-out ρ on the deterministic text side
-  plateaus at **0.2223** over steps 3 000–7 000 (max 0.2315, bound 0.30 as a machine-checked claim in the model card).
-  Ninefold more text and 3× the capacity moved it not at all at matched steps. The mean-invariant latent term, the one
-  knob found disabled and newly enabled, gave **+0.032 at step 1 000 and +0.007 by step 2 000** — an early-training
-  accelerator, not a higher ceiling — so re-weighting the objective is not the missing ingredient either. What is left
-  is the paper's regime;
+* **and the number that matters is distinct prompts, not hours.** The comparison model's cache holds 4 533
+  utterances over **3 744 distinct prompts**, because the base corpus reads each prompt across several voices, against
+  400 held-out prompts from four unseen books that share **no text** with any of them. Repeating a prompt across voices
+  is useful signal; it is not new text. **The expansion has since been run and measured**, taking the distinct count to
+  about **8 100** in a cache of 8 890 items;
+* **the corpus lever, which this file used to list as closed and which is now the measured one.** Held-out ρ on the
+  deterministic text side is **0.2228** for the 3 744-distinct-prompt corpus and **0.3630** for the ~8 100 one, a stable
+  **+0.140 offset** measured at every thousand steps from 3 000 to 5 000 with both arms flat, five readings per
+  checkpoint and cumulative learning-rate exposure matched at 1.05×. The mechanism is the in-sample gap: 0.5201 against
+  0.2228 (**2.33×**) becomes 0.4919 against 0.3630 (**1.36×**) — the larger corpus fits its own data *worse* and
+  generalises *better*. So the earlier "ninefold more text moved it not at all" was measured **below a threshold**:
+  1 207 and 4 533 items behave alike and 8 890 does not. An earlier version of this item told a GPU run not to retest
+  the corpus, and that instruction was wrong;
+* **the levers that are still closed.** 3× the capacity (9.62M → ~30M) moved the readout not at all at matched steps.
+  The mean-invariant latent term, the one knob found disabled and newly enabled, gave **+0.032 at step 1 000 and +0.007
+  by step 2 000** — an early-training accelerator, not a higher ceiling — so re-weighting the objective is not the
+  missing ingredient. Training through the decoder rather than on cached latents reads WER 1.0000 against the latent
+  route's 1.0000 on the real 4 533-item corpus, with DNSMOS 1.200 against 1.278, so the objective with the better
+  small-corpus record does not survive the real data either. What is left is the paper's regime, and now with a measured
+  per-doubling gain rather than a flat ceiling;
 * **read the curve with repeats or not at all.** The held-out ρ readout moves by up to **0.0204** on the *same*
   checkpoint, so single readings cannot support a trend. Three claims in this project were made and retracted on single
   readings. `scripts/compare_runs.ps1` and `scripts/text_plateau.py` both repeat and report the spread, and a difference
