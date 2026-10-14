@@ -5371,6 +5371,21 @@ difference was a small-corpus effect.
 The card's claim carries the provenance in the statement and in its format string for the same reason: a bounded number
 with no data description is how a small-corpus result becomes a project headline.
 
+**And the advantage does not survive the real corpus, measured.** The restated prediction said that at or above WER
+1.0000 on the 4 533-item corpus would mean the small-corpus advantage was a corpus effect rather than an objective
+effect. Measured at step 1 000 on 24 held-out utterances:
+
+| objective, same 4 533-item cache, step 1 000 | WER | DNSMOS |
+|---|---|---|
+| through-decoder (audio mel + spectral) | 1.0000 | 1.200 |
+| latent L1 (`distill-text`) | 1.0000 | **1.278** |
+
+So the through-decoder objective is not better on the real data — the same WER and a *lower* naturalness score — and the
+0.667 stays a three-voice, six-utterance result. The length indicator had already predicted this hours before the run
+would have finished, which is why the run was stopped, and the WER reading confirms the prediction rather than replacing
+it. **Both of this project's objectives produce unintelligible speech on the real corpus, and the difference between them
+was an artefact of corpus size.**
+
 ## 142. Milestone 2 complete: 4357 new prompts, 7.49 h, validated before the merge (round 152)
 
 The expansion named in the objective's second milestone is finished and checked, not merely generated:
