@@ -5135,7 +5135,47 @@ happened in §135.
 The negative result is worth stating too: **91 of 98 config fields are read**, so this is a tail of seven rather than a
 config surface in disarray.
 
-## 137. Environment notes
+## 137. The plateau, measured properly: rho ≈ 0.22 ± 0.02, and my noise estimate was 5× too small (round 152)
+
+The curve looked like it was still climbing, and I had been judging increments against a measured spread of 0.004.
+That figure came from one session's repeated readings and understated the instrument. Measuring each checkpoint
+**twice, back to back**, on the same 60 held-out items:
+
+| step | pass 1 | pass 2 | within-checkpoint spread |
+|---|---|---|---|
+| 3 000 | 0.1873 | 0.2033 | 0.0160 |
+| 4 000 | 0.2194 | 0.2161 | 0.0033 |
+| 5 000 | 0.2410 | 0.2206 | 0.0204 |
+| 6 000 | 0.2016 | 0.1950 | 0.0066 |
+| 7 000 | 0.2496 | 0.2338 | 0.0158 |
+
+**The same checkpoint, read twice, moves by up to 0.0204.** Across the ten readings the mean is **0.2167** with sd
+**0.0201** and a range of 0.1953 to 0.2417. So the resolution of this instrument is about **±0.02, not ±0.004**, and
+every increment I reported after step 3 000 was inside its own error bar: +0.0029, +0.0189, +0.0024, and the −0.0247
+drop at step 7 000 are all the same reading.
+
+**What survives, and what this means for the objective.**
+
+* The early climb is real and far outside the noise: **0.0908 → 0.1741 → 0.2113** over steps 1 000 to 3 000, a factor
+  of 2.3, against a sixfold smaller spread.
+* Between steps 3 000 and 7 000 there is **no resolvable trend**. Five checkpoints span 4 000 steps and their means lie
+  inside ±0.02 of each other. The correct statement is that held-out ρ has reached a plateau of **≈ 0.22 ± 0.02**.
+* The bar is the **0.60** at which the recogniser stops failing, so the plateau sits **2.7× below** it, and WER is
+  1.0000 at every one of those checkpoints (§134). There is no gradient left to spend CPU against.
+* The plateau is measured on 400 held-out prompts from four unseen books, with a 3 744-distinct-prompt training corpus
+  and a ~30M text side. Ninefold more text and 3× more parameters moved it not at all at matched steps (§133).
+
+**The lesson, which is mine.** A noise floor is not a property of the script, it is a property of the script at the
+moment and on the checkpoints it is applied to. I measured 0.004 once, quoted it for a day, and used it to call two
+plateaus and one climb. Measuring it again cost four minutes and would have prevented all three calls. **Every trend
+claim in this project should carry a spread measured on the same checkpoints it is claimed over.**
+
+**Not the end of the search, but the end of this lever.** The contrast arm (§135) is still running and is the last
+untested intervention available here; if it lands inside the same ±0.02 it does not help either. What remains after
+that is what §131 and `docs/PLAN.md` already state: the paper's regime is 945 h of audio with the compute to use it,
+and the architecture that the papers pair with it, neither of which this machine has.
+
+## 138. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
