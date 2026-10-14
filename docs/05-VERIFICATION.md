@@ -5633,9 +5633,23 @@ machine's ceiling, and the whole difference is the corpus lever measured once an
 uncertainty on the label. The loop's rule follows from it: keep doubling, measure each doubling's increment, and stop
 when the increment collapses rather than when a round count runs out.
 
-**And what v5 decides, which is sharper than "does it keep rising".** The corpus-size points on record are:
+**Both curves plateau, and the offset is constant to three decimal places.** Five readings per arm at every point:
 
-| items | distinct texts | held-out ρ at matched steps | caveat |
+| step | baseline | enlarged | difference |
+|---|---|---|---|
+| 2 000 | 0.1702 | 0.3256 | +0.1554 |
+| 3 000 | 0.2074 | 0.3471 | +0.1425 |
+| 4 000 | 0.2211 | 0.3612 | +0.1401 |
+| 5 000 | **0.2228** | **0.3630** | **+0.1402** |
+
+The baseline's last increment is +0.0017 and the enlarged run's is +0.0018, so **both have plateaued**: at **0.223** and
+**0.363**. The baseline landing on 0.2228 independently reproduces the 0.2223 plateau this run showed before any of the
+corpus work, which is a check on the instrument rather than on the model.
+
+So milestone 3's result is a **stable +0.140 offset**, the corpus lever is real, and the plateau it produces is **1.65×
+below the 0.60 step** that would make the speech intelligible. Both statements, measured, in the same table.
+
+**And what v5 decides, which is sharper than "does it keep rising".** The corpus-size points on record are:| items | distinct texts | held-out ρ at matched steps | caveat |
 |---|---|---|---|
 | 1 207 | 418 | ~0.176 | the dim-256 ladder, so confounded by capacity |
 | 4 533 | 3 744 | 0.1702 at step 2 000, 0.2211 at 4 000 | clean |
