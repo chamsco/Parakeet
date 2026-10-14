@@ -27,11 +27,21 @@ the measured reason, in order of discovery:
   *perfectly* at per-dimension correlation **ρ ≥ 0.75** and fails at 0.60, so ρ is the progress metric —
   and unlike a mel-spectrogram proxy it cannot be satisfied by noise. The flow once measured ρ ≈ 0 with a
   log-mel cosine of **0.90**, which is why the envelope looks right and the words are absent.
-* **a one-shot text→latent regressor cannot get there, and that is now explained rather than assumed.**
-  The text side memorises 8 utterances to ρ **0.998** in 300 steps, so capacity and optimisation are fine;
-  on the full corpus it plateaus at **ρ ≈ 0.37** with validation ≈ training — i.e. it fits as well as it
-  can and the limit is the *mapping*: one text admits many acoustics, and a deterministic regressor must
-  average them. That is the papers' reason for **sampling** the acoustics rather than predicting them.
+* **the "one-shot regressor cannot get there" story was based on a training number, and is withdrawn.** The
+  text side memorises 8 utterances to ρ **0.998** in 300 steps, so capacity and optimisation are fine. The figure
+  quoted here for months — **ρ ≈ 0.37** with "validation ≈ training" — was measured on the items the model
+  **trained on**. Held out, the same model reads **ρ ≈ 0.15**, and on its training items **0.82**: a
+  training-versus-generalisation gap of **five**. So it is not "close to its ceiling and fitting as well as it
+  can" — it has **memorised its corpus**, which is also why every conditioning and data intervention moved
+  nothing.* What remains genuinely unexplained is why it cannot generalise, and the measurements above now put a
+  number on the headroom rather than closing it.
+* **and there is a concrete route out of WER 1.000, measured, that needs no GPU.** Two renditions of the same
+  words by the same voice share a component — the *rendition-independent* part — and it can be manufactured:
+  give a prompt a **punctuation variant**, average the two **waveforms**, re-encode through the frozen
+  autoencoder. That target decodes at **WER 0.368** (0.455 on the corpus subset) against the **1.000** every
+  model here produces. It is not free: averaging *latents* instead of waveforms costs 0.15 WER because the mean
+  of two latents is not a latent. A matched experiment — identical 304 items, the target the only variable — is
+  running, read out on a **held-out corpus built from four books the training data never used**.
 * **the sampling route is therefore the right tool, and its blocker is measured too.** It learns the
   marginal distribution first — its samples carry teacher-like temporal autocorrelation (lag-1 0.885
   against 0.901) while correlating ~0 with the *right* latent. The share of its **velocity field's** own
@@ -43,8 +53,13 @@ the measured reason, in order of discovery:
   **But read the flow's audio by WER, not by ρ against a recording.** A flow conditioned on (text, voice) is
   supposed to draw *one of many* valid utterances for that pair, so a good sampler legitimately produces a
   rendition that correlates ~0 with the particular recording it was trained on — ρ-against-the-target is a
-  metric for a deterministic regressor. Two renditions sharing both text and voice agree at **0.445 frame ρ**;
-  the flow scores **0.0045** against the specific recordings, which for a sampler is not yet proof of failure.
+  metric for a deterministic regressor. **How much a text-conditioned model can agree with one recording was
+  finally measured** — on **110** same-voice pairs of the same words, which is **0.714 frame ρ** where the old
+  four-pair estimate said 0.445. Its square root, **0.845**, is the ceiling for any model with (text, voice), and
+  that ceiling is **above** the 0.60 fail point and even above the 0.75 perfect-reading point. So the
+  deterministic route is **not excluded by the data** — the earlier "a one-shot regressor cannot get there" was
+  built on a four-pair number whose confidence interval spanned [−0.90, +0.99]. The flow's own samples score
+  **0.0045** against the recordings, which for a sampler is not yet proof of failure.
   **The proof is WER: the flow's audio transcribes at 1.000 against the teacher's 0.000** — unambiguous, because
   unintelligible is unintelligible whichever utterance was intended. (Sampling steps are not the issue either:
   ρ is flat at NFE 4, 8, 16 and 32, so the field's *exact* ODE solution is as uncorrelated as its 4-step one.)
