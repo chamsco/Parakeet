@@ -4708,7 +4708,45 @@ WER on its samples rather than by a comparison the design biased.
 **interpretation outran them**. A ρ against a target the model was never asked to predict is not a quality measure,
 and calling its outcome a "clean negative" gave a number authority it had not earned.
 
-## 127. Environment notes
+## 127. The fair readout: even against its OWN target, the shared-target arm generalises 5× worse (round 146)
+
+§126 called the target experiment inconclusive because both arms were scored against the **original** renditions,
+which biases against an arm trained on the shared signal. The held-out **shared** target is now built — 400
+punctuation variants of the held-out prompts, the same construction as the training pairs — so each arm is scored
+against the signal it was actually trained to predict, **on data no run has seen**:
+
+| model | scored against | ρ |
+|---|---|---|
+| baseline step 5000 | ORIGINAL held-out targets | **+0.2214** |
+| arm O step 1000 (originals) | ORIGINAL held-out targets | **+0.2004** |
+| arm S step 1000 (shared) | **SHARED** held-out targets | **+0.0413** |
+
+**This settles the route question, against the route, on fair terms.** Arm S tracks its **own** target **five times
+worse** than arm O tracks its own — 0.041 against 0.200 — and its samples read **WER 1.000** like everything else
+here. The low ρ was not merely the bias identified in §126: with the bias removed, the arm still fails to fit the
+target it was trained on.
+
+**The mechanism is visible from measurements already in hand.** The shared target is on the autoencoder's manifold
+by construction, but it is **blurred**: averaging two waveform renditions of the same words averages their pacing and
+prosody differences too, and §122 measured what that costs at the output — the shared component decodes at **WER
+0.512** as a latent average and **0.368** as a waveform average, against **0.209** for a plain rendition. The target
+is not only *different* from a rendition, it is a **degraded** rendition, and the model finds less in it to lock
+onto.
+
+That also corrects §126's generosity: I wrote that the comparison *"does not distinguish worse from different"*.
+With the fair comparison run, the answer is **both** — partly the bias (now removed), and partly a genuine failure
+to fit a signal whose information has been averaged away.
+
+**One thing remains open:** 1 000 steps of **fine-tuning** from a model trained on the original targets is still not
+how anyone would train on a new target. The **from-scratch pair** (both targets, 3 000 steps, random init) is
+running for that reason, and it is the last test this route gets.
+
+**Not in doubt:** the target measurement itself — the rendition-independent component decodes at **WER 0.368**
+against 1.000, its cache writer reproduces that to sixteen digits, and the reliability behind it is **0.714 on 110
+pairs** against a four-pair estimate of 0.445. *A good target is not sufficient* — now measured, twice, on fair
+terms.
+
+## 128. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
