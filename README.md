@@ -40,8 +40,16 @@ the measured reason, in order of discovery:
   give a prompt a **punctuation variant**, average the two **waveforms**, re-encode through the frozen
   autoencoder. That target decodes at **WER 0.368** (0.455 on the corpus subset) against the **1.000** every
   model here produces. It is not free: averaging *latents* instead of waveforms costs 0.15 WER because the mean
-  of two latents is not a latent. A matched experiment — identical 304 items, the target the only variable — is
-  running, read out on a **held-out corpus built from four books the training data never used**.
+  of two latents is not a latent.
+  **The route has now been tested and did not work.** A matched experiment — identical 304 items, the target the
+  only variable — read out on a **held-out corpus built from four books the training data never used**: scored
+  against the signal each arm was actually trained to predict, the shared-target arm reaches ρ **0.041** where the
+  original-target arm reaches **0.200**, and both transcribe at **WER 1.000**. The mechanism is in the target
+  itself: averaging two renditions averages their pacing and prosody differences, so the shared component is a
+  **degraded** rendition (0.368–0.512 WER against 0.209 for a plain one), and a model finds less in it to lock
+  onto. *A good target is not sufficient*, and that is now measured on fair terms rather than assumed. One test
+  remains open — both targets trained **from scratch**, since fine-tuning onto a different target for 1 000 steps
+  is not how anyone would train one.
 * **the sampling route is therefore the right tool, and its blocker is measured too.** It learns the
   marginal distribution first — its samples carry teacher-like temporal autocorrelation (lag-1 0.885
   against 0.901) while correlating ~0 with the *right* latent. The share of its **velocity field's** own
