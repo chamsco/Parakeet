@@ -257,3 +257,70 @@ reconstruction, written after auditing which files the commits actually touched.
       `--warm-start runs/text_continue/distill-text_step5000.pt`, gate = the flow term.
 * [ ] **The token route stays parked.** ρ 0.37 with validation ≈ training and ρ 0.998 on 8 memorised
       utterances: it fits as well as it can, and the remaining error is the one-to-many mapping.
+
+---
+
+## Rounds 74–127: what the measurements changed
+
+The authoritative record is `docs/05-VERIFICATION.md` §§74–117. This is the summary, and it is written now because
+this file was again the last to hear about it — line 212 records the previous time.
+
+### Closed, with the number that closed it
+
+* **Per-voice normalisation (§74), and then per-(voice, source) (§§112–117).** A voice's latent scale is a property
+  of that voice (the corpus's Kokoro voices pool at 0.83–0.85, eleven others at 0.44–0.52), so an expansion rendered
+  with different voices lands elsewhere and mixes in *worse* until normalised. A **merge** then produced a case one
+  per-voice statistic cannot cover — one voice whose items come from two sources at different scales — so items now
+  carry a **compound provenance tag** (`"0"`, `"0>0"`, `"0>1"`) and statistics are fitted per (voice, source).
+* **The gate was reading ~1–2 %, not 2–7 % (§§107).** `text_dependence` ran the model in **train** mode, where 10 %
+  conditioning dropout pollutes the right-text pass. Measured in eval mode the figure is **+1.9 %**, and it is that
+  small at **every timestep** (0.3–1.3 % from t=0.05 to 0.95) — so **no loss reweighting or curriculum can create
+  it.** That closes a whole class of proposed fixes before they are tried.
+* **The loss is energy-weighted; intelligibility follows structure (§§110, 118).** The best available text predictor
+  explains **2.1 % of the flow's loss** while tracking the target at ρ **0.406** — so "the field barely uses the
+  text" was a statement about the *loss*, and the loss was never where the text's contribution lives.
+* **The token route is at 91 % of the ceiling that applies to it (§109).** Against the text+voice reproducibility
+  ceiling (ρ 0.445), the deterministic route's frames measure ρ **0.406** and the flow's samples **0.0045**.
+  "Deterministic route parked at its ceiling" was written against a *different* ceiling and is corrected.
+* **The plan head has learned nothing, so the plan/residual route is dead (§§108, 111).** Unfolded, the plan's ρ
+  against the target is **−0.0137**. The 0.37 belongs to the *token route*, not to the flow's auxiliary head — and
+  with floor 0.406 against a fail threshold of 0.60, the residual route's **0.039 window** cannot produce
+  intelligible audio even with a perfect field. Closed by arithmetic rather than by a training run.
+* **ρ ≥ 0.75 was calibrated for a deterministic regressor and does not apply to the sampler (§111).** A sampler that
+  produces a valid, intelligible utterance still scores ~0 against a *particular* recording. **WER decides**, and
+  both routes sit at WER 1.000 against the teacher's 0.000.
+* **Domain diversity: the premise is measured (§§112, 121).** Every corpus element was *narration* — an unusually
+  easy distribution to model unconditionally. A dialogue set built from public-domain plays
+  (`scripts/expansion_dialogue.py`, 1 461 turns) leaves **37.4 %** of the target's variance for the text against
+  narration's **21.3 %** — ~1.75× more conditional signal. Honest limit: Kokoro *reads* those turns.
+* **Per-voice statistics are not the only scaling trap; so is the variable table (§74).** A widened voice table now
+  copies the matching rows instead of rebuilding every voice from scratch.
+
+### In flight
+
+* [ ] **Domain A/B** (`scripts/run_domain_ab.ps1`, arm N narration vs arm D dialogue, 1 400 items each so corpus
+      *size* is not a variable). Pre-registered: arm D's flow-term mean exceeds arm N's across four gate points;
+      expected effect ~1–2 points; **a null does not refute the premise**, it means the instrument cannot resolve
+      an effect that size — the in-loop gate ran `repeats=2` against a ±3–4-point noise floor. Raised to 5 for
+      future runs. ~2.4 s/step, ~2.7 h for both arms.
+
+### The remaining path is scale, and it is costed
+
+* [ ] **7B and a duplex mode** (`docs/PLAN.md`): 7B is **179×** the research flow, ~**8 min/step** on this CPU
+      (~56 days for 10 k steps) — a GPU question, and a **fine-tuning** one. PersonaPlex fine-tuned open Moshi;
+      QLoRA on a frozen 7B fits one 24–48 GB card. What carries over: the autoencoder work, streaming inference,
+      the evaluation discipline, the corpus pipeline. What is missing: two streams, a Mimi-style codec, an
+      inner/depth transformer for the codebook axis, role-prompt and voice conditioning.
+* [ ] **Three ordered GPU runs with criteria** (`docs/PLAN.md`): Run 1 is the cheap falsification — 50 k steps at
+      batch 16 on the existing corpus, watching the flow term. If it stays near 1–2 %, training volume on this
+      architecture is not the missing ingredient and the corpus run is where the answer is.
+* [ ] **Corpus: ~8 h here against the paper's 945 h.** That, and the compute to use it, is the measured difference.
+
+### Verdict at the end of this span
+
+* **Size and speed: solved and measured** — 9.63 M parameters, 42× real time fp32, **20.3 MB int8 at 85×**,
+  ONNX pipeline 103×, autoencoder round trip **WER 0.000**.
+* **Speech: unintelligible** — flow and token routes both at **WER 1.000** against the teacher's 0.000, with the
+  teacher fully controlled. Every cheap lever — eight conditioning interventions, sampling steps, NFE, 4.2× data,
+  4× training time, both structural routes — is closed *and measured*. **345 tests.**
+
