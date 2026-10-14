@@ -366,25 +366,22 @@ about anything. The authoritative record is `docs/05-VERIFICATION.md` §§108–
 
 ### Done, and what it showed
 
-* **The matched target experiment ran** (`scripts/run_target_ab.ps1`): 304 Kokoro records, each with a same-voice
-  punctuation variant; two caches **verified identical in ids, voice and durations (304/304)** with only the target
-  differing; both arms 500 and 1 000 steps from one warm start.
+* **The matched target experiment ran**, in four revisions, and the last one reverses the others:
 
-  | step | arm O (originals) | arm S (shared) |
-  |---|---|---|
-  | 500 | ρ +0.1994 | ρ +0.0335 |
-  | 1000 | ρ +0.2084 | ρ +0.0540 |
-  | (baseline) | ρ +0.2057 | — |
+  | run | arm O (originals) | arm S (shared) | verdict |
+  |---|---|---|---|
+  | fine-tuned, scored vs the ORIGINALS | ρ +0.2004 | ρ +0.0335 | biased against arm S |
+  | fine-tuned, each vs its OWN target | ρ +0.2004 | ρ +0.0413 | unequal training |
+  | **from scratch, each vs its OWN target** | **ρ +0.1388** | **ρ +0.1245** | **the target is viable** |
 
-  **The result is INCONCLUSIVE, and my first reading of it was wrong.** WER is **1.000 for both arms** — saturated,
-  it cannot separate two unintelligible models — and the ρ comparison is **biased against arm S by construction**:
-  it was trained on the rendition-independent signal (std 0.54), so scoring it against the *original* renditions
-  asks it to predict something it was never trained to predict. Arm S's ρ **climbs** with training (0.034 → 0.054),
-  which is what adapting to a different target looks like, and a ρ against the wrong target cannot separate that
-  from failure.
+  From scratch on matched terms the rendition-independent target reaches **90 %** of the original-target arm. The
+  "route fails" readings were artefacts: first a readout that scored arm S against a signal it never predicted
+  (worth ≈14 %, measured), then a **fine-tuning handicap** — the same target trained from scratch is three times
+  better than the same target fine-tuned onto a model that had learned the originals.
 
-  Established, and less than first claimed: **the route produced no intelligible speech in this pilot** (WER 1.000
-  on 24 held-out utterances, control 0.022). What is *not* established is that the target is at fault.
+  **What has not changed:** every arm transcribes at **WER 1.000**, and ρ ≈ 0.13 is far below the 0.60 fail point.
+  The missing ingredient is generalisation itself, which every arm lacks equally — including the 1 207-item
+  baseline at ρ 0.221. **The target is not the wall; the wall is that this model does not generalise.**
 
 * **The held-out set proved itself on first use.** The baseline reads **WER 1.000** with the recogniser's control at
   **0.014** on four unseen books — the project's headline number reproduced independently on data no run has seen,

@@ -41,15 +41,17 @@ the measured reason, in order of discovery:
   autoencoder. That target decodes at **WER 0.368** (0.455 on the corpus subset) against the **1.000** every
   model here produces. It is not free: averaging *latents* instead of waveforms costs 0.15 WER because the mean
   of two latents is not a latent.
-  **The route has now been tested and did not work.** A matched experiment — identical 304 items, the target the
-  only variable — read out on a **held-out corpus built from four books the training data never used**: scored
-  against the signal each arm was actually trained to predict, the shared-target arm reaches ρ **0.041** where the
-  original-target arm reaches **0.200**, and both transcribe at **WER 1.000**. The mechanism is in the target
-  itself: averaging two renditions averages their pacing and prosody differences, so the shared component is a
-  **degraded** rendition (0.368–0.512 WER against 0.209 for a plain one), and a model finds less in it to lock
-  onto. *A good target is not sufficient*, and that is now measured on fair terms rather than assumed. One test
-  remains open — both targets trained **from scratch**, since fine-tuning onto a different target for 1 000 steps
-  is not how anyone would train one.
+  **The route has been tested on matched terms, and the target is not the problem.** A matched experiment —
+  identical 304 items, the target the only variable — read out on a **held-out corpus built from four books the
+  training data never used**, with both arms trained **from scratch** and each scored against the signal it was
+  actually trained to predict: the shared-target arm reaches ρ **0.1245** where the original-target arm reaches
+  **0.1388** — **90 % of it.** Two earlier readings said the route failed (0.041 against 0.200); both were
+  artefacts, first of a readout biased against the shared arm, then of a **fine-tuning handicap** — the same target
+  trained from scratch is three times better than the same target fine-tuned onto a model that had learned the
+  originals. *The target is viable; that is now measured rather than argued.*
+  **What has not changed is the outcome:** every model here transcribes at **WER 1.000**, and ρ ≈ 0.13 is far below
+  the 0.60 at which the recogniser fails. The missing ingredient is generalisation itself, which every arm lacks
+  equally — including the 1 207-item baseline at ρ 0.221.
 * **the sampling route is therefore the right tool, and its blocker is measured too.** It learns the
   marginal distribution first — its samples carry teacher-like temporal autocorrelation (lag-1 0.885
   against 0.901) while correlating ~0 with the *right* latent. The share of its **velocity field's** own
