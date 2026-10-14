@@ -5592,6 +5592,29 @@ calibration. So the likely answer is both statements together: **the corpus leve
 short of intelligible.** The v5 round — 3 779 more prompts, about 11 900 distinct — is the measurement that says whether
 0.4 is a wall or a waypoint.
 
+**Step 4 000, five readings per arm, and the effect is a stable OFFSET rather than a growing gap.**
+
+| step | baseline | enlarged | difference |
+|---|---|---|---|
+| 3 000 | 0.2074 | 0.3471 | +0.1425 |
+| 4 000 | **0.2211** | **0.3612** | **+0.1401** |
+
+The gap holds at **+0.14** across a thousand steps while both arms decelerate in parallel: the baseline's increments are
++0.081, +0.034, +0.017 and the enlarged run's are +0.146, +0.028, +0.014. Neither is flat yet, so both plateaus sit
+somewhere above 0.36.
+
+**Which makes the next doubling the measurement that matters.** If each doubling of the corpus adds a roughly constant
++0.14, then 3 744 → ~7 500 (measured: +0.14) → ~15 000 → ~30 000 would cross the 0.60 step at the third doubling. If the
+increment shrinks as the corpus grows, the lever saturates below the threshold and the answer is the negative half of
+the pair. v5 — 3 779 more prompts, about 11 900 distinct — is the next doubling and the measurement that distinguishes
+the two.
+
+**And a single reading misled me by 0.013 here, in the direction of a false conclusion.** The monitor's step-4 000
+reading is 0.3548 while the five-reading mean is 0.3612, so the increment I first computed was +0.0013 and looked like a
+flat plateau; the real increment is +0.0141. One reading would have written "the enlarged corpus plateaus at 0.355" into
+this log. The five-reading number is the one on record, which is the fourth time in this session that a single reading
+and a repeated one disagreed by more than the effect being claimed.
+
 **The loop's measured cost, so a handover does not have to rediscover it.** Per round: about **3 hours** of synthesis at
 the measured 19.3 utterances per minute for roughly 3 800 prompts; about **12 minutes** to cache and merge, which scales
 with the base it merges onto (18 shards took about 10 minutes); and about **2.4 hours** of training at the measured
