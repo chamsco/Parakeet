@@ -238,7 +238,12 @@ def main() -> int:
         model.eval()
         try:
             with torch.no_grad():
-                gate = text_dependence(model, source, repeats=2)
+                # repeats=5, not 2.  The gate's per-checkpoint noise was measured at +-3-4 points with the CLI's
+                # 3 repeats, and the in-loop version was running 2 -- so any run whose *effect* is smaller than
+                # that (the domain A/B predicts ~1.5-2 points) is measuring noise.  Five repeats costs seconds
+                # per checkpoint and is the difference between an instrument that can resolve the effect and one
+                # that cannot.
+                gate = text_dependence(model, source, repeats=5)
             print(f"  [gate] step {step}: FLOW-TERM text dependence {gate['flow_share']:+.1f}% "
                   f"(total {gate['total_share']:+.1f}%, plan {gate['plan_share']:+.1f}%)", flush=True)
         finally:
