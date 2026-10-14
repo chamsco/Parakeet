@@ -5708,6 +5708,22 @@ direction it was meant to resolve, while taking a third of the CPU from v5's syn
 a training run, and its partial cache was deleted so that nothing reads it later. The composition question is still open
 and still cheap; it needs an arm whose voice set matches the base's.
 
+**The next round's invocation, so continuing is not a reconstruction.** The mechanism says the lever is generalisation
+through text, so the loop keeps adding text rather than re-synthesising renditions. Run, in order:
+
+```powershell
+# 1. v5 finishes on its own: scripts/run_growth_round.ps1 -- already running, merging onto runs/v4_fixed
+# 2. then the round after it, whose prompts are already built and whose base is the v5 output
+pwsh scripts\run_growth_round.ps1 -Texts data\prompts\prompts_v6.txt -Corpus data\kokoro_v6 `
+    -Cache runs\kokoro_v6_cache -Base runs\v5_fixed -Out runs\v6_fixed -RunDir runs\text_v6
+# 3. monitor with repeats (the fix in this round), and compare at matched steps
+pwsh scripts\monitor_text_run.ps1 -RunDir runs\text_v6 -Cache runs\holdout_cache -Repeats 3
+pwsh scripts\compare_runs.ps1 -Runs "runs/text_v4,runs/text_v6" -Steps 3000,4000,5000 -Repeats 5
+```
+
+Read the result as an **increment**: +0.14 again means the threshold reading and two more rounds reach the bar; a
+shrinking increment means the smooth reading and the bar is further than the corpus lever can carry at this model size.
+
 ## 146. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
