@@ -326,3 +326,58 @@ this file was again the last to hear about it — line 212 records the previous 
   teacher fully controlled. Every cheap lever — eight conditioning interventions, sampling steps, NFE, 4.2× data,
   4× training time, both structural routes — is closed *and measured*. **345 tests.**
 
+---
+
+## Rounds 128–142: the ceiling was wrong, and a route opened because of it
+
+This section exists for the third time, and for the same reason as the first two: this file is the last to hear
+about anything. The authoritative record is `docs/05-VERIFICATION.md` §§108–125.
+
+### Reversed, with the number that reversed it
+
+* **The "ceiling" was a reliability, and then it was not a measurement at all.** §109 called 0.445 "the ceiling that
+  applies" and used it to close the deterministic route. 0.445 is the agreement between two renditions — a
+  *reliability* — so the bound for a predictor of the shared signal is its square root. §119 corrected that to
+  **0.667**. §120 then showed the whole thing rested on **four pairs**, CI **[−0.90, +0.99]**. §121/§123 measured it
+  properly on **110** same-voice pairs built from punctuation variants: **0.714**, ceiling **0.845** — **above both
+  the recogniser's fail point (0.60) and its perfect-reading point (0.75)**. The deterministic route is **not
+  excluded by the data**, contrary to everything this file said before.
+* **The token route's published ρ was a TRAINING number.** "ρ 0.354 with validation ≈ training, so it fits as well
+  as it can" was measured on the items the model trained on. Held out it reads **0.15**; on its training items
+  **0.82** — a factor of **five**. It has **memorised its corpus**, which is also why every conditioning and data
+  intervention moved nothing. **Correction: the 0.354/0.406 figures describe what the model had *seen*.**
+* **A route out of WER 1.000, measured, needing no GPU.** The rendition-independent part of a signal — two
+  renditions of the same words by the same voice, averaged as **waveforms** and re-encoded through the frozen
+  autoencoder — decodes at **WER 0.368** (0.455 on the corpus subset) against the **1.000** every model here
+  produces. Averaging *latents* instead costs 0.15 WER: the mean of two latents is not a latent.
+* **An in-domain held-out set now exists.** 400 prompts from four Gutenberg books the corpus was never built from
+  (Dracula, Jane Eyre, A Tale of Two Cities, Moby-Dick), excluding every sentence already in a prompt file, with the
+  final intersection **asserted empty**. 1 085 scanned sentences were skipped for already being in the corpus — so
+  "pick a new book" would not have been enough on its own.
+
+### In flight
+
+* [ ] **The matched target experiment** (`scripts/run_target_ab.ps1`): 304 Kokoro records, each with a same-voice
+      punctuation variant; two caches verified **identical in ids, voice and durations (304/304)** with only the
+      target differing; both arms 1 500 steps from the same warm start. Read out by WER on the held-out corpus,
+      because a 304-item subset will memorise and training loss therefore says nothing. **The mechanical question:
+      does training on the rendition-independent target produce better samples?**
+* [ ] **A powered version** needs variants for the expansion corpora (~3 300 prompts, generation time only).
+
+### Closed, and stopped
+
+* The **domain A/B** (×dialogue vs ×narration) was stopped after three points (+3.2, +0.5, +4.8 %): the within-arm
+  spread is **4.3 points** against a predicted effect of 1.5–2, so the instrument's resolution was *determined* and
+  the remaining hours could not change the verdict. The premise it tests (dialogue leaves **37.4 %** of the
+  objective for the text against narration's **21.3 %**) was measured independently and stands.
+* The **token continuation** was stopped at step 1 000 having answered its question: held-out ρ +0.02 to +0.03,
+  above the within-session sd (0.004) but not above the between-session spread (~0.016). Weak support, not
+  confirmation.
+
+### The recurring defect, named
+
+Seven self-corrections in this span, and the pattern is consistent: **a number that was right, given a name that did
+work it had not earned** — a "ceiling" that was a reliability, a "validation" figure measured on training items, a
+model card whose claim list stopped growing, a README still teaching both. None of them announced themselves. What
+caught every one was comparing an artefact against its own source.
+
