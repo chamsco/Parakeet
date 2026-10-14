@@ -5540,6 +5540,36 @@ the shape this section's evidence predicted before the result arrived.
 measurements, and it was wrong. The earlier measurements were not noise; they were taken below a threshold, which is a
 failure mode that a threshold cannot be found by testing on one side of it.
 
+**The registered read at step 3 000 confirms it, at the point where no interpolation is needed.** Five readings per
+arm, cumulative exposure matched at 1.05×:
+
+| run | mean held-out ρ | range |
+|---|---|---|
+| `runs/text_long384`, 3 744 distinct prompts | 0.2046 | 0.1893 – 0.2185 |
+| `runs/text_v4`, ~8 100 distinct prompts | **0.3471** | 0.3362 – 0.3591 |
+| difference | **+0.1425** | **SEPARATED** |
+
+Two consecutive points now separate by more than five times the larger spread, at the point chosen before the run
+started.
+
+**But the increments are decelerating, faster than the baseline's:**
+
+| interval | enlarged | baseline |
+|---|---|---|
+| 1 000 → 2 000 | **+0.146** | +0.081 |
+| 2 000 → 3 000 | **+0.022** | +0.034 |
+
+Part of that is the schedule, and the schedule is a confound the comparison cannot remove: at step 3 000 the enlarged
+run's instantaneous learning rate is 0.84 of peak against the baseline's 0.97, and it anneals to zero at 10 000 steps
+rather than 20 000. So its endpoint may **understate** what 8 100 distinct prompts can do given a full schedule, which is
+an argument for measuring each new corpus at the same budget as its predecessor rather than a longer one.
+
+**The honest expectation, stated before the v5 round reports.** At 0.3471 and decelerating, the enlarged curve is
+plausibly heading for a plateau near 0.4, and the intelligibility threshold is a **step at 0.60** per the committed
+calibration. So the likely answer is both statements together: **the corpus lever is real, and this machine is still
+short of intelligible.** The v5 round — 3 779 more prompts, about 11 900 distinct — is the measurement that says whether
+0.4 is a wall or a waypoint.
+
 ## 146. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
