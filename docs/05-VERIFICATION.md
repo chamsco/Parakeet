@@ -5669,6 +5669,12 @@ in both runs and the larger corpus holds it off rather than preventing it.
 | 5 000 | 0.2228 | 0.3630 | +0.1402 |
 | 6 000 | 0.2301 | **0.3648** | **+0.1347** |
 | 7 000 | — | 0.3649 | — |
+| 8 000 | — | 0.3619 | — |
+
+Four points spanning three thousand steps agree to within **0.0030**, which is *tighter than the instrument's own
+mean-level noise of about 0.01*. The first doubling's ceiling is therefore settled at **0.362–0.367**, not estimated,
+and it sits **1.65× below** the 0.60 step. This is the strongest single stability statement in the project: an effect
+fourteen times the resolution limit, measured at four points, moving by a third of the noise.
 
 The enlarged run's increment is **+0.0018** — its **second consecutive flat point**, so its plateau is **~0.364** and
 the first doubling's ceiling is found. The baseline's increment is +0.0073, but it arrives with a **spread of 0.0521**,
