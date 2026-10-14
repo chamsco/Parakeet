@@ -116,6 +116,21 @@ steps, only the corpus size changing):
   so it is usable). See [PAPER_COMPARISON.md](PAPER_COMPARISON.md) — the architectural axes line up one by one
   (144-dim folded latents at ~15 Hz, ConvNeXt, character-level text, implicit alignment, `Ke = 4`, NFE 32), so
   the difference is data and compute rather than a missing trick;
+* **and the number that matters is distinct prompts, not hours.** The training cache holds 4 533 utterances over
+  **3 744 distinct prompts**, because the base corpus reads each prompt across several voices, against 400 held-out
+  prompts from four unseen books that share **no text** with any of them. Repeating a prompt across voices is useful
+  signal; it is not new text. The expansion in flight takes the distinct count to about 8 100, and the comparison
+  against the current run is pre-registered in `scripts/run_milestone3.ps1`;
+* **the levers that are now closed, so a GPU run does not retest them.** Held-out ρ on the deterministic text side
+  plateaus at **0.2223** over steps 3 000–7 000 (max 0.2315, bound 0.30 as a machine-checked claim in the model card).
+  Ninefold more text and 3× the capacity moved it not at all at matched steps. The mean-invariant latent term, the one
+  knob found disabled and newly enabled, gave **+0.032 at step 1 000 and +0.007 by step 2 000** — an early-training
+  accelerator, not a higher ceiling — so re-weighting the objective is not the missing ingredient either. What is left
+  is the paper's regime;
+* **read the curve with repeats or not at all.** The held-out ρ readout moves by up to **0.0204** on the *same*
+  checkpoint, so single readings cannot support a trend. Three claims in this project were made and retracted on single
+  readings. `scripts/compare_runs.ps1` and `scripts/text_plateau.py` both repeat and report the spread, and a difference
+  is only called when it clears it;
 * **a GPU** (any CUDA card, even rented for a few hours): the code is device-agnostic, plain fp32, with no
   CUDA-specific assumptions and a verified `--resume`, so it would move as-is;
 * ~~a lower-rate learned acoustic bottleneck~~ — **retracted.** The velocity field already models 144-dim
