@@ -4341,7 +4341,30 @@ Same conclusion as §111, now resting on WER rather than on a threshold that doe
 claim (**41 verified, 0 failing**) with its report committed as evidence, so the number the closure depends on is
 reproducible rather than quoted.
 
-## 118. Environment notes
+## 118. The domain A/B's instrument spread, measured before the result (round 130)
+
+Built scripts/analyse_domain_ab.py to compare the two arms against the prediction registered before the runs, and
+to report each arm's **own** spread — because that spread *is* the instrument's noise.
+
+**First two points, arm N (narration):** +3.2 % at step 500, +0.5 % at step 1000 ⇒ mean +1.85, **spread 2.7
+points**, sd 1.91.
+
+Within **one** arm that has not changed what it is training on, the gate moves **2.7 points** between checkpoints —
+against a predicted domain effect of ~1.5–2 points. This is the concern written into the pre-registration *before*
+any result (§ "Domain A/B" in docs/ROADMAP.md): the in-loop gate ran epeats=2 against a ±3–4-point floor. It
+is now **measured** rather than suspected.
+
+**What that does and does not mean:**
+
+* it does **not** invalidate the premise — that was measured directly and independently of any training (37.4 %
+  against 21.3 %, §112) and is in the model card;
+* it **does** mean the A/B's mean comparison carries an error of roughly sd/√4 ≈ 1 point per arm, so a ~1.5–2-point
+  separation is **marginal rather than decisive**, and whichever way it lands the verdict must say so. The tooling
+  enforces that: it declares UNRESOLVED whenever the difference is smaller than half an arm's own spread, rather
+  than reporting a sign as a finding;
+* and it is why the in-loop gate was raised to epeats=5 for future runs — these arms started before that change.
+
+## 119. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
