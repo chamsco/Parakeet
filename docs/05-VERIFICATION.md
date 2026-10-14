@@ -4746,7 +4746,28 @@ against 1.000, its cache writer reproduces that to sixteen digits, and the relia
 pairs** against a four-pair estimate of 0.445. *A good target is not sufficient* — now measured, twice, on fair
 terms.
 
-## 128. Environment notes
+## 128. A from-scratch data point on 304 items (round 147)
+
+The from-scratch pair was launched because 1 000 steps of fine-tuning onto a different target is not a fair test of
+it (§127). While the first arm was still finishing, its step-2 000 checkpoint was measured on the held-out corpus —
+a partial result, recorded because it is clean and it bounds something.
+
+| model | items | steps | held-out ρ | WER |
+|---|---|---|---|---|
+| baseline (	ext_continue) | 1 207 | 5 000 | **+0.2214** | 1.000 |
+| arm O, fine-tuned from it | 304 | 1 000 | +0.2004 | 1.000 |
+| **arm O, from scratch** | 304 | 2 000 | **+0.1736** | 1.000 |
+
+**What it says.** A model trained from a random initialisation on **a quarter of the data** reaches **79 %** of the
+baseline's held-out ρ. The architecture learns, warm-starting helps slightly (0.200 against 0.174), and **all of
+them transcribe at WER 1.000** — the wall is not the training procedure. Note also that the held-out ρ is *lower*
+here (0.174) than the token route's held-out 0.15 on the dialogue set (§124); those are **different held-out sets**
+and are not comparable, which is exactly why the in-domain set was built.
+
+**Not yet a comparison.** The matched from-scratch *shared*-target arm has not run, so this bounds the original-target
+route only. It is logged as a data point, not a result about the target.
+
+## 129. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
