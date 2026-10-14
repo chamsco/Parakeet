@@ -68,7 +68,7 @@ cached teacher corpus.
 | two halves trained **separately** against a frozen cached teacher | `make_teacher_corpus.py` + `runs/*/latent_cache`; stages `distill-text` and `flow` | it is what made CPU training tractable at all: the teacher is paid for once, then every experiment reads a cache |
 | **low spectral weight** and adversarial decoding | `parakeet/models/` + the AE stage's adversarial term | the autoencoder's round trip is *perfect* (WER 0.000), so this half is solved |
 | **weight-only int8** | `export_onnx.py --pipeline` | 9.63M → **20.3 MB** at **85× real time**, waveform cosine 0.9952 |
-| direct feature supervision of the text half | the token route (`distill-text`) | ρ 0.37 on held-out prompts, with the ceiling explained as the one-to-many mapping rather than capacity |
+| direct feature supervision of the text half | the token route (`distill-text`) | held-out ρ plateaus at **0.22 ± 0.02** on 400 prompts from four unseen books, measured over steps 3 000–7 000 with the readout repeated (noise floor ±0.02). The **0.37** this row used to quote is an **in-sample** number and was never held out; text count (418 → 3 744 distinct prompts) and capacity (9.6M → 30M) both moved this readout not at all at matched steps |
 
 **[SupertonicTTS](https://www.alphaxiv.org/abs/2503.23108)** — 44M, 945 h, the closest architectural match.
 
@@ -77,7 +77,8 @@ cached teacher corpus.
 | 24-dim continuous latent + temporal compression `Kc = 6` | `autoencoder.latent_dim`, `flow.compress` | the velocity field models **144 dims at 15.6 Hz** against the paper's ~14 Hz — the axes match |
 | ConvNeXt blocks, character-level text, implicit alignment | `parakeet/models/flow.py`, `text.mode` | implemented, no G2P, no aligner |
 | **context-sharing batch expansion `Ke = 4`** | `flow.context_expansion`, applied in `flow_loss` | implemented as designed |
-| the papers' reason for **sampling** rather than regressing | the flow stage | it is why the deterministic route's plateau (ρ 0.37) is a dead end rather than a tuning problem |
+| the papers' reason for **sampling** rather than regressing | the flow stage | measured, the deterministic route plateaus at **0.22 ± 0.02** held out against the **0.60** the recogniser needs, so the plateau is real; *why* it plateaus is a separate question, and the one-to-many explanation is now contradicted by the model's own in-sample fit of **0.4157**, which is under-fitted rather than saturated |
+
 | — | — | **what did not transfer:** its conditioning, at this scale. Eight interventions (§§94–101) left the flow term at **~1–2 %** (2–7 % before round 114 found the gate was inflated by train-mode dropout) and ρ indistinguishable from zero. The difference is 945 h against 8 h |
 
 **[PilotTTS](https://www.alphaxiv.org/abs/2605.27258)** — factorised conditioning, cross-sample paired training.

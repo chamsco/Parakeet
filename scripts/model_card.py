@@ -691,8 +691,10 @@ def render(results: List[Dict[str, Any]], args) -> str:
             "**WER 1.000 against a teacher control of 0.000-0.014**, on held-out text as well as training text.  "
             "So the size and speed claims below are real and the *speech* is not: these are not released "
             "weights, and nothing here should be read as a working TTS model.  The measured reason is in "
-            "`docs/05-VERIFICATION.md` -- the model memorises its corpus rather than generalising from it "
-            "(rho 0.82 in-sample against 0.15 held out)."
+            "`docs/05-VERIFICATION.md` -- the text side is **under-fit and plateaus**: held-out rho sits at "
+            "**0.22 +- 0.02** on 400 prompts from four unseen books while its own in-sample rho is 0.4157, so the "
+            "gap is 2x rather than the factor of five this card used to quote, and the plateau sits 2.7x below "
+            "the 0.60 at which the recogniser reads a latent at all."
         )
     else:
         out.append(

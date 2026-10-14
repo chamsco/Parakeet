@@ -255,8 +255,11 @@ reconstruction, written after auditing which files the commits actually touched.
       tensors shape-compatible. Round 43 tested warm-starting it on the 2-item task, which rounds 64–65 then
       showed cannot discriminate anything — so it is untested at scale. Arm A fresh, arm B
       `--warm-start runs/text_continue/distill-text_step5000.pt`, gate = the flow term.
-* [ ] **The token route stays parked.** ρ 0.37 with validation ≈ training and ρ 0.998 on 8 memorised
-      utterances: it fits as well as it can, and the remaining error is the one-to-many mapping.
+* [ ] **The token route's published plateau was wrong in two ways.** It is **not** ρ 0.37 and it is **not**
+      validation ≈ training: held-out ρ plateaus at **0.22 ± 0.02** on 400 prompts from four unseen books, against an
+      in-sample **0.4157**, so the gap is 2× rather than 1× and the model is **under-fit** rather than "fitting as well
+      as it can". The 0.37 was an in-sample number quoted for months as a capability. What survives is that the plateau
+      is real and sits **2.7× below** the 0.60 the recogniser needs — see `docs/05-VERIFICATION.md` §§133–137.
 
 ---
 
