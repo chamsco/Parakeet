@@ -5175,7 +5175,34 @@ untested intervention available here; if it lands inside the same ±0.02 it does
 that is what §131 and `docs/PLAN.md` already state: the paper's regime is 945 h of audio with the compute to use it,
 and the architecture that the papers pair with it, neither of which this machine has.
 
-## 138. Environment notes
+## 138. The mean-invariant term separates on the text stage, at last (round 152)
+
+Section 137 established that this readout cannot resolve differences below about ±0.02, so single readings were the
+wrong instrument for an A/B. `scripts/compare_runs.ps1` therefore reads each checkpoint several times and reports the
+spread, and only calls a difference when it clears both runs' spread.
+
+Checked at every step count where both arms have a checkpoint, each checkpoint read **three times**, run twice:
+
+| arm | step 1 000, first run | step 1 000, second run |
+|---|---|---|
+| `runs/text_long384`, no contrast term | 0.0833 | 0.0813 |
+| `runs/text_contrast_ab`, contrast term live | **0.1219** | **0.1226** |
+| difference | **+0.0386** | **+0.0413** |
+| largest spread within a checkpoint | 0.0122 | 0.0062 |
+| verdict | **SEPARATED** | **SEPARATED** |
+
+**The mean-invariant latent term raises held-out ρ by about +0.04 at step 1 000**, a relative gain of 46–51 %, and the
+effect clears the instrument's spread in two independent readings. This is the first intervention in this project
+measured to move the *text stage* by more than noise, and it is the term that was silently disabled on that stage until
+§135 — reachable only from the audio stage, where round 30 had measured +59 % train and +66 % validation.
+
+Two things it does not say. It is **one step count**, and the same treatment at 2 000, 3 000 and beyond is needed
+before the term goes into the token route's config, because a step-1 000 advantage need not survive to the plateau.
+And **+0.04 does not approach the bar**: if the plateau scales by a similar factor it moves from ≈ 0.22 to ≈ 0.26
+against the 0.60 at which the recogniser stops failing. It improves the model; it does not make it intelligible, and
+both statements belong in the same sentence.
+
+## 139. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
