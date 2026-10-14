@@ -1,21 +1,44 @@
 {
-  "checkpoint": "runs/real_train/distill-text_last.pt",
-  "checkpoint_step": 400,
+  "checkpoint": "runs\\text_big\\distill-text_step3000.pt",
+  "checkpoint_step": 3000,
   "weights": "ema",
   "corpus": {
     "manifest": "kept.jsonl",
-    "utterances": 6
+    "utterances": 4
+  },
+  "level_correction": {
+    "outputs_over_full_scale": 0,
+    "max_peak": null
   },
   "synthesis": {
-    "rtf": 0.019227342295253812,
-    "x_realtime": 52.00926808521247,
-    "log_mel_cosine_vs_reference": 0.9303304851055145,
-    "phase_coherence": 0.16702991475661597
+    "rtf": 0.022963027053020908,
+    "x_realtime": 43.54826555275275,
+    "log_mel_cosine_vs_reference": 0.9261229038238525,
+    "phase_coherence": 0.17319673672318459,
+    "generated_seconds": 14.293333333333333,
+    "reference_seconds": 13.4535,
+    "length_ratio": 1.0624248956281512
+  },
+  "speechlikeness": {
+    "available": true,
+    "voiced_fraction": 1.0,
+    "median_f0_hz": 93.7498779296875,
+    "spectral_flatness": 0.5805185586214066,
+    "detail": "voiced fraction, median F0 and spectral flatness via the YIN tracker",
+    "speech_like": false,
+    "teacher": {
+      "available": true,
+      "voiced_fraction": 0.548105962574482,
+      "median_f0_hz": 161.37716674804688,
+      "spectral_flatness": 0.3486202582716942,
+      "detail": "voiced fraction, median F0 and spectral flatness via the YIN tracker",
+      "speech_like": true
+    }
   },
   "naturalness": {
     "metric": "dnsmos p835",
-    "student": 1.7656290089703501,
-    "teacher": 2.6128619289535666,
+    "student": 1.1954096262802751,
+    "teacher": 2.635806763264969,
     "note": "teacher = the Kokoro reference the corpus was built from; it is the control"
   },
   "utmos": {

@@ -35,6 +35,48 @@ from parakeet.train.common import config_fingerprint, git_revision  # noqa: E402
 # claims: every advertised number, tied to the report that produced it
 # --------------------------------------------------------------------------------------
 CLAIMS: List[Dict[str, Any]] = [
+    # Rounds 108-121.  These are the claims that bound what is *possible* from the data on hand, so they belong
+    # next to the advertised numbers: the negative results are the most load-bearing things this project measured.
+    {
+        "id": "token_route_frame_rho",
+        "statement": "the deterministic (token) route's frames against the target — the best available text "
+                     "conditioning, and 91% of the text+voice ceiling (0.445)",
+        "report": ["runs/token_route_ceiling.json"],
+        "field": "frame_rho",
+        "op": ">=",
+        "target": 0.40,
+        "fmt": "rho {:.3f} frames",
+    },
+    {
+        "id": "plan_head_empty",
+        "statement": "the flow's own auxiliary plan head against the target — it has learned nothing, which is "
+                     "why the plan/residual route cannot help",
+        "report": ["runs/plan_ceiling.json"],
+        "field": "frame_rho",
+        "op": "<=",
+        "target": 0.05,
+        "fmt": "rho {:.4f} (uncorrelated)",
+    },
+    {
+        "id": "text_share_narration",
+        "statement": "share of the flow's folded 144-dim objective that is NOT explained by the marginal "
+                     "(per-voice + smoothness) on the narration corpus — i.e. what the text could explain",
+        "report": ["runs/variance_narration.json"],
+        "field": "folded.residual_for_text",
+        "op": ">=",
+        "target": 0.20,
+        "fmt": "{:.3f} of the objective",
+    },
+    {
+        "id": "text_share_dialogue",
+        "statement": "the same budget on a conversational corpus built from public-domain plays: a harder marginal "
+                     "leaves ~1.75x more of the objective for the text",
+        "report": ["runs/variance_dialogue.json"],
+        "field": "folded.residual_for_text",
+        "op": ">=",
+        "target": 0.35,
+        "fmt": "{:.3f} of the objective",
+    },
     {
         "id": "int8_pipeline_speed",
         "statement": "int8 ONNX pipeline (text side + vocoder) as shipped, 1 CPU thread",

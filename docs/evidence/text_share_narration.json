@@ -1,0 +1,15 @@
+{
+  "items": 600,
+  "nothing": 0.0,
+  "global per-dim mean": 0.6871790750152293,
+  "+ per-voice mean": 0.7117050236712982,
+  "+ per-utterance DC": 0.7159131767429532,
+  "+ AR(1) smoothness": 0.9590646892103827,
+  "residual": 0.04093531078961732,
+  "folded": {
+    "dims": 144,
+    "per_voice_r2": 0.7128587068609351,
+    "plus_ar1_r2": 0.786604587270084,
+    "residual_for_text": 0.21339541272991602
+  }
+}

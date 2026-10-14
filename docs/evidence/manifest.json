@@ -1,11 +1,39 @@
 {
-  "generated": "2026-10-10T06:29:18",
+  "generated": "2026-10-14T03:04:40",
   "git": {
-    "rev": "d0b9310",
+    "rev": "71aef90",
     "dirty": true
   },
   "note": "Committed snapshots of the reports the model card cites.  Refresh with `python scripts/model_card.py --refresh-evidence` after re-running the demos; the hashes make a stale bundle visible.",
   "entries": [
+    {
+      "claim": "token_route_frame_rho",
+      "status": "copied",
+      "source": "runs/token_route_ceiling.json",
+      "evidence": "docs/evidence/token_route_frame_rho.json",
+      "sha256": "0ecb7d85ba3b30f25588ff392e2650aca840eb6927eb0a2da0d5c175a4af2ee2"
+    },
+    {
+      "claim": "plan_head_empty",
+      "status": "copied",
+      "source": "runs/plan_ceiling.json",
+      "evidence": "docs/evidence/plan_head_empty.json",
+      "sha256": "b7a38fc60a87ba1d5d6894acb2e326d906a69e4524fd99af9a8366ed3b30d594"
+    },
+    {
+      "claim": "text_share_narration",
+      "status": "copied",
+      "source": "runs/variance_narration.json",
+      "evidence": "docs/evidence/text_share_narration.json",
+      "sha256": "c47abcc5fb1cd38e94886a29a6b9e25fa7cbe4df986939775e1d2e213fa3cc93"
+    },
+    {
+      "claim": "text_share_dialogue",
+      "status": "copied",
+      "source": "runs/variance_dialogue.json",
+      "evidence": "docs/evidence/text_share_dialogue.json",
+      "sha256": "fc9563f52e5f01ba35595130d4d9bc99eb88a2a8b9db6ed39d8455ab36200c42"
+    },
     {
       "claim": "int8_pipeline_speed",
       "status": "copied",
@@ -242,7 +270,7 @@
       "status": "copied",
       "source": "runs/real_eval/report.json",
       "evidence": "docs/evidence/real_evaluation.json",
-      "sha256": "973d4cef499c2e003b1f825d257e0ffe4664cff69eaebffb7e5fc5756d3165f1"
+      "sha256": "2a5811bd025dc4651018d199a73e4551599157d59a0fbe9aa32f16c7e88d0f52"
     },
     {
       "claim": "learning_progress",
