@@ -54,10 +54,10 @@ question that a wrong answer costs days to discover.
 "plateaus at ρ ≈ 0.37 with validation ≈ training" and that "more steps will not move it. **Not worth more
 compute.**" That is **withdrawn**, and the measurements that withdraw it are in §134 of the verification log.
 
-* **It had not plateaued.** Held-out frame ρ on 400 prompts from four unseen books, read every 1 000 steps,
-  climbs monotonically: **0.0932 → 0.1759 → 0.2102** on 1 207 items with a 9.62M text side, and **0.0884 →
-  0.1741 → 0.2113** on 4 533 items with a ~30M one. Two configurations, ninefold different in text count and
-  threefold in parameters, agreeing to within 0.005 the whole way.
+* **It had not plateaued.** Held-out frame ρ on 400 prompts from four unseen books, read every 1 000 steps, climbs
+  **0.0932 → 0.1759 → 0.2102** on 1 207 items with a 9.62M text side, and **0.0908 → 0.1741 → 0.2113 → 0.2142 →
+  0.2331** on 4 533 items with a ~30M one. Two configurations, ninefold different in text count and threefold in
+  parameters, agreeing to within 0.005 the whole way.
 * **Steps are the only thing that has moved it.** Across those two runs, neither text count nor capacity moved
   held-out ρ at matched steps. The one variable with an effect is the step counter.
 * **The 0.37 figure was an in-sample number.** In-sample ρ at step 3 000 is **0.4157**, which is where that
@@ -65,14 +65,18 @@ compute.**" That is **withdrawn**, and the measurements that withdraw it are in 
 * **"Validation ≈ training" does not reproduce.** Held-out is **0.2127**, half of in-sample, a **2×** gap. At
   in-sample 0.42 the model cannot yet reproduce its own training data, so this configuration is under-fit
   rather than a converged fit against a one-to-many ceiling.
-* **What is still open is the asymptote.** The curve decelerates hard, +0.083 from 1 000 to 2 000 steps and
-  +0.034 from 2 000 to 3 000, which puts the asymptote nearer 0.25 than the 0.60 at which the recogniser reads
-  a latent. `runs/text_long384` runs to 20 000 steps to find out, and the stop rule is registered: if it
-  flattens below step count alone raising ρ, report the ceiling instead of spending more.
+* **What is still open is the asymptote, and the increments are noisy.** The deltas run +0.0833, +0.0372, +0.0029,
+  +0.0189. The +0.0029 was briefly read as a plateau and the reading was wrong: the next point came in at 0.2331,
+  above everything before it. Against a measurement sd near 0.005, two adjacent deltas cannot tell "flat" from
+  "slow", so the stop rule needs several consecutive points. `runs/text_long384` runs to 20 000 steps to find the
+  asymptote. Taking the mean of the last three increments, +0.020 per 1 000 steps, the 0.60 the recogniser needs is
+  about 18 000 steps away **if that rate held**, which a decelerating curve will not do. That is a bound, not a
+  forecast.
 
 So the correct statement is narrower than "not worth more compute" and narrower than "compute will fix it":
-**more steps is the only untested lever left on CPU, its measured effect is real but decelerating, and the
+**more steps is the only untested lever left on CPU, its effect is real and its size is not yet measured, and the
 decision to spend beyond it belongs to the asymptote measurement.**
+
 
 **Flow route** (sampling, the structurally correct tool for a one-to-many target). Its blocker is measured:
 the velocity field's own objective is only a few percent text-dependent, while the 2-utterance regime reached

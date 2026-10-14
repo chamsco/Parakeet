@@ -4955,22 +4955,30 @@ reason above, and it is not a blocker, but it says the held-out audio is not sca
 **The curve, all read on the same 60 held-out items.** Two runs at matched steps, differing in text count by 9× and
 in capacity by 3×:
 
-| step | ladder: 418 texts, 9.62M | long run: 3 744 texts, ~30M |
-|---|---|---|
-| 1 000 | 0.0932 | 0.0908 (raw convention at the time; 0.0884 normalised) |
-| 2 000 | 0.1759 | 0.1741 |
-| 3 000 | 0.2102 | **0.2113** |
-| for reference | baseline `text_continue`, 22.6M warm-started: 0.1985 at its 5 000th step | |
+| step | ladder: 418 texts, 9.62M | long run: 3 744 texts, ~30M | long-run increment |
+|---|---|---|---|
+| 1 000 | 0.0932 | 0.0908 (raw convention at the time; 0.0884 normalised) | |
+| 2 000 | 0.1759 | 0.1741 | +0.0833 |
+| 3 000 | 0.2102 | 0.2113 | +0.0372 |
+| 4 000 | | 0.2142 | +0.0029 |
+| 5 000 | | **0.2331** | +0.0189 |
+| for reference | baseline `text_continue`, 22.6M warm-started: 0.1985 at its 5 000th step | | |
 
-**The held-out curve is a function of step count, not of text count or capacity, across the ranges tested.** Three
-matched points agree to within 0.005, which is the measurement's own noise, while text diversity varies 9-fold and
-parameters 3-fold. That is a stronger statement than "data scaling looked flat": over this range neither lever moves
-held-out rho at all, and the only thing that has moved it is more steps.
+**The held-out curve is a function of step count, not of text count or capacity, across the ranges tested.** Matched
+points agree to within 0.005, which is the measurement's own noise, while text diversity varies 9-fold and parameters
+3-fold. That is a stronger statement than "data scaling looked flat": over this range neither lever moves held-out rho
+at all, and the only thing that has moved it is more steps.
 
-**The shape is monotone and decelerating.** The ladder adds +0.083 between 1 000 and 2 000 steps, then +0.034 between
-2 000 and 3 000. Two deltas do not fit a curve, but a deceleration that size puts the asymptote nearer 0.25 than the
-0.60 at which the recogniser reads a latent. The long run continues to 20 000 steps, and that is what the stop rule is
-for.
+**The increments are noisy, and an apparent plateau at step 4 000 did not hold.** The deltas run +0.0833, +0.0372,
+**+0.0029**, **+0.0189**. The +0.0029 was read as a plateau and reported as one before the step-5 000 point came in at
+0.2331, which is above every earlier reading. Against a measurement sd of about 0.005 and a between-session spread
+measured at 0.016, two adjacent deltas cannot distinguish "flat" from "slow". **The stop rule therefore needs several
+consecutive points, not two**, and the honest statement at step 5 000 is that the curve is still climbing with
+decelerating but noisy increments and its asymptote is not yet measured. The run continues to 20 000 steps for that
+reason. Using the mean of the last three increments, +0.020 per 1 000 steps, reaching the 0.60 the recogniser needs
+would take about 18 000 further steps **if the rate held**, which a decelerating curve will not do. That is a bound,
+not a forecast.
+
 
 The wide capacity arm was stopped rather than run to completion: at a fixed step count it would have measured capacity
 confounded with under-training, and the matched comparison above answers the question more cheaply.
