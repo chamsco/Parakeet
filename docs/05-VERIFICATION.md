@@ -5441,10 +5441,19 @@ The prompt builder excluded the 400 held-out prompts and all 5 097 previously us
 training, from validation, and from the first expansion. If the corpus lever turns out to be real, adding these takes
 the distinct-prompt count from about 8 100 to about 11 900 for roughly 2.2 hours of synthesis and no new books to find.
 
-**And a third set behind it**, because held-out ρ turned out to be rising and milestone 4 says to keep growing: eight
+**And a fourth set behind it**, because held-out ρ turned out to be rising and milestone 4 says to keep growing: eight
 more unused books — Persuasion (105), Northanger Abbey (121), Mansfield Park (141), The Republic (1497), Meditations
 (2680), The Prince (1232), Grimms' Tales (2591), A Modest Proposal (1080) — give **3 451 prompts and 442 092 characters**
 under the same exclusions. That carries the chain to about **15 350 distinct prompts** without stopping to look for text.
+
+**A fourth set, and preparing it caught two of my own mislabels.** Eight more public-domain books give **4 105 prompts
+and 490 025 characters**: Les Misérables (135), The Count of Monte Cristo (1184), Oliver Twist (730), Sense and
+Sensibility (161), Thus Spake Zarathustra (1998), The Iliad (6130), **Just So Stories** (2781) and **Martin Chuzzlewit**
+(968). The last two went onto the list as The Iliad and The Aeneid, and **reading the downloaded files' own headers
+caught it** — id 2781 is Kipling and id 968 is Dickens. The files were always usable; the provenance was wrong, and they
+are now named after what they contain. Two of the eight (135, 1998) carry no title header in their first sixty lines, so
+those two are recorded as **as-downloaded but not verified from the text**, which is the distinction the objective's
+"every number names the data it was measured on" rule asks for.
 
 ## 143. The comment audit, closed by family (round 152)
 
