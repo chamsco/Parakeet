@@ -1,0 +1,68 @@
+{
+  "summary": {
+    "run": "runs/text_long384",
+    "cache": "runs/holdout_cache",
+    "items": 60,
+    "repeats": 2,
+    "steps": [
+      3000,
+      4000,
+      5000,
+      6000,
+      7000
+    ],
+    "mean": 0.22225076493813703,
+    "sd_across_steps": 0.00934162561442187,
+    "min": 0.20739015094507823,
+    "max": 0.23152583175399033,
+    "largest_within_checkpoint_spread": 0.020191688086722698,
+    "note": "held-out frame rho on 400 prompts from four unseen books. The plateau is read over steps 3000-7000; the within-checkpoint spread is the instrument's resolution, and it is why no trend below about 0.02 can be claimed from these points."
+  },
+  "readings": [
+    {
+      "step": 3000,
+      "values": [
+        0.21327300219729498,
+        0.20150729969286152
+      ],
+      "mean": 0.20739015094507823,
+      "spread": 0.011765702504433456
+    },
+    {
+      "step": 4000,
+      "values": [
+        0.23132380518557813,
+        0.21113211709885543
+      ],
+      "mean": 0.22122796114221677,
+      "spread": 0.020191688086722698
+    },
+    {
+      "step": 5000,
+      "values": [
+        0.23048539122388925,
+        0.21440872178977263
+      ],
+      "mean": 0.22244705650683094,
+      "spread": 0.01607666943411662
+    },
+    {
+      "step": 6000,
+      "values": [
+        0.220324870732313,
+        0.23700077795282495
+      ],
+      "mean": 0.22866282434256896,
+      "spread": 0.01667590722051196
+    },
+    {
+      "step": 7000,
+      "values": [
+        0.22919360964596208,
+        0.2338580538620186
+      ],
+      "mean": 0.23152583175399033,
+      "spread": 0.004664444216056524
+    }
+  ]
+}

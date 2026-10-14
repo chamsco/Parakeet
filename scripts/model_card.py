@@ -49,6 +49,21 @@ CLAIMS: List[Dict[str, Any]] = [
         "fmt": "rho {:.4f} (implied ceiling sqrt = 0.845)",
     },
     {
+        "id": "text_plateau",
+        "statement": "the deterministic text side's held-out ceiling: frame rho on 400 prompts from four unseen "
+                     "books, over steps 3 000-7 000, each checkpoint read twice. The bound claimed here is that no "
+                     "checkpoint exceeds 0.30, which is half the 0.60 at which the recogniser stops failing. The "
+                     "drift across those 4 000 steps measured SMALLER than the instrument's own within-checkpoint "
+                     "spread, so this is a plateau rather than a slow climb, and no trend is claimed from these "
+                     "points. Text count (418 against 3 744 distinct prompts) and capacity (9.62M against ~30M) "
+                     "both moved this readout not at all at matched steps",
+        "report": ["runs/text_plateau.json"],
+        "field": "summary.max",
+        "op": "<=",
+        "target": 0.30,
+        "fmt": "held-out rho ceiling {:.4f} over steps 3000-7000 (bound 0.30)",
+    },
+    {
         "id": "token_route_wer",
         "statement": "the deterministic route's own audio, measured by WER — this is the FLOOR the residual route "
                      "would sample at (a field that adds nothing leaves the plan), and it is the metric that "
