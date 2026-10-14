@@ -722,10 +722,15 @@ def render(results: List[Dict[str, Any]], args) -> str:
             "**WER 1.000 against a teacher control of 0.000-0.014**, on held-out text as well as training text.  "
             "So the size and speed claims below are real and the *speech* is not: these are not released "
             "weights, and nothing here should be read as a working TTS model.  The measured reason is in "
-            "`docs/05-VERIFICATION.md` -- the text side is **under-fit and plateaus**: held-out rho sits at "
-            "**0.22 +- 0.02** on 400 prompts from four unseen books while its own in-sample rho is 0.4157, so the "
-            "gap is 2x rather than the factor of five this card used to quote, and the plateau sits 2.7x below "
-            "the 0.60 at which the recogniser reads a latent at all."
+            "`docs/05-VERIFICATION.md` -- the text side **memorised the corpus it had and generalises when the "
+            "corpus grows**: on 400 prompts from four unseen books, the 3 744-distinct-prompt model plateaus at "
+            "held-out rho **0.22 +- 0.02** while fitting its own training data at 0.3190, a gap of **1.94x**, and "
+            "the ~8 100-distinct-prompt model reaches **0.3612** while fitting at 0.3520, a gap of **1.07x** -- same "
+            "architecture, capacity, step count and schedule, only the corpus differing.  So the earlier diagnosis "
+            "of under-fitting was half right: the smaller corpus was memorising, and corpus size is the first "
+            "variable measured to move this number at all.  **The speech is still not intelligible**: WER is 1.0000 "
+            "for both models, because the recogniser's transition is a step between rho 0.60 and 0.75, and a plateau "
+            "near 0.36 sits about 1.7x below it."
         )
     else:
         out.append(
