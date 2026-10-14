@@ -5649,6 +5649,19 @@ corpus work, which is a check on the instrument rather than on the model.
 So milestone 3's result is a **stable +0.140 offset**, the corpus lever is real, and the plateau it produces is **1.65×
 below the 0.60 step** that would make the speech intelligible. Both statements, measured, in the same table.
 
+**And what the corpus bought, in in-sample terms.** Each arm measured at step 5 000 on its own training cache:
+
+| run | in-sample ρ | held-out ρ (five readings) | gap |
+|---|---|---|---|
+| baseline, 3 744 distinct texts | **0.5201** | 0.2228 | **2.33×** |
+| enlarged, ~8 100 distinct texts | **0.4919** | 0.3630 | **1.36×** |
+
+The enlarged model fits its **own** training data *less* well than the baseline fits its smaller corpus, and generalises
+*far* better — which is the trade the objective's third milestone was written to test. **Corpus size is the
+memorisation-versus-generalisation knob**, and the same configuration moved from a 2.33× gap to a 1.36× gap purely by
+having more text. Both gaps widen with training (at step 2 000 they were 1.94× and 1.07×), so memorisation sets in late
+in both runs and the larger corpus holds it off rather than preventing it.
+
 **And what v5 decides, which is sharper than "does it keep rising".** The corpus-size points on record are:| items | distinct texts | held-out ρ at matched steps | caveat |
 |---|---|---|---|
 | 1 207 | 418 | ~0.176 | the dim-256 ladder, so confounded by capacity |
