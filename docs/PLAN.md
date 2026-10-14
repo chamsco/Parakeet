@@ -137,6 +137,24 @@ unconditionally, and a hard target to model unconditionally is what makes the te
 conversational audio (Moshi's open weights, or any small conversational set; the corpus pipeline is agnostic) and
 compare the flow term against Run 1's band.
 
+* **The premise is already measured, so this run is not a fishing trip.** `scripts/latent_variance_budget.py` on the
+  folded 144-dim target the flow models: narration's marginal (per-voice mean + AR(1) smoothness) explains **78.7 %**
+  of the variance, leaving **21.3 %** for the text; a dialogue set built here from public-domain plays explains
+  **62.6 %**, leaving **37.4 %** — **~1.75× more conditional signal** (§112, and in the model card). So the
+  prediction is specific: the flow term should rise. It did not move on narration across 4.2× data and 4× steps.
+* **The instrument is the limiting factor, and that is measured too.** The in-loop gate's own spread *within* one
+  unchanged arm is **2.7 points** over two checkpoints against a predicted effect of ~1.5–2, so a two-arm mean
+  comparison resolves this only marginally. If you run it, raise the gate's repeats (now 5, was 2) and read **more
+  checkpoints per arm**, or accept an `UNRESOLVED` verdict — `scripts/analyse_domain_ab.py` reports one rather than
+  a sign.
+* **The corpus here may be too weak a version of the hypothesis.** `scripts/expansion_dialogue.py` builds it from
+  Gutenberg plays, and **Kokoro reads the turns**: dialogue-shaped text in narration delivery — shorter utterances,
+  more register variation, turn boundaries — not spontaneous prosody, backchannels or overlap. Moshi/PersonaPlex
+  output or a licensed conversational set is the real test, and it needs a GPU.
+* **Criterion:** the flow term climbs toward the 37.4 % that is available, and WER on the samples falls below 1.000
+  with the teacher control intact. If it climbs in the gate but WER does not move, the gate is measuring the loss
+  again — and §110 already showed the loss is not where the text's contribution lives.
+
 **How to judge any of these.** By **WER on sampled audio with the teacher control** — `scripts/real_eval.py` —
 never by ρ against a recording. A sampler legitimately draws a different valid rendition each time, so ρ-against-
 the-target is a metric for a deterministic regressor and it conflates "different valid draw" with "wrong". The
