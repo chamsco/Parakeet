@@ -4542,7 +4542,54 @@ calibration**, which used exactly that technique.
 gate vacuous and *hides* the number whenever a clip is poor — the failure mode the control exists to prevent. Fixed
 to use the teacher's audio from the manifest.
 
-## 123. Environment notes
+## 123. The predictable component is on-manifold and decodes at WER 0.368 (round 136)
+
+§122 averaged the two **latents** of a rendition pair and found the result decodes worse than either member (0.512
+against 0.209) — off-manifold: *the mean of two latents is not a latent*. The correction is one step upstream:
+average the **waveforms**, take the **log-mel**, and let the autoencoder's own **encoder** produce the shared latent.
+Then the target is a point the encoder can produce and the decoder can render, by construction.
+
+**With a self-check that gates the number:**
+
+`
+self-check: encoding rendition A's waveform reproduces the CACHED latent at rho +0.9824
+`
+
+| variant | WER |
+|---|---|
+| rendition A | 0.209 |
+| rendition B | 0.395 |
+| shared — latent average (off-manifold) | 0.512 |
+| **shared — waveform average, re-encoded (on-manifold)** | **0.368** |
+| this project's models | **1.000** |
+| teacher control | 0.142 |
+
+The rendition-independent component scores **between** the two renditions (exactly what a common part should) and is
+**2.7× more intelligible than anything this project has produced**. The off-manifold diagnosis is confirmed by the
+fix improving as predicted.
+
+**The self-check found a real bug, not a hypothetical one.** The first run reported ρ 0.32 against the cache and
+stopped: the cache writes latents with MelSpectrogram.log_mel(...) while these scripts called the module's
+__call__ — the **linear** mel. With the right method the mel matches at **+1.0000**, the latent at **+1.0000**
+with an identical std, and only then does any WER above mean anything. Two rounds of "looks plausible" sat between
+that bug and this number.
+
+**What it opens — the first measurable path out of WER 1.000 that needs no GPU:**
+
+* the target a text-conditioned model should aim at is the rendition-independent part, and that part decodes at
+  **0.368**, not 1.000;
+* it is reachable for the **whole corpus**, not just these 110 pairs, by the same trick that built them: generate a
+  punctuation variant of every prompt in the same voice, average the two waveforms, re-encode, and train on that.
+  Generation roughly doubles and stays on CPU;
+* the learning problem should also be **easier**, because the rendition noise is removed from the target instead of
+  being an irreducible part of the loss — the "make the text term matter" argument, with data behind it rather than
+  a loss change.
+
+**Not claimed:** 0.368 is not intelligible in the strict sense — the teacher control itself reads at 0.142, so a
+model would land at or above the target's error, not at zero. The claim is narrower and measured: the target is
+**2.7× better** than the current output, and the route to it is CPU-feasible.
+
+## 124. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
