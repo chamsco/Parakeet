@@ -5715,6 +5715,27 @@ contain. The other four were the unpersisted normaliser, the missing per-voice t
 its autoencoder, and the identity global normaliser — and all five were found by comparing a recorded artefact against
 what it was supposed to be, never by reading a result, because in every case the result looked fine.
 
+**And the registered instrument's own artefact, now complete.** `runs/milestone3_conclusion_v2.txt`, five readings per
+checkpoint, both arms under one convention:
+
+| step | baseline | enlarged | difference |
+|---|---|---|---|
+| 1 000 | 0.0867 | 0.1837 | **+0.0970** |
+| 2 000 | 0.1690 | 0.3212 | **+0.1522** |
+| 3 000 | 0.2031 | 0.3502 | **+0.1471** |
+| 4 000 | 0.2174 | 0.3615 | **+0.1442** |
+| 5 000 | 0.2235 | 0.3620 | **+0.1385** |
+
+**Every matched step from 1 000 to 5 000 is SEPARATED.** The gap narrows as both arms approach their plateaus, which is
+the same shape the independent five-reading curve showed: the corpus buys a higher ceiling (+0.139 at the endpoint) and
+reaches any given level sooner — at step 1 000 it is already +0.097 ahead, and it passes the baseline's entire plateau of
+0.2223 at about step 1 350. The instrument's in-sample check on the completed model reads 0.5415 against 0.3631, a gap of
+**1.49×** where the baseline's is 2.33×, and its WER is 1.0000 for both arms with DNSMOS 1.204 against 1.238.
+
+**So the pre-registered verdict and the independently taken curve agree on every number**, which is the only kind of
+agreement worth reporting: the same conclusion reached twice, once by an instrument written before the result existed
+and once by measurements taken while it was still running.
+
 **The run is complete, and its endpoint thickens the result rather than changing it.** `runs/text_v4` finished its10 000 steps with `nonfinite_steps: 0.0`. Its plateau readings now stand at six points — 0.3630, 0.3648, 0.3649, 0.3619,
 0.3698 and **0.3616 at the endpoint with five readings and a spread of 0.0044** — so the ceiling is **0.362 to 0.370**
 and the first doubling is finished, not sampled. The last matched point the *baseline* still has is step 8 000 (its later
