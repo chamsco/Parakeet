@@ -165,8 +165,36 @@ SPEECHIFY = TeacherSpec(
     model_id="simba-3.2",
 )
 
+DRAMA3 = TeacherSpec(
+    name="drama3",
+    kind="http_api",
+    code_license="proprietary hosted inference; the repository ships weights, not code",
+    weights_license=(
+        "fish-audio-research-license -- research use only, and it constrains redistribution of weights trained "
+        "on its outputs, which is a narrower grant than Kokoro's Apache-2.0"
+    ),
+    allows_training=True,
+    #: 44 100 as Fish Audio's codecs report it; the backend re-reads the true rate from whatever the endpoint returns,
+    #: so this field is documentation rather than a conversion factor.
+    sample_rate=44100,
+    restricted=True,
+    model_id="fishaudio/drama-3",
+    notes=(
+        "Fish Audio's Drama-3: a 35.9 B FishOmni MoE, FP8 `bsgemm-moe` quantisation, 41.5 GB of weights, 83 "
+        "languages, multi-speaker, emotional speech and audio editing.  **It is an http_api teacher because it "
+        "cannot run here** -- the FP8 GEMM path needs Ada/Hopper-class hardware, so it would not load on this CPU "
+        "and would not load on a Kaggle T4 or P100 either; reach it through a hosted endpoint via DRAMA3_API_URL.  "
+        "What it does NOT settle: whether it raises the text-conditioned ceiling.  This project measured the "
+        "target's own reliability at 0.845, which bounds what any student can learn from it, so a new teacher helps "
+        "held-out rho only if its renditions are MORE consistent than Kokoro's -- and the cheap way to find out is to "
+        "synthesise a few hundred prompts and measure that statistic before training anything.  LICENCE DISTINCTION "
+        "recorded rather than smoothed over: research-only weights mean derivative weights inherit the restriction, "
+        "so this teacher is refused by default."
+    ),
+)
+
 TEACHERS: Dict[str, TeacherSpec] = {
-    t.name: t for t in (ORPHEUS, KOKORO, MINIMAX, SPEECHIFY, STUB_LOW, STUB_HIGH)
+    t.name: t for t in (ORPHEUS, KOKORO, MINIMAX, SPEECHIFY, DRAMA3, STUB_LOW, STUB_HIGH)
 }
 
 #: the English voices this workspace can reach, from ``GET /v1/voices`` (round 26).  Recorded rather
@@ -814,11 +842,78 @@ def _kokoro_runtime() -> type:
         return SherpaKokoroBackend
 
 
+class DramaBackend(TeacherBackend):
+    """Fish Audio's Drama-3 through a hosted HTTP endpoint.
+
+    The weights are 35.9 B parameters of FishOmni MoE with FP8 `bsgemm-moe` quantisation in 41.5 GB, and that FP8 GEMM
+    path needs Ada/Hopper hardware, so this backend loads no weights at all: it posts text to an endpoint already
+    serving the model and reads audio back.  The URL comes from DRAMA3_API_URL or ``.secrets/drama3.url`` and the token
+    from HF_TOKEN, HUGGINGFACE_HUB_TOKEN or ``.secrets/drama3.key``.
+
+    When the endpoint is missing this raises.  That is deliberate: a teacher that returned silence or noise would
+    poison a corpus and be discovered much later, which is the failure mode this project has spent its rounds hunting.
+    """
+
+    def __init__(
+        self,
+        api_url: Optional[str] = None,
+        token: Optional[str] = None,
+        timeout: float = 180.0,
+        voice: Optional[str] = None,
+    ) -> None:
+        self.api_url = api_url or os.environ.get("DRAMA3_API_URL") or self._read_secret("drama3.url")
+        self.token = (
+            token
+            or os.environ.get("HF_TOKEN")
+            or os.environ.get("HUGGINGFACE_HUB_TOKEN")
+            or self._read_secret("drama3.key")
+        )
+        self.timeout = timeout
+        self.voice = voice
+        if not self.api_url:
+            raise RuntimeError(
+                "no Drama-3 endpoint: set DRAMA3_API_URL to a hosted inference URL that accepts "
+                '{"inputs": "<text>"} and returns audio, or write .secrets/drama3.url. The weights cannot be run '
+                "locally: FP8 bsgemm-moe needs Ada/Hopper, and the download is 41.5 GB."
+            )
+
+    @staticmethod
+    def _read_secret(name: str) -> Optional[str]:
+        from pathlib import Path as _Path  # noqa: PLC0415
+
+        path = _Path(".secrets") / name
+        return path.read_text(encoding="utf-8").strip() if path.exists() else None
+
+    def synthesize(self, text: str, voice: Optional[str] = None) -> Tuple[np.ndarray, int]:
+        import io  # noqa: PLC0415
+        import json  # noqa: PLC0415
+
+        import soundfile as sf  # noqa: PLC0415
+
+        payload = json.dumps({"inputs": text, "voice": voice or self.voice}).encode()
+        request = urllib.request.Request(
+            self.api_url, data=payload, headers={"Content-Type": "application/json"}
+        )
+        if self.token:
+            request.add_header("Authorization", f"Bearer {self.token}")
+        try:
+            with urllib.request.urlopen(request, timeout=self.timeout) as response:
+                audio_bytes = response.read()
+        except Exception as exc:  # noqa: BLE001 - re-raised with the endpoint named and the body left out
+            raise RuntimeError(f"Drama-3 request to {self.api_url} failed: {type(exc).__name__}") from exc
+        wav, sample_rate = sf.read(io.BytesIO(audio_bytes), dtype="float32", always_2d=False)
+        if getattr(wav, "ndim", 1) > 1:
+            wav = wav.mean(axis=1)
+        # the true rate is read from the response rather than taken from the spec's documentation field
+        return np.asarray(wav, dtype=np.float32), int(sample_rate)
+
+
 BACKENDS: Dict[str, type] = {
     "orpheus": OrpheusBackend,
     "speechify": SpeechifyBackend,
     "kokoro": _kokoro_runtime(),
     "minimax": MiniMaxBackend,
+    "drama3": DramaBackend,
     "stub_low": StubTeacherBackend,
     "stub_high": StubTeacherBackend,
 }
