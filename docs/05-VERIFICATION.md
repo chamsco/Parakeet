@@ -5902,6 +5902,16 @@ model size.
 
 ## 147. Environment notes
 
+* **Kaggle credentials, measured rather than assumed (round 256).** The account is `dariushafshar`. A **new-style API
+  token** (a single opaque string, which is what Kaggle's "Generate New Token" produces now) **authenticates reads** —
+  `GET /api/v1/datasets/list` with it returns HTTP 200 and real rows, over both a bearer header and a legacy-basic
+  header — and it **fails writes**: `POST /api/v1/kernels/push` answers `401 {"code":401,"message":"Unauthorized
+  access"}` to the same token in both styles. The `kaggle` CLI at v2.2.4 does not authenticate with it either, from
+  `KAGGLE_API_TOKEN` or from `~/.kaggle/access_token`, and its own recommended route is the interactive
+  `kaggle auth login`. So **nothing can be pushed to Kaggle with what is on this machine today**, and the two ways
+  forward are a one-time `kaggle auth login` (which caches credentials the CLI will then use headlessly) or a **Legacy
+  API Key**, which is the `{"username": ..., "key": ...}` pair the older write endpoints accepted. This is recorded
+  because it cost an hour to establish and would otherwise be rediscovered as "the push silently fails".
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
 * `soundfile` is required for corpus I/O; `transformers`/`snac`/`kokoro` (teachers),
