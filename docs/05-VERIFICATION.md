@@ -5858,7 +5858,49 @@ The middle row is the one I expect, and writing down all three before the number
 prediction was registered, defended and then falsified by data, and that was the most useful thing that happened in this
 session.
 
-## 146. Environment notes
+## 146. The second doubling answers the stop rule: the corpus saturates (round 256)
+
+`runs/v5_fixed` merged to **12 669 items over about 11 900 distinct prompts** (26 shards, 21 voices, fingerprint
+`70be81578827cf50` matching its base) and `runs/text_v5` trained 10 000 steps on it with `exit 0`. The measurement the
+pre-registered rule was written for, five readings per checkpoint:
+
+| step | v4, ~8 100 prompts | v5, ~11 900 prompts | difference |
+|---|---|---|---|
+| 2 000 | 0.3260 | 0.3348 | +0.0088 (inside the spread) |
+| 3 000 | 0.3450 | 0.3641 | **+0.0190 SEPARATED** |
+| 4 000 | 0.3573 | 0.3783 | **+0.0210 SEPARATED** |
+| 7 000 | — | 0.3916 | — |
+| 8 000 | — | 0.3868 | — |
+| 9 000 | — | 0.3939 | — |
+| 10 000 | — | 0.3918 | — |
+
+**v5's ceiling is 0.391** over four points with a spread of 0.0071, against v4's settled **0.3620**. The **ceiling
+increment is +0.029**, against a corpus that grew **1.47×**.
+
+**The rule fires on its third row.** It said: ≥ +0.10 the offset is roughly constant per doubling and two more rounds
+reach the 0.60 step; +0.05 to +0.10 the offset is shrinking smoothly and four to six rounds will do; **< +0.05 the lever
+is saturating below the bar, so stop and report the ceiling as real and insufficient at this model size.** +0.029 is
+below the lowest bound, and it is 2.7× smaller than even the logarithmic expectation of +0.078 for a 1.47× corpus.
+
+**And the asymptote is computable.** Normalising the two increments per doubling gives 0.139 for the first doubling and
+0.052 for the second — a ratio of 0.37 — so a geometric series from 0.391 adds about 0.031 more and **the corpus
+asymptote is roughly 0.42**. The intelligibility step is at 0.60, which is **1.43× above the lever's asymptote**. Corpus
+growth alone cannot make this model's speech intelligible, and that is a measured statement rather than a forecast from
+a single point.
+
+**Three corpus points on one curve, in one session:**
+
+| corpus | distinct prompts | held-out plateau |
+|---|---|---|
+| base | 3 744 | 0.2228 |
+| v4 | ~8 100 | 0.3620 |
+| v5 | ~11 900 | 0.3910 |
+
+Each step is SEPARATED, both mechanisms are visible (the in-sample gap falls from 2.33× to 1.49× and the convergence
+speed rises 3.7×), and the increments fall from +0.139 to +0.029. The lever is real, measured, and finished at this
+model size.
+
+## 147. Environment notes
 
 * CPU torch was installed from the PyTorch CPU index (no CUDA on this machine), in a dedicated
   Python 3.13 venv; the system Python 3.14 also has torch wheels available (2.14.1).
