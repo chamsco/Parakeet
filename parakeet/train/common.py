@@ -18,14 +18,43 @@ import torch.nn as nn
 from ..config import ParakeetConfig, to_dict
 
 
+def xla_device_count() -> int:
+    """Number of XLA devices (TPU cores), or 0 when torch_xla is not importable.
+
+    Kept as a function rather than a constant so that importing this module on a machine without torch_xla — which is
+    every machine this project has run on so far — costs nothing and changes nothing.
+    """
+    try:
+        import torch_xla.core.xla_model as xm  # noqa: PLC0415
+    except Exception:
+        return 0
+    try:
+        return len(xm.get_xla_supported_devices())
+    except Exception:
+        return 0
+
+
 def resolve_device(spec: str = "auto") -> torch.device:
     if spec and spec != "auto":
+        if spec == "xla":
+            return _xla_device()
         return torch.device(spec)
     if torch.cuda.is_available():
         return torch.device("cuda")
     if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
         return torch.device("mps")
+    # XLA comes after cuda and mps deliberately: on a Kaggle TPU image torch.cuda may report unavailable, but if a
+    # machine ever has both, a GPU is the safer default than a network-attached accelerator.
+    if xla_device_count() > 0:
+        return _xla_device()
     return torch.device("cpu")
+
+
+def _xla_device() -> torch.device:
+    """The XLA device, resolved through torch_xla's own API rather than a constructed "xla:0" string."""
+    import torch_xla.core.xla_model as xm  # noqa: PLC0415
+
+    return xm.xla_device()
 
 
 def seed_everything(seed: int) -> None:
@@ -33,6 +62,13 @@ def seed_everything(seed: int) -> None:
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
+    if xla_device_count() > 0:
+        try:
+            import torch_xla.core.xla_model as xm  # noqa: PLC0415
+
+            xm.set_rng_state(seed)
+        except Exception:
+            pass
 
 
 class EMAModel:
