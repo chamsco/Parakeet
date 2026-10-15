@@ -1,0 +1,51 @@
+{
+  "config": "configs/parakeet_tiny.yaml",
+  "n_voices": 3,
+  "manifest_voices": [
+    "high",
+    "low",
+    "mid"
+  ],
+  "cache_voice_names": [
+    "low",
+    "mid",
+    "high"
+  ],
+  "steps": {
+    "ae": 80,
+    "text": 250
+  },
+  "loss": {
+    "with_voice": [
+      5.998841802279155,
+      0.3725821723540624
+    ],
+    "control": [
+      5.998841802279155,
+      2.602095603942871
+    ]
+  },
+  "predicted_f0_hz": {
+    "with_voice": [
+      81.65668487548828,
+      88.78170776367188,
+      148.61676025390625
+    ],
+    "control": [
+      127.99270629882812,
+      106.94198608398438,
+      0.0
+    ]
+  },
+  "span_hz": {
+    "with_voice": 66.96007537841797,
+    "control": 127.99270629882812
+  },
+  "checks": {
+    "cache_carries_all_voices": true,
+    "voice_f0_ordering_matches_fixture": true,
+    "conditioning_fits_better_than_control": true,
+    "both_runs_learned": true
+  },
+  "seconds_total": 420.3901702000003
+}

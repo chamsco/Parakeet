@@ -5900,7 +5900,44 @@ Each step is SEPARATED, both mechanisms are visible (the in-sample gap falls fro
 speed rises 3.7×), and the increments fall from +0.139 to +0.029. The lever is real, measured, and finished at this
 model size.
 
-## 147. Environment notes
+## 148. Kaggle: the path works, the GPU is slower than advertised here, and why (round 256)
+
+The whole chain is now proven end to end: dataset created and uploaded (10.6 GB of cached latents, status `ready`), kernel
+pushed through the v1 API, GPU attached, the repository cloned, the text stage trained, and the log retrieved. The run:
+
+```
+torch 2.11.0+cu128  cuda True  device: Tesla T4
+stage=distill-text variant=tiny params=18.118M
+step 0 loss 2.8167  ->  step 300 loss 1.6546   nonfinite_steps 0.0
+training exit 0 in 121.3s   ->   0.404 s/step
+```
+
+**And the honest headline is a correction: this is 1.3 to 2 times the CPU, not the two orders of magnitude I told the
+operator to expect.** The CPU measured 0.52–0.93 s/step at the same configuration against the T4's 0.404. My "roughly
+two orders of magnitude" was a peak-FLOPS comparison, and peak FLOPS is not what this workload is limited by:
+
+* the model is **18.1 M parameters at batch 16**, which leaves a T4 essentially idle — a 65-TFLOP card doing 6.5
+  GFLOPS of useful work;
+* every batch is read from **`/kaggle/input`, a read-only network mount**, so the accelerator waits on I/O;
+* and the T4 has no fp32 tensor cores, so nothing about this configuration plays to its strengths.
+
+So the four fixes are known rather than guessed: **copy the cache to local disk** first, **raise the batch size** (16 →
+512, since an 18 M model on 16 GB has room), **use AMP**, and only then re-measure. Until that is done, the honest
+statement is that a Kaggle T4 reproduces this stage at CPU speed, and the value of the platform is the free GPU *plus*
+the 12-hour unattended sessions, not raw throughput.
+
+Three things were also learned the cheap way, by pushing kernels that failed in under 20 seconds each:
+
+* **`enableTpu: true` does not attach a TPU** to an API-pushed kernel: the image came back `torch 2.11.0+cpu` with no
+  `torch_xla` and no TPU environment variables;
+* **the dataset mounts at `/kaggle/input/datasets/<owner>/<slug>/`**, three levels down. Two hand-written globs guessed
+  one and two levels and both found nothing while the mount was present; the log's own tree dump gave the path, and the
+  fix is a recursive glob;
+* **the clone must not go in `/kaggle/working`**: that directory is what `kernels output` downloads, so a repository
+  clone there turns a 1 KB log into thousands of files — and on the way back it extracted a second copy of the repo into
+  this project's own `parakeet/` package directory.
+
+## 149. Environment notes
 
 * **Kaggle credentials, measured rather than assumed (round 256).** The account is `dariushafshar`. A **new-style API
   token** (a single opaque string, which is what Kaggle's "Generate New Token" produces now) **authenticates reads** —

@@ -1,0 +1,48 @@
+{
+  "config": "configs/parakeet_tiny.yaml",
+  "stage": "distill-text",
+  "mixture": {
+    "stub_low": 0.6,
+    "stub_high": 0.4
+  },
+  "prompts": 4,
+  "corpus": {
+    "utterances": 4,
+    "audio_seconds": 18.474666666666668,
+    "teachers": [
+      "stub_high",
+      "stub_low"
+    ]
+  },
+  "steps": {
+    "autoencoder": 25,
+    "distill-text": 60
+  },
+  "ae_recon_before": 2.8581727743148804,
+  "ae_recon_after": 2.698973923921585,
+  "student_loss_before": 3.80608069896698,
+  "student_loss_after": 1.3273727893829346,
+  "batch_teacher_weights": [
+    0.6000000238418579,
+    0.4000000059604645,
+    0.4000000059604645,
+    0.6000000238418579
+  ],
+  "synthesis": {
+    "mel_l1_vs_corpus": 3.3921267986297607,
+    "phase_coherence": 0.21163581311702728,
+    "seconds": 3.232
+  },
+  "checks": {
+    "corpus_uses_both_teachers": true,
+    "autoencoder_improved": true,
+    "curation_ran": true,
+    "curation_kept_usable_data": true,
+    "cache_uses_the_curated_manifest": true,
+    "cache_records_mixture": true,
+    "weights_reach_the_batch": true,
+    "student_improved": true,
+    "synthesis_produces_audio": true
+  },
+  "seconds_total": 148.06283989999793
+}

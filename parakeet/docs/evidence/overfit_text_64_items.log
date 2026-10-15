@@ -1,0 +1,83 @@
+warm start runs/text_continue/distill-text_step5000.pt | geometry {'n_voices': 12, 'latent_rate': 3, 'text_dim': 512, 'text_layers': 6} | voices 12
+before: token rho on 64 utterances = +0.8705
+schedule: 3000 steps, warmup 75, lr 0.001
+   {'step': 0, 'trainable_params': 22640675.0, 'total_params': 27673693.0, 'frozen': 'autoencoder'}
+   {'duration': 0.1396, 'f0': 0.0782, 'energy': 0.0926, 'latent': 0.079, 'loss': 0.3893, 'lr': 0.0004, 'step': 50}
+   {'duration': 0.2161, 'f0': 0.1038, 'energy': 0.1041, 'latent': 0.0999, 'loss': 0.5239, 'lr': 0.0009, 'step': 100}
+   {'duration': 0.2237, 'f0': 0.1057, 'energy': 0.1065, 'latent': 0.086, 'loss': 0.5218, 'lr': 0.001, 'step': 150}
+   {'duration': 0.1767, 'f0': 0.1053, 'energy': 0.1002, 'latent': 0.062, 'loss': 0.4442, 'lr': 0.001, 'step': 200}
+   {'duration': 0.159, 'f0': 0.1066, 'energy': 0.1019, 'latent': 0.0544, 'loss': 0.4219, 'lr': 0.001, 'step': 250}
+   {'duration': 0.176, 'f0': 0.0957, 'energy': 0.0996, 'latent': 0.0589, 'loss': 0.4302, 'lr': 0.001, 'step': 300}
+   {'duration': 0.1544, 'f0': 0.0932, 'energy': 0.089, 'latent': 0.0498, 'loss': 0.3864, 'lr': 0.001, 'step': 350}
+   {'duration': 0.1364, 'f0': 0.0893, 'energy': 0.0886, 'latent': 0.038, 'loss': 0.3523, 'lr': 0.001, 'step': 400}
+   {'duration': 0.1204, 'f0': 0.0954, 'energy': 0.0885, 'latent': 0.0341, 'loss': 0.3384, 'lr': 0.001, 'step': 450}
+   {'duration': 0.1303, 'f0': 0.092, 'energy': 0.0856, 'latent': 0.0336, 'loss': 0.3415, 'lr': 0.001, 'step': 500}
+   {'duration': 0.135, 'f0': 0.0818, 'energy': 0.0868, 'latent': 0.0379, 'loss': 0.3415, 'lr': 0.0009, 'step': 550}
+   {'duration': 0.1278, 'f0': 0.0875, 'energy': 0.0818, 'latent': 0.0329, 'loss': 0.33, 'lr': 0.0009, 'step': 600}
+   {'duration': 0.097, 'f0': 0.0825, 'energy': 0.0863, 'latent': 0.0262, 'loss': 0.292, 'lr': 0.0009, 'step': 650}
+   {'duration': 0.1025, 'f0': 0.0766, 'energy': 0.0782, 'latent': 0.0292, 'loss': 0.2865, 'lr': 0.0009, 'step': 700}
+   {'duration': 0.1039, 'f0': 0.079, 'energy': 0.0848, 'latent': 0.0256, 'loss': 0.2932, 'lr': 0.0009, 'step': 750}
+   {'duration': 0.0842, 'f0': 0.0819, 'energy': 0.0775, 'latent': 0.019, 'loss': 0.2626, 'lr': 0.0009, 'step': 800}
+   {'duration': 0.0814, 'f0': 0.0807, 'energy': 0.0861, 'latent': 0.0167, 'loss': 0.2649, 'lr': 0.0009, 'step': 850}
+   {'duration': 0.0966, 'f0': 0.0809, 'energy': 0.0768, 'latent': 0.0245, 'loss': 0.2788, 'lr': 0.0008, 'step': 900}
+   {'duration': 0.0834, 'f0': 0.0758, 'energy': 0.0816, 'latent': 0.019, 'loss': 0.2599, 'lr': 0.0008, 'step': 950}
+   {'duration': 0.0799, 'f0': 0.0738, 'energy': 0.0727, 'latent': 0.0159, 'loss': 0.2424, 'lr': 0.0008, 'step': 1000}
+   {'duration': 0.0767, 'f0': 0.0738, 'energy': 0.0724, 'latent': 0.0136, 'loss': 0.2365, 'lr': 0.0008, 'step': 1050}
+   {'duration': 0.0641, 'f0': 0.084, 'energy': 0.0768, 'latent': 0.0145, 'loss': 0.2394, 'lr': 0.0008, 'step': 1100}
+   {'duration': 0.0696, 'f0': 0.077, 'energy': 0.0764, 'latent': 0.0162, 'loss': 0.2392, 'lr': 0.0007, 'step': 1150}
+   {'duration': 0.069, 'f0': 0.0719, 'energy': 0.0746, 'latent': 0.0151, 'loss': 0.2305, 'lr': 0.0007, 'step': 1200}
+   {'duration': 0.0575, 'f0': 0.0687, 'energy': 0.0737, 'latent': 0.0115, 'loss': 0.2113, 'lr': 0.0007, 'step': 1250}
+   {'duration': 0.0587, 'f0': 0.0688, 'energy': 0.0696, 'latent': 0.0099, 'loss': 0.207, 'lr': 0.0007, 'step': 1300}
+   {'duration': 0.0579, 'f0': 0.0681, 'energy': 0.0685, 'latent': 0.0094, 'loss': 0.2039, 'lr': 0.0006, 'step': 1350}
+   {'duration': 0.0518, 'f0': 0.0674, 'energy': 0.0697, 'latent': 0.009, 'loss': 0.1978, 'lr': 0.0006, 'step': 1400}
+   {'duration': 0.0528, 'f0': 0.0679, 'energy': 0.0674, 'latent': 0.0091, 'loss': 0.1972, 'lr': 0.0006, 'step': 1450}
+   {'duration': 0.0511, 'f0': 0.0663, 'energy': 0.0647, 'latent': 0.0073, 'loss': 0.1894, 'lr': 0.0006, 'step': 1500}
+   {'duration': 0.0485, 'f0': 0.0679, 'energy': 0.0657, 'latent': 0.0067, 'loss': 0.1888, 'lr': 0.0005, 'step': 1550}
+   {'duration': 0.0427, 'f0': 0.0651, 'energy': 0.0649, 'latent': 0.0081, 'loss': 0.1807, 'lr': 0.0005, 'step': 1600}
+   {'duration': 0.0374, 'f0': 0.064, 'energy': 0.0667, 'latent': 0.0071, 'loss': 0.1753, 'lr': 0.0005, 'step': 1650}
+   {'duration': 0.0387, 'f0': 0.0629, 'energy': 0.0647, 'latent': 0.0064, 'loss': 0.1727, 'lr': 0.0005, 'step': 1700}
+   {'duration': 0.0353, 'f0': 0.0629, 'energy': 0.0649, 'latent': 0.0058, 'loss': 0.169, 'lr': 0.0004, 'step': 1750}
+   {'duration': 0.0322, 'f0': 0.0621, 'energy': 0.0643, 'latent': 0.0051, 'loss': 0.1636, 'lr': 0.0004, 'step': 1800}
+   {'duration': 0.0307, 'f0': 0.0617, 'energy': 0.0638, 'latent': 0.0048, 'loss': 0.161, 'lr': 0.0004, 'step': 1850}
+   {'duration': 0.0303, 'f0': 0.0595, 'energy': 0.0656, 'latent': 0.0042, 'loss': 0.1595, 'lr': 0.0004, 'step': 1900}
+   {'duration': 0.0298, 'f0': 0.0613, 'energy': 0.0616, 'latent': 0.004, 'loss': 0.1566, 'lr': 0.0003, 'step': 1950}
+   {'duration': 0.0262, 'f0': 0.06, 'energy': 0.0606, 'latent': 0.0041, 'loss': 0.1508, 'lr': 0.0003, 'step': 2000}
+   {'duration': 0.0261, 'f0': 0.0586, 'energy': 0.0602, 'latent': 0.0036, 'loss': 0.1486, 'lr': 0.0003, 'step': 2050}
+   {'duration': 0.0205, 'f0': 0.0575, 'energy': 0.0613, 'latent': 0.0034, 'loss': 0.1426, 'lr': 0.0003, 'step': 2100}
+   {'duration': 0.0202, 'f0': 0.059, 'energy': 0.0604, 'latent': 0.0033, 'loss': 0.1428, 'lr': 0.0002, 'step': 2150}
+   {'duration': 0.0192, 'f0': 0.0571, 'energy': 0.0592, 'latent': 0.0031, 'loss': 0.1385, 'lr': 0.0002, 'step': 2200}
+   {'duration': 0.0176, 'f0': 0.0578, 'energy': 0.0583, 'latent': 0.0027, 'loss': 0.1364, 'lr': 0.0002, 'step': 2250}
+   {'duration': 0.0168, 'f0': 0.0569, 'energy': 0.0576, 'latent': 0.0028, 'loss': 0.1341, 'lr': 0.0002, 'step': 2300}
+   {'duration': 0.0136, 'f0': 0.0567, 'energy': 0.0583, 'latent': 0.0026, 'loss': 0.1312, 'lr': 0.0002, 'step': 2350}
+   {'duration': 0.0137, 'f0': 0.0558, 'energy': 0.0566, 'latent': 0.0025, 'loss': 0.1287, 'lr': 0.0002, 'step': 2400}
+   {'duration': 0.0117, 'f0': 0.0551, 'energy': 0.0567, 'latent': 0.0024, 'loss': 0.1259, 'lr': 0.0001, 'step': 2450}
+   {'duration': 0.0101, 'f0': 0.0558, 'energy': 0.0573, 'latent': 0.0023, 'loss': 0.1255, 'lr': 0.0001, 'step': 2500}
+   {'duration': 0.0098, 'f0': 0.0554, 'energy': 0.056, 'latent': 0.0023, 'loss': 0.1234, 'lr': 0.0001, 'step': 2550}
+   {'duration': 0.0086, 'f0': 0.0548, 'energy': 0.0563, 'latent': 0.0022, 'loss': 0.1218, 'lr': 0.0001, 'step': 2600}
+   {'duration': 0.007, 'f0': 0.0553, 'energy': 0.0563, 'latent': 0.0021, 'loss': 0.1207, 'lr': 0.0001, 'step': 2650}
+   {'duration': 0.007, 'f0': 0.0541, 'energy': 0.0548, 'latent': 0.0021, 'loss': 0.118, 'lr': 0.0001, 'step': 2700}
+   {'duration': 0.0058, 'f0': 0.0537, 'energy': 0.0549, 'latent': 0.002, 'loss': 0.1165, 'lr': 0.0001, 'step': 2750}
+   {'duration': 0.0054, 'f0': 0.0541, 'energy': 0.0556, 'latent': 0.002, 'loss': 0.1171, 'lr': 0.0001, 'step': 2800}
+   {'duration': 0.005, 'f0': 0.0533, 'energy': 0.0548, 'latent': 0.002, 'loss': 0.1151, 'lr': 0.0001, 'step': 2850}
+   {'duration': 0.0049, 'f0': 0.0546, 'energy': 0.0556, 'latent': 0.002, 'loss': 0.1171, 'lr': 0.0001, 'step': 2900}
+   {'duration': 0.0042, 'f0': 0.0532, 'energy': 0.0541, 'latent': 0.0019, 'loss': 0.1134, 'lr': 0.0001, 'step': 2950}
+   {'duration': 0.0043, 'f0': 0.0535, 'energy': 0.0551, 'latent': 0.0019, 'loss': 0.1147, 'lr': 0.0001, 'step': 3000}
+
+after 3000 steps: token rho on the same 64 utterances = +0.9944
+  CAN memorise -- capacity and optimisation are adequate for fitting
+Traceback (most recent call last):
+  File "C:\Users\chamy\Documents\code\Parakeet\scripts\overfit_text.py", line 120, in <module>
+    raise SystemExit(main())
+                     ~~~~^^
+  File "C:\Users\chamy\Documents\code\Parakeet\scripts\overfit_text.py", line 111, in main
+    Path("runs/overfit_text.json").write_text(json.dumps({
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+        "items": len(dataset), "steps": args.steps, "lr": args.lr,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        "rho_before": before, "rho_after": after,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        "last_logs": (logs[-3:] if isinstance(logs, list) else logs),
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    }, indent=2), encoding="utf-8", default=str)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: Path.write_text() got an unexpected keyword argument 'default'

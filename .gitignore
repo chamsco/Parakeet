@@ -51,3 +51,4 @@ Thumbs.db
 
 # the flow demo pack (same rationale as docs/demo)
 !docs/demo_flow/*.wav
+kaggle_upload.log
