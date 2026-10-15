@@ -349,6 +349,24 @@ def _record_divergence(
     return count + 1, (step + 1 if first is None else first)
 
 
+def optimizer_step(opt: torch.optim.Optimizer) -> None:
+    """Step an optimizer, reducing gradients across XLA cores when the parameters live on a TPU.
+
+    On an XLA device a bare ``opt.step()`` updates only the local replica: torch_xla needs ``xm.optimizer_step``, which
+    all-reduces the gradients across the cores and marks the step. Without it the eight cores drift apart and the run
+    trains eight unrelated models that never agree — which would surface as a slow, noisy training curve rather than as a
+    crash, the failure mode this project has learned to distrust. On CPU, CUDA and MPS this is exactly the ``opt.step()``
+    it replaced.
+    """
+    params = [p for group in opt.param_groups for p in group["params"]]
+    if params and params[0].device.type == "xla":
+        import torch_xla.core.xla_model as xm  # noqa: PLC0415
+
+        xm.optimizer_step(opt)
+        return
+    opt.step()
+
+
 def _optimise(step: int, model: nn.Module, opt: torch.optim.Optimizer, loss: torch.Tensor, grad_clip: float) -> bool:
     """Backward, guard, clip, step.  Returns False when the update was skipped as divergent.
 
@@ -362,7 +380,7 @@ def _optimise(step: int, model: nn.Module, opt: torch.optim.Optimizer, loss: tor
     if not _gradients_are_finite(model):
         return False
     torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
-    opt.step()
+    optimizer_step(opt)
     return True
 
 
@@ -619,7 +637,7 @@ def run_stage(
                 sched.step()
                 continue
             torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.train.grad_clip)
-            opt.step()
+            optimizer_step(opt)
             if disc_opt is not None:
                 disc_opt.zero_grad(set_to_none=True)
                 d_loss = discriminator_step(losses, batch["wav"], fake)
@@ -630,7 +648,7 @@ def run_stage(
                     disc_opt.zero_grad(set_to_none=True)
                 else:
                     d_loss.backward()
-                    disc_opt.step()
+                    optimizer_step(disc_opt)
                     extra_logs["disc"] = float(d_loss.detach())
         elif stage == "flow":
             loss, step_logs = flow_step(cfg, model, batch)

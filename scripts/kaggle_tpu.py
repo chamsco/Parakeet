@@ -23,18 +23,32 @@ API = "https://www.kaggle.com/api/v1"
 
 
 def token() -> str:
+    """The token value, from the environment or from whichever Kaggle file has it.
+
+    `~/.kaggle/access_token` is checked before `kaggle.json` because Kaggle's settings page hands out a block of shell
+    assignments ("KAGGLE_API_TOKEN=..." on one line and a second variable on the next), and a file holding that block
+    authenticates nothing - the first attempt at this read the block verbatim and the API rejected the header. Both
+    shapes are handled here so neither can silently become the reason a push fails.
+    """
     env = os.environ.get("KAGGLE_API_TOKEN")
     if env:
-        return env.strip()
-    path = Path.home() / ".kaggle" / "kaggle.json"
-    if path.exists():
-        text = path.read_text(encoding="utf-8").strip()
+        return env.strip().split("=", 1)[-1].strip()
+    for name in ("access_token", "kaggle.json"):
+        path = Path.home() / ".kaggle" / name
+        if not path.exists():
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace").strip()
         try:
             payload = json.loads(text)
             return str(payload.get("key") or payload.get("access_token") or "").strip()
         except json.JSONDecodeError:
+            pass
+        for line in text.splitlines():
+            if line.strip().startswith("KAGGLE_API_TOKEN="):
+                return line.split("=", 1)[1].strip().strip('"').strip("'")
+        if text and "=" not in text and " " not in text:
             return text
-    raise SystemExit("no Kaggle token found in KAGGLE_API_TOKEN or ~/.kaggle/kaggle.json")
+    raise SystemExit("no Kaggle token found in KAGGLE_API_TOKEN, ~/.kaggle/access_token or ~/.kaggle/kaggle.json")
 
 
 def _headers(account: str | None, style: str) -> dict:

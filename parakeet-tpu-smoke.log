@@ -1,0 +1,11 @@
+[{"stream_name":"stdout","time":0.887403435,"data":"python 3.13.15 | Linux-6.18.48+-x86_64-with-glibc2.39\n"}
+,{"stream_name":"stdout","time":6.704661742,"data":"torch: 2.11.0+cpu\n"}
+,{"stream_name":"stdout","time":6.704809139,"data":"torch_xla import: ABSENT (No module named 'torch_xla')\n"}
+,{"stream_name":"stdout","time":6.704819334,"data":"RESULT: no torch_xla in this image - the port cannot run here\n"}
+,{"stream_name":"stderr","time":9.851455234,"data":"/usr/local/lib/python3.13/dist-packages/mistune.py:435: SyntaxWarning: invalid escape sequence '\\|'\n"}
+,{"stream_name":"stderr","time":9.851487669,"data":"  cells[i][c] = re.sub('\\\\\\\\\\|', '|', cell)\n"}
+,{"stream_name":"stderr","time":10.237177374,"data":"/usr/local/lib/python3.13/dist-packages/nbconvert/filters/filter_links.py:36: SyntaxWarning: invalid escape sequence '\\_'\n"}
+,{"stream_name":"stderr","time":10.23721024,"data":"  text = re.sub(r'_', '\\_', text) # Escape underscores in display text\n"}
+,{"stream_name":"stderr","time":11.258285886,"data":"[NbConvertApp] Converting notebook __script__.ipynb to html\n"}
+,{"stream_name":"stderr","time":12.59335149,"data":"[NbConvertApp] Writing 280216 bytes to __results__.html\n"}
+]

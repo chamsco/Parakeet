@@ -1,0 +1,25 @@
+[{"stream_name":"stdout","time":0.886773045,"data":"python 3.13.15 | Linux-6.18.48+-x86_64-with-glibc2.39\n"}
+,{"stream_name":"stdout","time":0.88680696,"data":"  env CUDA_HOME=/usr/local/cuda\n"}
+,{"stream_name":"stdout","time":0.886813243,"data":"  env CUDA_VERSION=12.8.1\n"}
+,{"stream_name":"stdout","time":0.88681785,"data":"  env NVIDIA_DRIVER_CAPABILITIES=compute,utility\n"}
+,{"stream_name":"stdout","time":0.886822107,"data":"  env NVIDIA_PRODUCT_NAME=CUDA\n"}
+,{"stream_name":"stdout","time":0.886827409,"data":"  env NVIDIA_REQUIRE_CUDA=cuda\u003e=12.8 brand=unknown,driver\u003e=470,driver\u003c471 brand=grid,d\n"}
+,{"stream_name":"stdout","time":0.88698821,"data":"  env NVIDIA_VISIBLE_DEVICES=all\n"}
+,{"stream_name":"stdout","time":0.887188584,"data":"  env NV_CUDA_CUDART_DEV_VERSION=12.8.90-1\n"}
+,{"stream_name":"stdout","time":0.88725457,"data":"  env NV_CUDA_CUDART_VERSION=12.8.90-1\n"}
+,{"stream_name":"stdout","time":0.887390453,"data":"  env NV_CUDA_LIB_VERSION=12.8.1-1\n"}
+,{"stream_name":"stdout","time":0.887398052,"data":"  env NV_CUDA_NSIGHT_COMPUTE_DEV_PACKAGE=cuda-nsight-compute-12-8=12.8.1-1\n"}
+,{"stream_name":"stdout","time":0.887402084,"data":"  env NV_CUDA_NSIGHT_COMPUTE_VERSION=12.8.1-1\n"}
+,{"stream_name":"stdout","time":0.887405649,"data":"  env TF_FORCE_GPU_ALLOW_GROWTH=true\n"}
+,{"stream_name":"stdout","time":9.799590183,"data":"torch: 2.11.0+cu128\n"}
+,{"stream_name":"stdout","time":10.052736561,"data":"cuda available: True\n"}
+,{"stream_name":"stdout","time":10.097787664,"data":"device: Tesla T4\n"}
+,{"stream_name":"stdout","time":10.612323574,"data":"matmul on the GPU: 8589934592\n"}
+,{"stream_name":"stdout","time":10.612356826,"data":"RESULT: a GPU is available to this kernel\n"}
+,{"stream_name":"stderr","time":16.206302296,"data":"/usr/local/lib/python3.13/dist-packages/mistune.py:435: SyntaxWarning: invalid escape sequence '\\|'\n"}
+,{"stream_name":"stderr","time":16.206329553,"data":"  cells[i][c] = re.sub('\\\\\\\\\\|', '|', cell)\n"}
+,{"stream_name":"stderr","time":16.526454267,"data":"/usr/local/lib/python3.13/dist-packages/nbconvert/filters/filter_links.py:36: SyntaxWarning: invalid escape sequence '\\_'\n"}
+,{"stream_name":"stderr","time":16.526478663,"data":"  text = re.sub(r'_', '\\_', text) # Escape underscores in display text\n"}
+,{"stream_name":"stderr","time":17.31211707,"data":"[NbConvertApp] Converting notebook __script__.ipynb to html\n"}
+,{"stream_name":"stderr","time":18.351517563,"data":"[NbConvertApp] Writing 279079 bytes to __results__.html\n"}
+]
