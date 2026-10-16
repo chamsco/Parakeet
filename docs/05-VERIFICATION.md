@@ -5939,7 +5939,26 @@ Three things were also learned the cheap way, by pushing kernels that failed in 
 
 ## 149. Environment notes
 
-* **Kaggle credentials, measured rather than assumed (round 256).** The account is `dariushafshar`. A **new-style API
+* **Where the T4's time actually goes, measured in three 100-step runs (round 256).** The first GPU run gave 0.404–0.448
+  s/step at batch 16 off a network mount, so the benchmark varied one thing at a time:
+
+  | configuration | s/step | versus the network run |
+  |---|---|---|
+  | network mount, batch 16 | **0.579** | 1.00× |
+  | local disk, batch 16 | 0.677 | **0.86× — slower** |
+  | local disk, batch 512 | **CUDA OOM** | tried 660 MiB with 549 MiB free on a 14.56 GiB T4 |
+
+  **So it is not I/O-bound**: copying 10.6 GB to local disk made the step *slower*, and 512 is simply too large. With the
+  CPU at 0.52–0.93 s/step, a T4 runs this configuration at **roughly parity**, run-to-run variance of ±30 % across the
+  three GPU runs so far (0.404, 0.448, 0.579). The reason is visible in the log: `stage=distill-text` computes
+  `duration`, `f0` and `energy` losses, and the f0/energy terms need the **frozen autoencoder's decode** on every step —
+  a ~30 M convolution stack over ~562 frames — so at batch 16 the step is dominated by fixed per-step work rather than
+  by anything a bigger card would accelerate.
+* **What that implies, stated before the next attempt rather than after.** The lever is **batch size** — 32, 64 or 128,
+  to find what fits and whether the step time is flat in it — and, longer term, the per-step audio-domain losses
+  themselves, which is a code change rather than a flag. It is not the cache's location and it is not the accelerator.
+  I predicted two orders of magnitude from peak FLOPS; the measurement says parity, and the measurement is what counts.
+* **Kaggle credentials, measured rather than assumed (round 256).** The account is `ebagnitchiecharles`. A **new-style API
   token** (a single opaque string, which is what Kaggle's "Generate New Token" produces now) **authenticates reads** —
   `GET /api/v1/datasets/list` with it returns HTTP 200 and real rows, over both a bearer header and a legacy-basic
   header — and it **fails writes**: `POST /api/v1/kernels/push` answers `401 {"code":401,"message":"Unauthorized
