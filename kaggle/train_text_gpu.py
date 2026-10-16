@@ -83,5 +83,19 @@ def main() -> int:
     return 0
 
 
+def _exit(code: int) -> None:
+    """Exit with a status in a script, but do nothing inside a notebook.
+
+    Kaggle presents a script kernel as notebook cells. `sys.exit()` there raises SystemExit, which IPython reports as an
+    error - "To exit: use 'exit', 'quit', or Ctrl-D" - even when the code finished successfully. That happened on the
+    first operator run of this kernel: the training had completed and the exit call made it look like a crash, which is
+    the worst kind of misleading because the work was already done.
+    """
+    try:
+        get_ipython  # noqa: B018 - defined only inside IPython
+    except NameError:
+        sys.exit(code)
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    _exit(main())
