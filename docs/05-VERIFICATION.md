@@ -5966,7 +5966,35 @@ otherwise have masked the spectral one, and the spectral one points at periodici
 **What earshot cannot do, from its own README: it cannot judge speech content.** This is not a substitute for the word
 error rate, which says 1.0000. It says what the sound *is*, not what it says.
 
-## 151. Environment notes
+## 151. earshot's verdict on the student: a steady 94 Hz buzz, not speech (round 256)
+
+earshot is now fully built — `transformers` and `pyloudnorm` installed, both CLAP and the AudioSet tagger cached (1.77 GB)
+— and asked to describe three files. Its own words, with the numbers it attaches.
+
+**The student**, `runs/say_demo.wav`:
+
+> 2.78 s sustained, **tonal, pitch ~94 Hz (F#2)** (attack 52 ms). Sounds most like: **an error buzz (z +4.6)**, a phone
+> vibration buzz (z +3.8), a digital glitch (z +3.5) **[clear reading]**. Other readings: an electrical hum (ambience,
+> z +2.6), insects buzzing (nature, z +2.6). **AudioSet: Hum 0.23, Mains hum 0.21.**
+
+And the forced choice against four descriptions: **"a person speaking a sentence" <1 %**, **"a buzzing electrical hum"
+>99 %**, "white noise" <1 %, "music" <1 %. The second student clip reads identically — pitch ~94 Hz, "an error buzz"
+z +4.4, "a buzzing electrical hum" >99 %.
+
+**The teacher**, `runs/demo_listen/reference_0.wav`, reads "busy, 4.3 onsets/s" with **AudioSet: Speech 0.64** and the
+forced choice "a person speaking a sentence" 47 %.
+
+**So the answer to "audible audio or straight noise" is: neither. It is a steady 94 Hz tone** — and the pitch is the
+finding. **24 000 / 256 = 93.75 Hz**, this pipeline's hop rate, and earshot names that as the dominant pitch of the output
+while knowing nothing about the code. That is the frame-rate buzz this project diagnosed from the waveform in round 134,
+now reproduced by an outside instrument, and it says something sharper than "the student is bad": **the model is emitting
+the analysis frame rate as its fundamental and carrying no speech structure above it**, which is what a conditional-mean
+latent predicts and why the low band measures 18 dB down.
+
+**earshot cannot judge speech content** — its README says so — so WER stays the word-level instrument and this is the
+timbre-level one. They agree: WER 1.0000, and the timbre is a buzz.
+
+## 152. Environment notes
 
 * **Where the T4's time actually goes, measured in three 100-step runs (round 256).** The first GPU run gave 0.404–0.448
   s/step at batch 16 off a network mount, so the benchmark varied one thing at a time:
