@@ -5937,7 +5937,36 @@ Three things were also learned the cheap way, by pushing kernels that failed in 
   clone there turns a 1 KB log into thousands of files — and on the way back it extracted a second copy of the repo into
   this project's own `parakeet/` package directory.
 
-## 149. Environment notes
+## 150. An outside instrument hears what we diagnosed from the inside (round 256)
+
+`earshot` (github.com/Leonxlnx/earshot, MIT, CPU-only) was installed into this project's venv without touching torch, so
+that the student's audio could be judged by something that was not built here. Its `measure` command uses no models and
+answers the operator's actual question — audible audio or straight noise — in numbers:
+
+| metric | student (`runs/say_demo.wav`) | teacher (`runs/demo_listen/reference_0.wav`) |
+|---|---|---|
+| peak / true peak | −24.3 / −24.2 dBFS | −6.8 / −6.8 dBFS |
+| loudness | **−35.2 LUFS** | **−22.0 LUFS** |
+| noise floor | **−41.5 dBFS** | **−67.6 dBFS** |
+| attack / decay | 52 ms / **none — "sustained or cut off"** | 230 ms / 81 ms |
+| brightness | **5979 Hz** | **2187 Hz** |
+| bandwidth | 16 254 Hz | 12 901 Hz |
+| `sub / low / lowmid / mid / presence / air` (dB) | −57.6 / **−18.9** / −12.4 / −5.6 / **−4.7** / **−5.0** | −19.8 / **−0.9** / −11.8 / −13.1 / −13.2 / −22.7 |
+
+**So it is audible, full-bandwidth, structured audio — not straight noise — and it is thin, bright, quiet and buzz-like.**
+The teacher's energy sits in `low` at −0.9 dB with `air` rolled off at −22.7; the student's `low` is **18 dB down** while
+its `presence` and `air` are the strongest bands in the file. It is 13 dB quieter, has no decay at all, and its noise
+floor is 26 dB higher.
+
+**That is the buzz this project diagnosed from the waveform, reproduced by an instrument that has never seen the code** —
+the missing low-frequency body is what a periodicity-free conditional-mean latent looks like in a spectrum, and the
+excess presence/air is the smearing on top of it. Two useful consequences: the level gap is a trivial fix that would
+otherwise have masked the spectral one, and the spectral one points at periodicity rather than at bandwidth.
+
+**What earshot cannot do, from its own README: it cannot judge speech content.** This is not a substitute for the word
+error rate, which says 1.0000. It says what the sound *is*, not what it says.
+
+## 151. Environment notes
 
 * **Where the T4's time actually goes, measured in three 100-step runs (round 256).** The first GPU run gave 0.404–0.448
   s/step at batch 16 off a network mount, so the benchmark varied one thing at a time:
