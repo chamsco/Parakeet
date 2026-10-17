@@ -26,8 +26,11 @@ from parakeet.data.dataset import LatentShardDataset
 from parakeet.models import build_model
 from parakeet.train.common import (
     apply_checkpoint_geometry,
+    cache_voice_names,
     derive_n_voices_from_cache,
     load_latent_norm_from_cache,
+    load_state_checked,
+    voice_index_remap,
 )
 
 
@@ -59,6 +62,9 @@ def main() -> int:
     ap.add_argument("--config", default="configs/parakeet_tiny.yaml")
     ap.add_argument("--cache", required=True)
     ap.add_argument("--items", type=int, default=16)
+    ap.add_argument("--train-cache", default=None,
+                    help="the cache the checkpoint was trained on; required when --cache is a different cache "
+                         "(e.g. the held-out one), because voice indices are cache-local")
     args = ap.parse_args()
 
     path = Path(args.checkpoint)
@@ -68,13 +74,21 @@ def main() -> int:
     cfg = load_config(args.config)
     payload = torch.load(path, map_location="cpu", weights_only=False)
     state = (payload.get("ema") or {}).get("shadow") or payload["model"]
-    apply_checkpoint_geometry(cfg, state)
-    cfg.n_voices = derive_n_voices_from_cache(args.cache) or 1
+    applied = apply_checkpoint_geometry(cfg, state)
+    if "n_voices" not in applied:
+        # only when the checkpoint has no voice table: overriding it with the eval cache's count leaves voice_embed
+        # at a random, unseeded initialisation (a different one on every call)
+        cfg.n_voices = derive_n_voices_from_cache(args.train_cache or args.cache) or 1
     model = build_model(cfg)
-    current = model.state_dict()
-    model.load_state_dict({k: v for k, v in state.items()
-                           if k in current and tuple(current[k].shape) == tuple(v.shape)}, strict=False)
+    load_state_checked(model, state)
     load_latent_norm_from_cache(model, args.cache)
+
+    eval_names = cache_voice_names(args.cache)
+    train_names = cache_voice_names(args.train_cache) if args.train_cache else eval_names
+    if args.train_cache is None and cfg.n_voices > 1 and len(eval_names) != cfg.n_voices:
+        raise SystemExit(f"{args.cache} holds {len(eval_names)} voices and the checkpoint {cfg.n_voices}: pass "
+                         "--train-cache so held-out voice indices map onto the trained ones by name")
+    remap = voice_index_remap(eval_names, train_names) if eval_names else {}
     model.eval()
 
     # A cache whose global normaliser is (near) identity is the symptom of the defect recorded in
@@ -105,7 +119,8 @@ def main() -> int:
             mask = item.get("text_mask")
             mask = mask[None] if mask is not None else None
             voice = item.get("voice")
-            voice = voice.reshape(1) if voice is not None else None
+            if voice is not None:
+                voice = torch.tensor([remap.get(int(voice), int(voice))], dtype=torch.long)
             side = model.text_side(ids, mask, voice)
             durations = item.get("durations")
             # the TRUE durations, so this measures whether the predicted latents track the target frames rather

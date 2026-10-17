@@ -312,6 +312,46 @@ def derive_n_voices_from_cache(cache_dir: Optional[str | Path]) -> Optional[int]
     return max(1, len(voices)) if voices else None
 
 
+def cache_voice_names(cache_dir: Optional[str | Path]) -> list:
+    """The cache's ``voice_names`` in index order, or ``[]`` when it carries none."""
+    if not cache_dir:
+        return []
+    meta_path = Path(cache_dir) / "cache_meta.json"
+    if not meta_path.exists():
+        return []
+    return list(json.loads(meta_path.read_text(encoding="utf-8")).get("voice_names") or [])
+
+
+def voice_index_remap(eval_names: list, train_names: list) -> Dict[int, int]:
+    """Map an evaluation cache's voice indices onto the indices the model was trained with.
+
+    Voice indices are cache-local (first-seen order), so the same index names different voices in two caches:
+    the held-out cache's 0 is ``af_heart`` while the training cache's 0 is ``af_alloy``. Reading a held-out cache
+    with its own indices conditions every item on the wrong voice. Raises if a held-out voice was never trained.
+    """
+    missing = [name for name in eval_names if name not in train_names]
+    if missing:
+        raise ValueError(f"voices absent from the training cache, so the model has no embedding for them: {missing}")
+    return {i: train_names.index(name) for i, name in enumerate(eval_names)}
+
+
+def load_state_checked(model: nn.Module, state: Dict[str, torch.Tensor]) -> list:
+    """Load ``state`` like ``strict=False`` but refuse a *shape* mismatch instead of silently skipping it.
+
+    Filtering mismatched shapes out before ``load_state_dict`` leaves those parameters at their random
+    initialisation, and an unseeded one is different on every call: that is how a held-out readout built with
+    the eval cache's voice count read a random ``voice_embed`` and moved by ~0.02 on the same checkpoint.
+    Returns the checkpoint keys the model does not have (loaded nowhere, reported rather than hidden).
+    """
+    current = model.state_dict()
+    mismatched = [k for k, v in state.items() if k in current and tuple(current[k].shape) != tuple(v.shape)]
+    if mismatched:
+        detail = {k: (tuple(state[k].shape), tuple(current[k].shape)) for k in mismatched}
+        raise ValueError(f"checkpoint/model shape mismatch (checkpoint, model): {detail}")
+    model.load_state_dict({k: v for k, v in state.items() if k in current}, strict=False)
+    return [k for k in state if k not in current]
+
+
 def derive_latent_rate_from_cache(
     cache_dir: Optional[str | Path], latent_dim: int = 24
 ) -> Optional[int]:
