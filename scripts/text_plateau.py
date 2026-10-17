@@ -24,6 +24,8 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Measure the held-out plateau with repeats")
     ap.add_argument("--run", default="runs/text_long384")
     ap.add_argument("--cache", default="runs/holdout_cache")
+    ap.add_argument("--train-cache", required=True,
+                    help="the cache the run trained on, so held-out voice indices are remapped by name")
     ap.add_argument("--items", type=int, default=60)
     ap.add_argument("--steps", default="3000,4000,5000,6000,7000")
     ap.add_argument("--repeats", type=int, default=2)
@@ -40,7 +42,7 @@ def main() -> int:
         for _ in range(args.repeats):
             subprocess.run(
                 [PY, "scripts/token_route_ceiling.py", "--checkpoint", str(checkpoint),
-                 "--cache", args.cache, "--items", str(args.items)],
+                 "--cache", args.cache, "--train-cache", args.train_cache, "--items", str(args.items)],
                 cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True,
             )
             payload = json.loads((ROOT / "runs/token_route_ceiling.json").read_text(encoding="utf-8"))
